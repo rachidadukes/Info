@@ -1,0 +1,11 @@
+string[] lines = request.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+if (lines.Length > 1)
+{
+    Match match = Regex.Match(lines[1], @"<(\w+)>");
+    if (match.Success)
+    {
+        string extractedType = match.Groups[1].Value; // e.g. "AdminCashRq"
+        if (!requestTypesList.Contains(extractedType))
+            requestTypesList.Add(extractedType);
+    }
+}
