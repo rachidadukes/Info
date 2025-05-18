@@ -1,11 +1,34 @@
-string[] lines = request.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-if (lines.Length > 1)
+foreach (var raw in rawEventDescriptions)
 {
-    Match match = Regex.Match(lines[1], @"<(\w+)>");
-    if (match.Success)
+    // Remove lines that start with "Send to Host" or "Receive from Host"
+    var cleanedMessage = string.Join(
+        Environment.NewLine,
+        raw.FullMessage
+            .Split(new[] { Environment.NewLine }, StringSplitOptions.None)
+            .Where(line => !line.StartsWith("Send to Host") && !line.StartsWith("Receive from Host"))
+    );
+
+    // Proceed with splitting by "<?xml"
+    parts = cleanedMessage.Split(new string[] { "<?xml" }, StringSplitOptions.RemoveEmptyEntries);
+
+    if (parts.Length >= 2)
     {
-        string extractedType = match.Groups[1].Value; // e.g. "AdminCashRq"
-        if (!requestTypesList.Contains(extractedType))
-            requestTypesList.Add(extractedType);
+        request = "<?xml" + parts[0];
+        response = "<?xml" + parts[1];
+
+        item = new LogRequestResponse();
+        item.FullMessage = raw.FullMessage;
+        item.EventID = raw.EventID;
+        item.Request = request;
+        item.Response = response;
+
+        requestResponseList.Add(item);
     }
+    else
+    {
+        request = response = string.Empty;
+    }
+
+    requestIndex = raw.FullMessage.IndexOf("Request:");
+    responseIndex = raw.FullMessage.IndexOf("Response:");
 }
