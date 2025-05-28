@@ -1,61 +1,52 @@
-  private static async Task RetrieveMembersProfile()
-  {
-      ResultWrapper<MemberProfileRespDTO>? memberProfile;
-      string? apiUrl;
-      string envir;
+public class ExtractAccountNumber
+{
+    public List<AccountModel> ExtractAccountAndType(List<RequestResponseLogModel> requestResponseList)
+    {
+        var accountList = new List<AccountModel>();
 
+        try
+        {
+            foreach (var item in requestResponseList)
+            {
+                string request = item.Request;
 
-      try
-      {
+                // Extract AcctId
+                var acctId = ExtractTagValue(request, "AcctId");
+                var acctType = ExtractTagValue(request, "AcctType");
 
+                if (!string.IsNullOrEmpty(acctId) && !string.IsNullOrEmpty(acctType))
+                {
+                    accountList.Add(new AccountModel
+                    {
+                        AcctId = acctId,
+                        AcctType = acctType
+                    });
+                }
+            }
 
-          envir = "UNIT";
-          apiUrl = FindUrl(envir);
-          string AccessNumber = "15";
-          MemberProfileRepository memberProfileRepository = new MemberProfileRepository();
-          memberProfile = await memberProfileRepository.GetMemberProfileAsync(envir, apiUrl, AccessNumber);
+            return accountList;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❗ Unexpected Error in Data: {ex.Message}");
+            return new List<AccountModel>();
+        }
+    }
 
-          if (memberProfile?.Data != null && memberProfile.IsSuccess)
-          {
-              Console.WriteLine("Member data retrieved successfully.");                
-              RetrieveAccounts(memberProfile, envir, AccessNumber); 
-          }
-          else
-          {
-              Console.WriteLine($"Failed to retrieve member data: {memberProfile?.ErrorMessage}");
-          }
-      }
-      catch (Exception ex)
-      {
-          Console.WriteLine("Error retrieving data: " + ex.Message);
-      }
-  }
+    private string ExtractTagValue(string input, string tagName)
+    {
+        var startTag = $"<{tagName}>";
+        var endTag = $"</{tagName}>";
 
-  private static void RetrieveAccounts(ResultWrapper<MemberProfileRespDTO>? memberProfile, string envir, string AccessNumber)
-  {
-      if (memberProfile == null || memberProfile.Data == null)
-      {
-          Console.WriteLine("No member profile data available.");
-          return;
-      }
+        var startIndex = input.IndexOf(startTag);
+        var endIndex = input.IndexOf(endTag);
 
-      string directoryPath = @"C:\temp";
-      Directory.CreateDirectory(directoryPath);
+        if (startIndex >= 0 && endIndex > startIndex)
+        {
+            startIndex += startTag.Length;
+            return input.Substring(startIndex, endIndex - startIndex).Trim();
+        }
 
-      string filePath = Path.Combine(directoryPath, $"Accounts_{envir}_{AccessNumber}.txt");
-
-      List<AcctProfileDTO> accounts = memberProfile.Data.ProfileAccts ?? new List<AcctProfileDTO>();
-
-      using (StreamWriter writer = new StreamWriter(filePath, append: true))
-      {
-          string header = "Environment, Access Number, Account Number, Account Type";
-          writer.WriteLine(header);
-
-          foreach (var acct in accounts)
-          {
-              string line = $"{envir}, {AccessNumber}, {acct.AccountNumber}, {acct.AcctType}";
-              writer.WriteLine(line);
-              Console.WriteLine($"Account: {acct.AccountNumber}, Type: {acct.AcctType}");
-          }
-      }
-  }
+        return string.Empty;
+    }
+}
