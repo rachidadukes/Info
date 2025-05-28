@@ -1,34 +1,61 @@
-foreach (var raw in rawEventDescriptions)
-{
-    // Remove lines that start with "Send to Host" or "Receive from Host"
-    var cleanedMessage = string.Join(
-        Environment.NewLine,
-        raw.FullMessage
-            .Split(new[] { Environment.NewLine }, StringSplitOptions.None)
-            .Where(line => !line.StartsWith("Send to Host") && !line.StartsWith("Receive from Host"))
-    );
+  private static async Task RetrieveMembersProfile()
+  {
+      ResultWrapper<MemberProfileRespDTO>? memberProfile;
+      string? apiUrl;
+      string envir;
 
-    // Proceed with splitting by "<?xml"
-    parts = cleanedMessage.Split(new string[] { "<?xml" }, StringSplitOptions.RemoveEmptyEntries);
 
-    if (parts.Length >= 2)
-    {
-        request = "<?xml" + parts[0];
-        response = "<?xml" + parts[1];
+      try
+      {
 
-        item = new LogRequestResponse();
-        item.FullMessage = raw.FullMessage;
-        item.EventID = raw.EventID;
-        item.Request = request;
-        item.Response = response;
 
-        requestResponseList.Add(item);
-    }
-    else
-    {
-        request = response = string.Empty;
-    }
+          envir = "UNIT";
+          apiUrl = FindUrl(envir);
+          string AccessNumber = "15";
+          MemberProfileRepository memberProfileRepository = new MemberProfileRepository();
+          memberProfile = await memberProfileRepository.GetMemberProfileAsync(envir, apiUrl, AccessNumber);
 
-    requestIndex = raw.FullMessage.IndexOf("Request:");
-    responseIndex = raw.FullMessage.IndexOf("Response:");
-}
+          if (memberProfile?.Data != null && memberProfile.IsSuccess)
+          {
+              Console.WriteLine("Member data retrieved successfully.");                
+              RetrieveAccounts(memberProfile, envir, AccessNumber); 
+          }
+          else
+          {
+              Console.WriteLine($"Failed to retrieve member data: {memberProfile?.ErrorMessage}");
+          }
+      }
+      catch (Exception ex)
+      {
+          Console.WriteLine("Error retrieving data: " + ex.Message);
+      }
+  }
+
+  private static void RetrieveAccounts(ResultWrapper<MemberProfileRespDTO>? memberProfile, string envir, string AccessNumber)
+  {
+      if (memberProfile == null || memberProfile.Data == null)
+      {
+          Console.WriteLine("No member profile data available.");
+          return;
+      }
+
+      string directoryPath = @"C:\temp";
+      Directory.CreateDirectory(directoryPath);
+
+      string filePath = Path.Combine(directoryPath, $"Accounts_{envir}_{AccessNumber}.txt");
+
+      List<AcctProfileDTO> accounts = memberProfile.Data.ProfileAccts ?? new List<AcctProfileDTO>();
+
+      using (StreamWriter writer = new StreamWriter(filePath, append: true))
+      {
+          string header = "Environment, Access Number, Account Number, Account Type";
+          writer.WriteLine(header);
+
+          foreach (var acct in accounts)
+          {
+              string line = $"{envir}, {AccessNumber}, {acct.AccountNumber}, {acct.AcctType}";
+              writer.WriteLine(line);
+              Console.WriteLine($"Account: {acct.AccountNumber}, Type: {acct.AcctType}");
+          }
+      }
+  }
