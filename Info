@@ -1,52 +1,43 @@
-public class ExtractAccountNumber
+private async Task DatabaseConnectivity(DbContext context)
 {
-    public List<AccountModel> ExtractAccountAndType(List<RequestResponseLogModel> requestResponseList)
+    try
     {
-        var accountList = new List<AccountModel>();
+        // Ensure the connection is open and get database name
+        var conn = context.Database.GetDbConnection();
+        await conn.OpenAsync();
+        Console.WriteLine($"Connected to database: {conn.Database}");
 
-        try
+        // Check if the table 'EventDetails' exists
+        var tableName = "EventDetails"; // Or the actual table name
+        var command = conn.CreateCommand();
+        command.CommandText = @$"
+            SELECT COUNT(*) 
+            FROM INFORMATION_SCHEMA.TABLES 
+            WHERE TABLE_NAME = '{tableName}'";
+
+        var result = (int)(await command.ExecuteScalarAsync());
+        if (result == 0)
         {
-            foreach (var item in requestResponseList)
-            {
-                string request = item.Request;
-
-                // Extract AcctId
-                var acctId = ExtractTagValue(request, "AcctId");
-                var acctType = ExtractTagValue(request, "AcctType");
-
-                if (!string.IsNullOrEmpty(acctId) && !string.IsNullOrEmpty(acctType))
-                {
-                    accountList.Add(new AccountModel
-                    {
-                        AcctId = acctId,
-                        AcctType = acctType
-                    });
-                }
-            }
-
-            return accountList;
+            Console.WriteLine($"Table '{tableName}' does not exist.");
+            return;
         }
-        catch (Exception ex)
+
+        // Test query
+        var testRecords = await context.Set<EventDetailsModel>()
+                                       .Take(2)
+                                       .ToListAsync();
+
+        if (testRecords.Any())
         {
-            Console.WriteLine($"❗ Unexpected Error in Data: {ex.Message}");
-            return new List<AccountModel>();
+            Console.WriteLine("Successfully connected and table contains data.");
+        }
+        else
+        {
+            Console.WriteLine("Connected, but table is empty.");
         }
     }
-
-    private string ExtractTagValue(string input, string tagName)
+    catch (Exception ex)
     {
-        var startTag = $"<{tagName}>";
-        var endTag = $"</{tagName}>";
-
-        var startIndex = input.IndexOf(startTag);
-        var endIndex = input.IndexOf(endTag);
-
-        if (startIndex >= 0 && endIndex > startIndex)
-        {
-            startIndex += startTag.Length;
-            return input.Substring(startIndex, endIndex - startIndex).Trim();
-        }
-
-        return string.Empty;
+        Console.WriteLine($"Unexpected Error: {ex.Message}");
     }
 }
