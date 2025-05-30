@@ -1,43 +1,44 @@
-private async Task DatabaseConnectivity(DbContext context)
+string fullMessage = @"Input from client;  aaaa
+aaaaaa
+
+Output to client; bbbb
+bbbb";
+
+// OR
+// string fullMessage = @"Send to Host;  aaffffaa
+// ssdddd
+//
+// Receive from Host; bbbik
+// bbaassdsdbb";
+
+string[] headers = new[]
 {
-    try
-    {
-        // Ensure the connection is open and get database name
-        var conn = context.Database.GetDbConnection();
-        await conn.OpenAsync();
-        Console.WriteLine($"Connected to database: {conn.Database}");
+    "Input from client;",
+    "Output to client;",
+    "Send to Host;",
+    "Receive from Host;"
+};
 
-        // Check if the table 'EventDetails' exists
-        var tableName = "EventDetails"; // Or the actual table name
-        var command = conn.CreateCommand();
-        command.CommandText = @$"
-            SELECT COUNT(*) 
-            FROM INFORMATION_SCHEMA.TABLES 
-            WHERE TABLE_NAME = '{tableName}'";
+// Find header positions
+var matches = headers
+    .Select(h => new { Header = h, Index = fullMessage.IndexOf(h) })
+    .Where(m => m.Index >= 0)
+    .OrderBy(m => m.Index)
+    .ToList();
 
-        var result = (int)(await command.ExecuteScalarAsync());
-        if (result == 0)
-        {
-            Console.WriteLine($"Table '{tableName}' does not exist.");
-            return;
-        }
+// Split using header positions
+if (matches.Count >= 2)
+{
+    var part1Start = matches[0].Index;
+    var part2Start = matches[1].Index;
 
-        // Test query
-        var testRecords = await context.Set<EventDetailsModel>()
-                                       .Take(2)
-                                       .ToListAsync();
+    string part1 = fullMessage.Substring(part1Start, part2Start - part1Start).Trim();
+    string part2 = fullMessage.Substring(part2Start).Trim();
 
-        if (testRecords.Any())
-        {
-            Console.WriteLine("Successfully connected and table contains data.");
-        }
-        else
-        {
-            Console.WriteLine("Connected, but table is empty.");
-        }
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Unexpected Error: {ex.Message}");
-    }
+    Console.WriteLine("Part 1:\n" + part1);
+    Console.WriteLine("\nPart 2:\n" + part2);
+}
+else
+{
+    Console.WriteLine("Unable to split the message: not enough known headers found.");
 }
