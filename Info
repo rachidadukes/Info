@@ -1,44 +1,11 @@
-string fullMessage = @"Input from client;  aaaa
-aaaaaa
-
-Output to client; bbbb
-bbbb";
-
-// OR
-// string fullMessage = @"Send to Host;  aaffffaa
-// ssdddd
-//
-// Receive from Host; bbbik
-// bbaassdsdbb";
-
-string[] headers = new[]
+public static string GetFirstTag(string xml)
 {
-    "Input from client;",
-    "Output to client;",
-    "Send to Host;",
-    "Receive from Host;"
-};
+    int startIndex = xml.IndexOf('<');
+    int endIndex = xml.IndexOf('>');
 
-// Find header positions
-var matches = headers
-    .Select(h => new { Header = h, Index = fullMessage.IndexOf(h) })
-    .Where(m => m.Index >= 0)
-    .OrderBy(m => m.Index)
-    .ToList();
+    if (startIndex == -1 || endIndex == -1 || endIndex <= startIndex)
+        return null;
 
-// Split using header positions
-if (matches.Count >= 2)
-{
-    var part1Start = matches[0].Index;
-    var part2Start = matches[1].Index;
-
-    string part1 = fullMessage.Substring(part1Start, part2Start - part1Start).Trim();
-    string part2 = fullMessage.Substring(part2Start).Trim();
-
-    Console.WriteLine("Part 1:\n" + part1);
-    Console.WriteLine("\nPart 2:\n" + part2);
-}
-else
-{
-    Console.WriteLine("Unable to split the message: not enough known headers found.");
+    // Extract what's inside the angle brackets
+    return xml.Substring(startIndex + 1, endIndex - startIndex - 1);
 }
