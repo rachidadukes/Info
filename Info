@@ -1,11 +1,10 @@
-public static string GetFirstTag(string xml)
-{
-    int startIndex = xml.IndexOf('<');
-    int endIndex = xml.IndexOf('>');
-
-    if (startIndex == -1 || endIndex == -1 || endIndex <= startIndex)
-        return null;
-
-    // Extract what's inside the angle brackets
-    return xml.Substring(startIndex + 1, endIndex - startIndex - 1);
-}
+<ListBox ItemsSource="{Binding People}">
+    <ListBox.ItemTemplate>
+        <DataTemplate>
+            <StackPanel Orientation="Horizontal" Margin="5">
+                <TextBlock Text="{Binding FirstName}" Margin="0,0,10,0" />
+                <TextBlock Text="{Binding LastName}" />
+            </StackPanel>
+        </DataTemplate>
+    </ListBox.ItemTemplate>
+</ListBox>
