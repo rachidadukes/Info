@@ -1,50 +1,74 @@
-private async Task FilterLogs()
+
+private void txtRequest1_TextChanged(object sender, TextChangedEventArgs e)
 {
-    Mouse.OverrideCursor = Cursors.Wait;
-    try
-    {
-        var filteredLogs = allLogs;
-
-        if (!string.IsNullOrWhiteSpace(txtAccessNumber.Text))
-        {
-            filteredLogs = filteredLogs
-                .Where(log => log.FullMessage?.IndexOf(txtAccessNumber.Text, StringComparison.OrdinalIgnoreCase) >= 0)
-                .ToList();
-        }
-
-        if (!string.IsNullOrWhiteSpace(txtAccountNumber.Text))
-        {
-            filteredLogs = filteredLogs
-                .Where(log => log.FullMessage?.IndexOf(txtAccountNumber.Text, StringComparison.OrdinalIgnoreCase) >= 0)
-                .ToList();
-        }
-
-        if (!string.IsNullOrWhiteSpace(selectedUserID))
-        {
-            filteredLogs = filteredLogs
-                .Where(log => log.UserID == selectedUserID)
-                .ToList();
-        }
-
-        if (!string.IsNullOrWhiteSpace(selectedType))
-        {
-            filteredLogs = filteredLogs
-                .Where(log => log.FullMessage?.IndexOf(selectedType, StringComparison.OrdinalIgnoreCase) >= 0)
-                .ToList();
-        }
-
-        Application.Current.Dispatcher.Invoke(() =>
-        {
-            LogsListView.ItemsSource = filteredLogs;
-            lblLogsCount.Content = $"{filteredLogs.Count} logs";
-        });
-    }
-    catch (Exception ex)
-    {
-        MessageBox.Show($"Error filtering logs: {ex.Message}");
-    }
-    finally
-    {
-        Mouse.OverrideCursor = null;
-    }
+    txtRequest1LineNumbers.Text = GetLineNumbers(txtRequest1.LineCount);
 }
+
+private void txtRequest2_TextChanged(object sender, TextChangedEventArgs e)
+{
+    txtRequest2LineNumbers.Text = GetLineNumbers(txtRequest2.LineCount);
+}
+
+private string GetLineNumbers(int lineCount)
+{
+    var sb = new StringBuilder();
+    for (int i = 1; i <= lineCount; i++)
+    {
+        sb.AppendLine(i.ToString());
+    }
+    return sb.ToString();
+}
+
+
+==============================
+
+<Grid Margin="0,5,0,0" Height="150">
+    <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" />
+    </Grid.ColumnDefinitions>
+
+    <!-- Line Numbers -->
+    <TextBlock x:Name="txtRequest1LineNumbers"
+               FontFamily="Consolas"
+               Padding="5,0,5,0"
+               TextAlignment="Right"
+               VerticalAlignment="Top"
+               Foreground="Gray"
+               />
+
+    <!-- Main Text -->
+    <TextBox x:Name="txtRequest1"
+             Grid.Column="1"
+             AcceptsReturn="True"
+             VerticalScrollBarVisibility="Auto"
+             TextWrapping="Wrap"
+             FontFamily="Consolas"
+             TextChanged="txtRequest1_TextChanged" />
+</Grid>
+
+<!-- Repeat for txtRequest2 -->
+<Grid Margin="0,5,0,0" Height="150">
+    <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" />
+    </Grid.ColumnDefinitions>
+
+    <!-- Line Numbers -->
+    <TextBlock x:Name="txtRequest2LineNumbers"
+               FontFamily="Consolas"
+               Padding="5,0,5,0"
+               TextAlignment="Right"
+               VerticalAlignment="Top"
+               Foreground="Gray"
+               />
+
+    <!-- Main Text -->
+    <TextBox x:Name="txtRequest2"
+             Grid.Column="1"
+             AcceptsReturn="True"
+             VerticalScrollBarVisibility="Auto"
+             TextWrapping="Wrap"
+             FontFamily="Consolas"
+             TextChanged="txtRequest2_TextChanged" />
+</Grid>
