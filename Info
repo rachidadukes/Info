@@ -1,74 +1,64 @@
 
-private void txtRequest1_TextChanged(object sender, TextChangedEventArgs e)
+public partial class CompareRequestsWindow : Window
 {
-    txtRequest1LineNumbers.Text = GetLineNumbers(txtRequest1.LineCount);
-}
+    public ObservableCollection<LineComparison> ComparedLines { get; set; }
 
-private void txtRequest2_TextChanged(object sender, TextChangedEventArgs e)
-{
-    txtRequest2LineNumbers.Text = GetLineNumbers(txtRequest2.LineCount);
-}
-
-private string GetLineNumbers(int lineCount)
-{
-    var sb = new StringBuilder();
-    for (int i = 1; i <= lineCount; i++)
+    public CompareRequestsWindow()
     {
-        sb.AppendLine(i.ToString());
+        InitializeComponent();
+
+        string stringA = File.ReadAllText("RequestA.xml"); // or fetch from textbox
+        string stringB = File.ReadAllText("RequestB.xml");
+
+        ComparedLines = new ObservableCollection<LineComparison>();
+        CompareLines(stringA, stringB);
+
+        DataContext = this;
     }
-    return sb.ToString();
+
+    private void CompareLines(string strA, string strB)
+    {
+        var linesA = strA.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+        var linesB = strB.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+        int maxLines = Math.Max(linesA.Length, linesB.Length);
+
+        for (int i = 0; i < maxLines; i++)
+        {
+            var lineA = i < linesA.Length ? linesA[i] : string.Empty;
+            var lineB = i < linesB.Length ? linesB[i] : string.Empty;
+
+            ComparedLines.Add(new LineComparison
+            {
+                LineA = lineA,
+                LineB = lineB,
+                IsMatch = lineA == lineB
+            });
+        }
+    }
 }
 
+=============================================================
+public class LineComparison
+{
+    public string LineA { get; set; }
+    public string LineB { get; set; }
+    public bool IsMatch { get; set; }
+}
 
-==============================
-
-<Grid Margin="0,5,0,0" Height="150">
-    <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="Auto" />
-        <ColumnDefinition Width="*" />
-    </Grid.ColumnDefinitions>
-
-    <!-- Line Numbers -->
-    <TextBlock x:Name="txtRequest1LineNumbers"
-               FontFamily="Consolas"
-               Padding="5,0,5,0"
-               TextAlignment="Right"
-               VerticalAlignment="Top"
-               Foreground="Gray"
-               />
-
-    <!-- Main Text -->
-    <TextBox x:Name="txtRequest1"
-             Grid.Column="1"
-             AcceptsReturn="True"
-             VerticalScrollBarVisibility="Auto"
-             TextWrapping="Wrap"
-             FontFamily="Consolas"
-             TextChanged="txtRequest1_TextChanged" />
-</Grid>
-
-<!-- Repeat for txtRequest2 -->
-<Grid Margin="0,5,0,0" Height="150">
-    <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="Auto" />
-        <ColumnDefinition Width="*" />
-    </Grid.ColumnDefinitions>
-
-    <!-- Line Numbers -->
-    <TextBlock x:Name="txtRequest2LineNumbers"
-               FontFamily="Consolas"
-               Padding="5,0,5,0"
-               TextAlignment="Right"
-               VerticalAlignment="Top"
-               Foreground="Gray"
-               />
-
-    <!-- Main Text -->
-    <TextBox x:Name="txtRequest2"
-             Grid.Column="1"
-             AcceptsReturn="True"
-             VerticalScrollBarVisibility="Auto"
-             TextWrapping="Wrap"
-             FontFamily="Consolas"
-             TextChanged="txtRequest2_TextChanged" />
-</Grid>
+============================================
+<Window x:Class="CompareRequestsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Compare Requests" Height="450" Width="800">
+    <Grid Margin="10">
+        <ListView Name="ComparisonListView" ItemsSource="{Binding ComparedLines}">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn Header="Line A" Width="300" DisplayMemberBinding="{Binding LineA}" />
+                    <GridViewColumn Header="Line B" Width="300" DisplayMemberBinding="{Binding LineB}" />
+                    <GridViewColumn Header="Match?" Width="100" DisplayMemberBinding="{Binding IsMatch}" />
+                </GridView>
+            </ListView.View>
+        </ListView>
+    </Grid>
+</Window>
