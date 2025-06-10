@@ -1,30 +1,29 @@
+using System.Text.RegularExpressions;
+
 public List<AccountModel> ReadAcctListDetail(RequestResponseLogModel log)
 {
     var accountsList = new List<AccountModel>();
-    var xml = log.FullMessage;
+    var input = log.FullMessage;
 
-    var xmlDoc = new XmlDocument();
-    xml.LoadXml(xml);
+    // Pattern to match blocks like <AcctKeys><AcctId>...</AcctId><AcctType>...</AcctType></AcctKeys>
+    var acctKeyPattern = new Regex(
+        @"<AcctKeys>\s*<AcctId>(?<acctId>.*?)<\/AcctId>\s*<AcctType>(?<acctType>.*?)<\/AcctType>\s*<\/AcctKeys>",
+        RegexOptions.Singleline | RegexOptions.IgnoreCase);
 
-    var acctProfiles = xmlDoc.GetElementsByTagName("AcctProfile");
-
-    foreach (XmlNode profileNode in acctProfiles)
+    foreach (Match match in acctKeyPattern.Matches(input))
     {
-        var acctIdNode = profileNode.SelectSingleNode("AcctKeys/AcctId");
-        var acctTypeNode = profileNode.SelectSingleNode("AcctKeys/AcctType");
+        var acctId = match.Groups["acctId"].Value;
+        var acctType = match.Groups["acctType"].Value;
 
-        if (acctIdNode != null && acctTypeNode != null)
+        var model = new AccountModel
         {
-            var model = new AccountModel
-            {
-                EventID = log.EventID,
-                Timestamp = log.DateTimeStamp,
-                AccountNumber = acctIdNode.InnerText,
-                AcctType = acctTypeNode.InnerText
-            };
+            EventID = log.EventID,
+            DateTimeStamp = log.DateTimeStamp,
+            AccountNumber = acctId,
+            AcctType = acctType
+        };
 
-            accountsList.Add(model);
-        }
+        accountsList.Add(model);
     }
 
     return accountsList;
