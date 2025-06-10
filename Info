@@ -1,64 +1,31 @@
-
-public partial class CompareRequestsWindow : Window
+public List<AccountModel> ReadAcctListDetail(RequestResponseLogModel log)
 {
-    public ObservableCollection<LineComparison> ComparedLines { get; set; }
+    var accountsList = new List<AccountModel>();
+    var xml = log.FullMessage;
 
-    public CompareRequestsWindow()
+    var xmlDoc = new XmlDocument();
+    xml.LoadXml(xml);
+
+    var acctProfiles = xmlDoc.GetElementsByTagName("AcctProfile");
+
+    foreach (XmlNode profileNode in acctProfiles)
     {
-        InitializeComponent();
+        var acctIdNode = profileNode.SelectSingleNode("AcctKeys/AcctId");
+        var acctTypeNode = profileNode.SelectSingleNode("AcctKeys/AcctType");
 
-        string stringA = File.ReadAllText("RequestA.xml"); // or fetch from textbox
-        string stringB = File.ReadAllText("RequestB.xml");
-
-        ComparedLines = new ObservableCollection<LineComparison>();
-        CompareLines(stringA, stringB);
-
-        DataContext = this;
-    }
-
-    private void CompareLines(string strA, string strB)
-    {
-        var linesA = strA.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
-        var linesB = strB.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
-        int maxLines = Math.Max(linesA.Length, linesB.Length);
-
-        for (int i = 0; i < maxLines; i++)
+        if (acctIdNode != null && acctTypeNode != null)
         {
-            var lineA = i < linesA.Length ? linesA[i] : string.Empty;
-            var lineB = i < linesB.Length ? linesB[i] : string.Empty;
-
-            ComparedLines.Add(new LineComparison
+            var model = new AccountModel
             {
-                LineA = lineA,
-                LineB = lineB,
-                IsMatch = lineA == lineB
-            });
+                EventID = log.EventID,
+                Timestamp = log.DateTimeStamp,
+                AccountNumber = acctIdNode.InnerText,
+                AcctType = acctTypeNode.InnerText
+            };
+
+            accountsList.Add(model);
         }
     }
-}
 
-=============================================================
-public class LineComparison
-{
-    public string LineA { get; set; }
-    public string LineB { get; set; }
-    public bool IsMatch { get; set; }
+    return accountsList;
 }
-
-============================================
-<Window x:Class="CompareRequestsWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Compare Requests" Height="450" Width="800">
-    <Grid Margin="10">
-        <ListView Name="ComparisonListView" ItemsSource="{Binding ComparedLines}">
-            <ListView.View>
-                <GridView>
-                    <GridViewColumn Header="Line A" Width="300" DisplayMemberBinding="{Binding LineA}" />
-                    <GridViewColumn Header="Line B" Width="300" DisplayMemberBinding="{Binding LineB}" />
-                    <GridViewColumn Header="Match?" Width="100" DisplayMemberBinding="{Binding IsMatch}" />
-                </GridView>
-            </ListView.View>
-        </ListView>
-    </Grid>
-</Window>
