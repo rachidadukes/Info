@@ -1,30 +1,127 @@
-using System.Text.RegularExpressions;
 
-public List<AccountModel> ReadAcctListDetail(RequestResponseLogModel log)
+
+==============================
+using Microsoft.EntityFrameworkCore;
+using System.Collections.ObjectModel;
+using System.Windows;
+using System.Windows.Controls;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+
+namespace HostLogsWPFApp
 {
-    var accountsList = new List<AccountModel>();
-    var input = log.FullMessage;
-
-    // Pattern to match blocks like <AcctKeys><AcctId>...</AcctId><AcctType>...</AcctType></AcctKeys>
-    var acctKeyPattern = new Regex(
-        @"<AcctKeys>\s*<AcctId>(?<acctId>.*?)<\/AcctId>\s*<AcctType>(?<acctType>.*?)<\/AcctType>\s*<\/AcctKeys>",
-        RegexOptions.Singleline | RegexOptions.IgnoreCase);
-
-    foreach (Match match in acctKeyPattern.Matches(input))
+    public partial class MainWindow : Window, INotifyPropertyChanged
     {
-        var acctId = match.Groups["acctId"].Value;
-        var acctType = match.Groups["acctType"].Value;
+        public ObservableCollection<EncoreLogModel> EncoreLogs { get; set; } = new();
 
-        var model = new AccountModel
+        private bool isLoading;
+        public bool IsLoading
         {
-            EventID = log.EventID,
-            DateTimeStamp = log.DateTimeStamp,
-            AccountNumber = acctId,
-            AcctType = acctType
-        };
+            get => isLoading;
+            set { isLoading = value; OnPropertyChanged(); }
+        }
 
-        accountsList.Add(model);
+        private int itemCount;
+        public int ItemCount
+        {
+            get => itemCount;
+            set { itemCount = value; OnPropertyChanged(); }
+        }
+
+        public MainWindow()
+        {
+            InitializeComponent();
+            DataContext = this;
+        }
+
+        private async void LoadLogs_Click(object sender, RoutedEventArgs e)
+        {
+            IsLoading = true;
+            EncoreLogs.Clear();
+            ItemCount = 0;
+
+            var dbContext = OpenDatabase();
+            if (dbContext == null)
+            {
+                MessageBox.Show("Database file not found.");
+                IsLoading = false;
+                return;
+            }
+
+            var progress = new Progress<EncoreLogModel>(log =>
+            {
+                EncoreLogs.Add(log);
+                ItemCount = EncoreLogs.Count;
+            });
+
+            await LoadLogsAsync(dbContext, progress);
+            IsLoading = false;
+        }
+
+        private DbContextSQLite OpenDatabase()
+        {
+            var dbPath = Path.Combine("C:\\Code\\EncoreRachida", "SQLiteEncore.db");
+            if (!File.Exists(dbPath)) return null;
+
+            var connectionString = $"Data Source={dbPath};";
+            var optionsBuilder = new DbContextOptionsBuilder<DbContextSQLite>();
+            optionsBuilder.UseSqlite(connectionString);
+            return new DbContextSQLite(optionsBuilder.Options);
+        }
+
+        private async Task LoadLogsAsync(DbContextSQLite dbContext, IProgress<EncoreLogModel> progress)
+        {
+            var query = dbContext.EncoreLog.OrderBy(x => x.AccessNumber).AsAsyncEnumerable();
+
+            await foreach (var item in query)
+            {
+                progress.Report(item);
+                await Task.Delay(1); // small delay to keep UI responsive
+            }
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        protected void OnPropertyChanged([CallerMemberName] string name = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
-
-    return accountsList;
 }
+
+
+========================================
+<Window x:Class="HostLogsWPFApp.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Encore Logs" Height="600" Width="900">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+    </Window.Resources>
+
+    <DockPanel Margin="10">
+        <StackPanel Orientation="Horizontal" DockPanel.Dock="Top" Margin="0 0 0 10">
+            <Button Content="Encore Logs With Detail From SQLite" Width="250"
+                    Click="LoadLogs_Click"/>
+            <TextBlock Text="{Binding ElementName=MainWindow, Path=ItemCount}" Margin="10,0" VerticalAlignment="Center"/>
+            <TextBlock Text=" items Numbers" VerticalAlignment="Center"/>
+        </StackPanel>
+
+        <ProgressBar IsIndeterminate="True"
+                     Visibility="{Binding ElementName=MainWindow, Path=IsLoading, Converter={StaticResource BoolToVisibilityConverter}}"
+                     Height="20" />
+
+        <DataGrid ItemsSource="{Binding ElementName=MainWindow, Path=EncoreLogs}"
+                  AutoGenerateColumns="False"
+                  DockPanel.Dock="Bottom"
+                  Margin="0,10,0,0">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="EventID" Binding="{Binding EventID}" />
+                <DataGridTextColumn Header="Environment" Binding="{Binding Environment}" />
+                <DataGridTextColumn Header="Request Type" Binding="{Binding RequestType}" />
+                <DataGridTextColumn Header="Access Number" Binding="{Binding AccessNumber}" />
+                <DataGridTextColumn Header="Account Number" Binding="{Binding AccountNumber}" />
+                <DataGridTextColumn Header="Acct Type" Binding="{Binding AccountType}" />
+                <DataGridTextColumn Header="UserID" Binding="{Binding UserID}" />
+                <DataGridTextColumn Header="Date Time Stamp" Binding="{Binding DateTimeStamp}" />
+            </DataGrid.Columns>
+        </DataGrid>
+    </DockPanel>
+</Window>
