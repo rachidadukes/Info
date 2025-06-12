@@ -1,7 +1,81 @@
-
-private int filterProgressValue;
-public int FilterProgressValue
+private async Task FilterLogs()
 {
-    get => filterProgressValue;
-    set { filterProgressValue = value; OnPropertyChanged(); }
+    Mouse.OverrideCursor = Cursors.Wait;
+    IsLoading = true;
+    FilterProgressValue = 0;
+
+    try
+    {
+        // 🟢 READ UI VALUES ON UI THREAD
+        string accessNumber = txtAccessNumber.Text.Trim();
+        string accountNumber = txtAccountNumber.Text.Trim();
+        string logId = txtLogId.Text.Trim();
+        string userId = selectedUserID;
+        string requestType = selectedRequestType;
+
+        var filtered = EncoreLogs;
+        int total = filtered.Count;
+        int current = 0;
+
+        var progress = new Progress<int>(value => FilterProgressValue = value);
+        List<EncoreLogModel> result = new();
+
+        await Task.Run(() =>
+        {
+            foreach (var log in filtered)
+            {
+                bool match = true;
+
+                if (!string.IsNullOrWhiteSpace(accessNumber))
+                    match &= log.FullMessage?.IndexOf(accessNumber, StringComparison.OrdinalIgnoreCase) >= 0;
+
+                if (!string.IsNullOrWhiteSpace(accountNumber))
+                    match &= log.FullMessage?.IndexOf(accountNumber, StringComparison.OrdinalIgnoreCase) >= 0;
+
+                if (!string.IsNullOrWhiteSpace(userId))
+                    match &= log.UserID == userId;
+
+                if (!string.IsNullOrWhiteSpace(requestType))
+                    match &= log.FullMessage?.IndexOf(requestType, StringComparison.OrdinalIgnoreCase) >= 0;
+
+                if (!string.IsNullOrWhiteSpace(logId))
+                    match &= log.EventID.ToString().Contains(logId);
+
+                if (match)
+                    result.Add(log);
+
+                current++;
+                int percent = (int)((double)current / total * 100);
+                (progress as IProgress<int>)?.Report(percent);
+            }
+        });
+
+        // 🔄 Update UI safely
+        Application.Current.Dispatcher.Invoke(() =>
+        {
+            LogsListView.ItemsSource = result;
+        });
+    }
+    catch (Exception ex)
+    {
+        MessageBox.Show($"Error filtering logs: {ex.Message}");
+    }
+    finally
+    {
+        Mouse.OverrideCursor = null;
+        IsLoading = false;
+    }
 }
+
+
+
+==============================
+
+
+<TextBlock Text="{Binding FilterProgressValue, StringFormat='Filtering... {0}%'}"
+           Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}"
+           Margin="5,0,0,10" />
+
+
+
+================================
