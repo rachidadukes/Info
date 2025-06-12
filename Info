@@ -1,68 +1,7 @@
-<TextBlock Text="{Binding FilterProgressValue, StringFormat='Filtering... {0}%'}"
-           Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}"
-           Margin="5,0,0,10" />
 
-
-
-===========================
-private async Task FilterLogs()
+private int filterProgressValue;
+public int FilterProgressValue
 {
-    Mouse.OverrideCursor = Cursors.Wait;
-    IsLoading = true;
-    FilterProgressValue = 0;
-
-    try
-    {
-        var filtered = logsList;
-        int total = filtered.Count;
-        int current = 0;
-
-        var progress = new Progress<int>(value => FilterProgressValue = value);
-
-        List<EncoreLogModel> result = new();
-
-        await Task.Run(() =>
-        {
-            foreach (var log in filtered)
-            {
-                bool match = true;
-
-                if (!string.IsNullOrWhiteSpace(txtAccessNumber.Text))
-                    match &= log.FullMessage?.IndexOf(txtAccessNumber.Text, StringComparison.OrdinalIgnoreCase) >= 0;
-
-                if (!string.IsNullOrWhiteSpace(txtAccountNumber.Text))
-                    match &= log.FullMessage?.IndexOf(txtAccountNumber.Text, StringComparison.OrdinalIgnoreCase) >= 0;
-
-                if (!string.IsNullOrWhiteSpace(selectedUserID))
-                    match &= log.UserID == selectedUserID;
-
-                if (!string.IsNullOrWhiteSpace(selectedRequestType))
-                    match &= log.FullMessage?.IndexOf(selectedRequestType, StringComparison.OrdinalIgnoreCase) >= 0;
-
-                if (!string.IsNullOrWhiteSpace(txtLogId.Text))
-                    match &= log.EventID.ToString().Contains(txtLogId.Text);
-
-                if (match)
-                    result.Add(log);
-
-                current++;
-                int percent = (int)((double)current / total * 100);
-                (progress as IProgress<int>)?.Report(percent);
-            }
-        });
-
-        Application.Current.Dispatcher.Invoke(() =>
-        {
-            LogsListView.ItemsSource = result;
-        });
-    }
-    catch (Exception ex)
-    {
-        MessageBox.Show($"Error filtering logs: {ex.Message}");
-    }
-    finally
-    {
-        Mouse.OverrideCursor = null;
-        IsLoading = false;
-    }
+    get => filterProgressValue;
+    set { filterProgressValue = value; OnPropertyChanged(); }
 }
