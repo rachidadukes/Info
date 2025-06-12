@@ -1,55 +1,68 @@
-<TextBlock Text="{Binding ProgressValue, StringFormat={}{0}%}"
+<TextBlock Text="{Binding FilterProgressValue, StringFormat='Filtering... {0}%'}"
            Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}"
-           Margin="5 0 0 10" />
+           Margin="5,0,0,10" />
 
 
-========================
-<ProgressBar Minimum="0" Maximum="100"
-             Value="{Binding ProgressValue}"
-             Height="20" Margin="0 0 0 10"
-             Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-============================
-private async void LoadLogs_Click(object sender, RoutedEventArgs e)
+===========================
+private async Task FilterLogs()
 {
+    Mouse.OverrideCursor = Cursors.Wait;
     IsLoading = true;
-    ProgressValue = 0;
-    EncoreLogs.Clear();
-    ItemCount = 0;
+    FilterProgressValue = 0;
 
-    var dbContext = OpenDatabase();
-    if (dbContext == null)
+    try
     {
-        MessageBox.Show("Database file not found.");
-        IsLoading = false;
-        return;
+        var filtered = logsList;
+        int total = filtered.Count;
+        int current = 0;
+
+        var progress = new Progress<int>(value => FilterProgressValue = value);
+
+        List<EncoreLogModel> result = new();
+
+        await Task.Run(() =>
+        {
+            foreach (var log in filtered)
+            {
+                bool match = true;
+
+                if (!string.IsNullOrWhiteSpace(txtAccessNumber.Text))
+                    match &= log.FullMessage?.IndexOf(txtAccessNumber.Text, StringComparison.OrdinalIgnoreCase) >= 0;
+
+                if (!string.IsNullOrWhiteSpace(txtAccountNumber.Text))
+                    match &= log.FullMessage?.IndexOf(txtAccountNumber.Text, StringComparison.OrdinalIgnoreCase) >= 0;
+
+                if (!string.IsNullOrWhiteSpace(selectedUserID))
+                    match &= log.UserID == selectedUserID;
+
+                if (!string.IsNullOrWhiteSpace(selectedRequestType))
+                    match &= log.FullMessage?.IndexOf(selectedRequestType, StringComparison.OrdinalIgnoreCase) >= 0;
+
+                if (!string.IsNullOrWhiteSpace(txtLogId.Text))
+                    match &= log.EventID.ToString().Contains(txtLogId.Text);
+
+                if (match)
+                    result.Add(log);
+
+                current++;
+                int percent = (int)((double)current / total * 100);
+                (progress as IProgress<int>)?.Report(percent);
+            }
+        });
+
+        Application.Current.Dispatcher.Invoke(() =>
+        {
+            LogsListView.ItemsSource = result;
+        });
     }
-
-    MaxItems = await dbContext.EncoreLog.CountAsync(); // total for progress bar
-
-    var progress = new Progress<EncoreLogModel>(log =>
+    catch (Exception ex)
     {
-        EncoreLogs.Add(log);
-        ItemCount = EncoreLogs.Count;
-        ProgressValue = (int)((double)ItemCount / MaxItems * 100);
-    });
-
-    await LoadLogsAsync(dbContext, progress);
-    IsLoading = false;
-}
-
-=================================
-
-private int progressValue;
-public int ProgressValue
-{
-    get => progressValue;
-    set { progressValue = value; OnPropertyChanged(); }
-}
-
-private int maxItems;
-public int MaxItems
-{
-    get => maxItems;
-    set { maxItems = value; OnPropertyChanged(); }
+        MessageBox.Show($"Error filtering logs: {ex.Message}");
+    }
+    finally
+    {
+        Mouse.OverrideCursor = null;
+        IsLoading = false;
+    }
 }
