@@ -1,127 +1,55 @@
+<TextBlock Text="{Binding ProgressValue, StringFormat={}{0}%}"
+           Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}"
+           Margin="5 0 0 10" />
 
 
-==============================
-using Microsoft.EntityFrameworkCore;
-using System.Collections.ObjectModel;
-using System.Windows;
-using System.Windows.Controls;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
+========================
+<ProgressBar Minimum="0" Maximum="100"
+             Value="{Binding ProgressValue}"
+             Height="20" Margin="0 0 0 10"
+             Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-namespace HostLogsWPFApp
+============================
+private async void LoadLogs_Click(object sender, RoutedEventArgs e)
 {
-    public partial class MainWindow : Window, INotifyPropertyChanged
+    IsLoading = true;
+    ProgressValue = 0;
+    EncoreLogs.Clear();
+    ItemCount = 0;
+
+    var dbContext = OpenDatabase();
+    if (dbContext == null)
     {
-        public ObservableCollection<EncoreLogModel> EncoreLogs { get; set; } = new();
-
-        private bool isLoading;
-        public bool IsLoading
-        {
-            get => isLoading;
-            set { isLoading = value; OnPropertyChanged(); }
-        }
-
-        private int itemCount;
-        public int ItemCount
-        {
-            get => itemCount;
-            set { itemCount = value; OnPropertyChanged(); }
-        }
-
-        public MainWindow()
-        {
-            InitializeComponent();
-            DataContext = this;
-        }
-
-        private async void LoadLogs_Click(object sender, RoutedEventArgs e)
-        {
-            IsLoading = true;
-            EncoreLogs.Clear();
-            ItemCount = 0;
-
-            var dbContext = OpenDatabase();
-            if (dbContext == null)
-            {
-                MessageBox.Show("Database file not found.");
-                IsLoading = false;
-                return;
-            }
-
-            var progress = new Progress<EncoreLogModel>(log =>
-            {
-                EncoreLogs.Add(log);
-                ItemCount = EncoreLogs.Count;
-            });
-
-            await LoadLogsAsync(dbContext, progress);
-            IsLoading = false;
-        }
-
-        private DbContextSQLite OpenDatabase()
-        {
-            var dbPath = Path.Combine("C:\\Code\\EncoreRachida", "SQLiteEncore.db");
-            if (!File.Exists(dbPath)) return null;
-
-            var connectionString = $"Data Source={dbPath};";
-            var optionsBuilder = new DbContextOptionsBuilder<DbContextSQLite>();
-            optionsBuilder.UseSqlite(connectionString);
-            return new DbContextSQLite(optionsBuilder.Options);
-        }
-
-        private async Task LoadLogsAsync(DbContextSQLite dbContext, IProgress<EncoreLogModel> progress)
-        {
-            var query = dbContext.EncoreLog.OrderBy(x => x.AccessNumber).AsAsyncEnumerable();
-
-            await foreach (var item in query)
-            {
-                progress.Report(item);
-                await Task.Delay(1); // small delay to keep UI responsive
-            }
-        }
-
-        public event PropertyChangedEventHandler PropertyChanged;
-        protected void OnPropertyChanged([CallerMemberName] string name = null)
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        MessageBox.Show("Database file not found.");
+        IsLoading = false;
+        return;
     }
+
+    MaxItems = await dbContext.EncoreLog.CountAsync(); // total for progress bar
+
+    var progress = new Progress<EncoreLogModel>(log =>
+    {
+        EncoreLogs.Add(log);
+        ItemCount = EncoreLogs.Count;
+        ProgressValue = (int)((double)ItemCount / MaxItems * 100);
+    });
+
+    await LoadLogsAsync(dbContext, progress);
+    IsLoading = false;
 }
 
+=================================
 
-========================================
-<Window x:Class="HostLogsWPFApp.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Encore Logs" Height="600" Width="900">
-    <Window.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
-    </Window.Resources>
+private int progressValue;
+public int ProgressValue
+{
+    get => progressValue;
+    set { progressValue = value; OnPropertyChanged(); }
+}
 
-    <DockPanel Margin="10">
-        <StackPanel Orientation="Horizontal" DockPanel.Dock="Top" Margin="0 0 0 10">
-            <Button Content="Encore Logs With Detail From SQLite" Width="250"
-                    Click="LoadLogs_Click"/>
-            <TextBlock Text="{Binding ElementName=MainWindow, Path=ItemCount}" Margin="10,0" VerticalAlignment="Center"/>
-            <TextBlock Text=" items Numbers" VerticalAlignment="Center"/>
-        </StackPanel>
-
-        <ProgressBar IsIndeterminate="True"
-                     Visibility="{Binding ElementName=MainWindow, Path=IsLoading, Converter={StaticResource BoolToVisibilityConverter}}"
-                     Height="20" />
-
-        <DataGrid ItemsSource="{Binding ElementName=MainWindow, Path=EncoreLogs}"
-                  AutoGenerateColumns="False"
-                  DockPanel.Dock="Bottom"
-                  Margin="0,10,0,0">
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="EventID" Binding="{Binding EventID}" />
-                <DataGridTextColumn Header="Environment" Binding="{Binding Environment}" />
-                <DataGridTextColumn Header="Request Type" Binding="{Binding RequestType}" />
-                <DataGridTextColumn Header="Access Number" Binding="{Binding AccessNumber}" />
-                <DataGridTextColumn Header="Account Number" Binding="{Binding AccountNumber}" />
-                <DataGridTextColumn Header="Acct Type" Binding="{Binding AccountType}" />
-                <DataGridTextColumn Header="UserID" Binding="{Binding UserID}" />
-                <DataGridTextColumn Header="Date Time Stamp" Binding="{Binding DateTimeStamp}" />
-            </DataGrid.Columns>
-        </DataGrid>
-    </DockPanel>
-</Window>
+private int maxItems;
+public int MaxItems
+{
+    get => maxItems;
+    set { maxItems = value; OnPropertyChanged(); }
+}
