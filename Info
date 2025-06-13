@@ -1,81 +1,167 @@
-private async Task FilterLogs()
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.IO;
+using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+
+namespace HostLogsWPFApp.DataFromSQLite
 {
-    Mouse.OverrideCursor = Cursors.Wait;
-    IsLoading = true;
-    FilterProgressValue = 0;
-
-    try
+    public class EncoreLogsManager : INotifyPropertyChanged
     {
-        // 🟢 READ UI VALUES ON UI THREAD
-        string accessNumber = txtAccessNumber.Text.Trim();
-        string accountNumber = txtAccountNumber.Text.Trim();
-        string logId = txtLogId.Text.Trim();
-        string userId = selectedUserID;
-        string requestType = selectedRequestType;
+        public ObservableCollection<EncoreLogModel> EncoreLogs { get; } = new();
 
-        var filtered = EncoreLogs;
-        int total = filtered.Count;
-        int current = 0;
+        private List<EncoreLogModel> logsList = new();
+        private List<TypesDbModel> requestTypesList = new();
+        private List<UserIDsDbModel> userIDsList = new();
 
-        var progress = new Progress<int>(value => FilterProgressValue = value);
-        List<EncoreLogModel> result = new();
-
-        await Task.Run(() =>
+        private int itemCount;
+        public int ItemCount
         {
-            foreach (var log in filtered)
+            get => itemCount;
+            set { itemCount = value; OnPropertyChanged(); }
+        }
+
+        private int progressValue;
+        public int ProgressValue
+        {
+            get => progressValue;
+            set { progressValue = value; OnPropertyChanged(); }
+        }
+
+        private int filterProgressValue;
+        public int FilterProgressValue
+        {
+            get => filterProgressValue;
+            set { filterProgressValue = value; OnPropertyChanged(); }
+        }
+
+        private bool isLoading;
+        public bool IsLoading
+        {
+            get => isLoading;
+            set { isLoading = value; OnPropertyChanged(); }
+        }
+
+        public string SelectedUserID { get; set; }
+        public string SelectedRequestType { get; set; }
+        public string Environment { get; set; }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        private void OnPropertyChanged([CallerMemberName] string propertyName = "") =>
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+
+        private DbContextSQLite OpenDatabase()
+        {
+            var dbPath = Path.Combine("C:\\Code\\EncoreRachida", "SQLiteEncore.db");
+            if (!File.Exists(dbPath)) return null;
+
+            var connectionString = $"Data Source={dbPath}";
+            var optionsBuilder = new DbContextOptionsBuilder<DbContextSQLite>();
+            optionsBuilder.UseSqlite(connectionString);
+            return new DbContextSQLite(optionsBuilder.Options);
+        }
+
+        public async Task LoadLogsAsync()
+        {
+            IsLoading = true;
+            ProgressValue = 0;
+            EncoreLogs.Clear();
+            ItemCount = 0;
+
+            var dbContext = OpenDatabase();
+            if (dbContext == null)
             {
-                bool match = true;
-
-                if (!string.IsNullOrWhiteSpace(accessNumber))
-                    match &= log.FullMessage?.IndexOf(accessNumber, StringComparison.OrdinalIgnoreCase) >= 0;
-
-                if (!string.IsNullOrWhiteSpace(accountNumber))
-                    match &= log.FullMessage?.IndexOf(accountNumber, StringComparison.OrdinalIgnoreCase) >= 0;
-
-                if (!string.IsNullOrWhiteSpace(userId))
-                    match &= log.UserID == userId;
-
-                if (!string.IsNullOrWhiteSpace(requestType))
-                    match &= log.FullMessage?.IndexOf(requestType, StringComparison.OrdinalIgnoreCase) >= 0;
-
-                if (!string.IsNullOrWhiteSpace(logId))
-                    match &= log.EventID.ToString().Contains(logId);
-
-                if (match)
-                    result.Add(log);
-
-                current++;
-                int percent = (int)((double)current / total * 100);
-                (progress as IProgress<int>)?.Report(percent);
+                IsLoading = false;
+                throw new FileNotFoundException("Database file not found.");
             }
-        });
 
-        // 🔄 Update UI safely
-        Application.Current.Dispatcher.Invoke(() =>
+            int maxItems = await dbContext.EncoreLog.CountAsync();
+
+            var progress = new Progress<EncoreLogModel>(log =>
+            {
+                EncoreLogs.Add(log);
+                ItemCount = EncoreLogs.Count;
+                ProgressValue = (int)((double)ItemCount / maxItems * 100);
+            });
+
+            await foreach (var log in dbContext.EncoreLog.OrderBy(x => x.DateTimeStamp).AsAsyncEnumerable())
+            {
+                progress.Report(log);
+                await Task.Delay(1);
+            }
+
+            logsList = EncoreLogs.ToList();
+            IsLoading = false;
+        }
+
+        public async Task<List<string>> RetrieveUserIDsAsync()
         {
-            LogsListView.ItemsSource = result;
-        });
-    }
-    catch (Exception ex)
-    {
-        MessageBox.Show($"Error filtering logs: {ex.Message}");
-    }
-    finally
-    {
-        Mouse.OverrideCursor = null;
-        IsLoading = false;
+            var data = new RetrieveLookupData();
+            var db = data.OpenDatabase();
+            if (db == null) return new();
+
+            userIDsList = await data.GetUserIDsFromDb(db);
+            return userIDsList.Select(x => x.UserID).Distinct().OrderBy(x => x).ToList();
+        }
+
+        public async Task<List<string>> RetrieveRequestTypesAsync()
+        {
+            var data = new RetrieveLookupData();
+            var db = data.OpenDatabase();
+            if (db == null) return new();
+
+            requestTypesList = await data.GetTypesDataFromDb(db);
+            return requestTypesList.Select(x => x.RequestType).Distinct().OrderBy(x => x).ToList();
+        }
+
+        public async Task<List<EncoreLogModel>> FilterLogsAsync(string accessNumber, string accountNumber, string logId)
+        {
+            IsLoading = true;
+            FilterProgressValue = 0;
+
+            var filtered = logsList;
+            int total = filtered.Count;
+            int current = 0;
+            List<EncoreLogModel> result = new();
+
+            var progress = new Progress<int>(value => FilterProgressValue = value);
+
+            await Task.Run(() =>
+            {
+                foreach (var log in filtered)
+                {
+                    bool match = true;
+
+                    if (!string.IsNullOrWhiteSpace(accessNumber))
+                        match &= log.FullMessage?.IndexOf(accessNumber, StringComparison.OrdinalIgnoreCase) >= 0;
+
+                    if (!string.IsNullOrWhiteSpace(accountNumber))
+                        match &= log.FullMessage?.IndexOf(accountNumber, StringComparison.OrdinalIgnoreCase) >= 0;
+
+                    if (!string.IsNullOrWhiteSpace(SelectedUserID))
+                        match &= log.UserID == SelectedUserID;
+
+                    if (!string.IsNullOrWhiteSpace(SelectedRequestType))
+                        match &= log.FullMessage?.IndexOf(SelectedRequestType, StringComparison.OrdinalIgnoreCase) >= 0;
+
+                    if (!string.IsNullOrWhiteSpace(logId))
+                        match &= log.EventID.ToString().Contains(logId);
+
+                    if (match)
+                        result.Add(log);
+
+                    current++;
+                    ((IProgress<int>)progress).Report((int)((double)current / total * 100));
+                }
+            });
+
+            ItemCount = result.Count;
+            IsLoading = false;
+            return result;
+        }
     }
 }
-
-
-
-==============================
-
-
-<TextBlock Text="{Binding FilterProgressValue, StringFormat='Filtering... {0}%'}"
-           Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}"
-           Margin="5,0,0,10" />
-
-
-
-================================
