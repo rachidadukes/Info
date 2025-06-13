@@ -1,3 +1,53 @@
+<TextBlock Text="{Binding ItemCount}" />
+<ProgressBar Value="{Binding ProgressValue}" Maximum="100" />
+<ProgressBar Value="{Binding FilterProgressValue}" Maximum="100" />
+
+=======================
+
+private void cmbUserID_SelectionChanged(object sender, SelectionChangedEventArgs e)
+{
+    logManager.SelectedUserID = cmbUserID.SelectedItem?.ToString();
+}
+
+private void cmbRequestType_SelectionChanged(object sender, SelectionChangedEventArgs e)
+{
+    logManager.SelectedRequestType = cmbRequestType.SelectedItem?.ToString();
+}
+
+
+=========================
+
+private async void btnFilter_Click(object sender, RoutedEventArgs e)
+{
+    string accessNumber = txtAccessNumber.Text.Trim();
+    string accountNumber = txtAccountNumber.Text.Trim();
+    string logId = txtLogId.Text.Trim();
+
+    var result = await logManager.FilterLogsAsync(accessNumber, accountNumber, logId);
+    LogsListView.ItemsSource = result;
+}
+
+
+=========================
+private async void EncoreLogsWindow_Loaded(object sender, RoutedEventArgs e)
+{
+    try
+    {
+        await logManager.RetrieveRequestTypesAsync();
+        await logManager.RetrieveUserIDsAsync();
+        await logManager.LoadLogsAsync();
+    }
+    catch (Exception ex)
+    {
+        MessageBox.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+    }
+}
+
+==================
+private readonly EncoreLogsManager logManager = new();
+
+========================
+
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
