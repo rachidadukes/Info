@@ -1,156 +1,141 @@
+<ProgressBar Height="20"
+             Minimum="0"
+             Maximum="{Binding MaxItems}"
+             Value="{Binding ProgressValue}"
+             Margin="10"
+             Foreground="Green"
+             Visibility="Visible"/>
 
-using HostLogsWPFapp;
-using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.IO;
-using System.Linq;
-using System.Runtime.CompilerServices;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
 
-namespace HostLogsWPFApp.DataFromSQLite
+========================
+
+
+
+private readonly RetrieveLogsByYearManager _logsManager;
+private readonly ProgressHandler<RequestResponseLogModel> _progressHandler = new();
+
+public RetrieveLogsByYearWindow()
 {
-    public partial class EncoreLogsWindow : Window, INotifyPropertyChanged
+    InitializeComponent();
+    DataContext = _progressHandler; // Bind progress bar to this
+    _logsManager = new RetrieveLogsByYearManager(new SqlLogRepository()); // Or your DI instance
+}
+
+
+===================================
+ProgressHandler.cs
+
+
+
+using System;
+using System.ComponentModel;
+
+namespace HostLogsWPFApp.Helpers
+{
+    public class ProgressHandler<T> : INotifyPropertyChanged
     {
-        private readonly EncoreLogsManager logManager = new();
-        public ObservableCollection<EncoreLogModel> EncoreLogs { get; set; } = new();
+        private int _progressValue;
+        private int _maxItems;
 
-        private List<EncoreLogModel> logsList;
-        private EncoreLogModel selectedLog;
-        private List<TypesDbModel> requestTypesList;
-        private List<UserIDsDbModel> userIDsList;
-        private string selectedUserID;
-        private string selectedRequestType;
-        public string Environment;
-
-        private int itemCount;
-        public int ItemCount
-        {
-            get => itemCount;
-            set { itemCount = value; OnPropertyChanged(); }
-        }
-
-        private int progressValue;
         public int ProgressValue
         {
-            get => progressValue;
-            set { progressValue = value; OnPropertyChanged(); }
-        }
-
-        private int filterProgressValue;
-        public int FilterProgressValue
-        {
-            get => filterProgressValue;
-            set { filterProgressValue = value; OnPropertyChanged(); }
-        }
-
-        private bool isLoading;
-        public bool IsLoading
-        {
-            get => isLoading;
-            set { isLoading = value; OnPropertyChanged(); }
-        }
-
-        public EncoreLogsWindow()
-        {
-            InitializeComponent();
-            DataContext = this;
-        }
-
-        private async void EncoreLogsWindowX_Loaded(object sender, RoutedEventArgs e)
-        {
-            try
+            get => _progressValue;
+            private set
             {
-                await logManager.RetrieveRequestTypesAsync();
-                await logManager.RetrieveUserIDsAsync();
-                await logManager.LoadLogsAsync();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                _progressValue = value;
+                OnPropertyChanged(nameof(ProgressValue));
             }
         }
 
-        private async void btnLoadLogs_Click(object sender, RoutedEventArgs e)
+        public int MaxItems
         {
-            await FilterLogs();
+            get => _maxItems;
+            private set
+            {
+                _maxItems = value;
+                OnPropertyChanged(nameof(MaxItems));
+            }
         }
 
-        private async Task FilterLogs()
+        public void SetMaxItems(int count)
         {
-            Mouse.OverrideCursor = Cursors.Wait;
-            IsLoading = true;
-            FilterProgressValue = 0;
+            MaxItems = count;
+            ProgressValue = 0;
+        }
 
-            try
+        public IProgress<T> GetProgressReporter()
+        {
+            return new Progress<T>(_ =>
             {
-                string accessNumber = txtAccessNumber.Text.Trim();
-                string accountNumber = txtAccountNumber.Text.Trim();
-                string logId = txtLogId.Text.Trim();
-                string userId = selectedUserID;
-                string requestType = selectedRequestType;
+                ProgressValue++;
+            });
+        }
 
-                var filtered = EncoreLogs;
-                int total = filtered.Count;
-                int current = 0;
-
-                var progress = new Progress<int>(value => FilterProgressValue = value);
-                List<EncoreLogModel> result = new();
-
-                await Task.Run(() =>
-                {
-                    foreach (var log in filtered)
-                    {
-                        bool match = true;
-
-                        if (!string.IsNullOrWhiteSpace(accessNumber))
-                            match &= log.FullMessage?.IndexOf(accessNumber, StringComparison.OrdinalIgnoreCase) >= 0;
-
-                        if (!string.IsNullOrWhiteSpace(accountNumber))
-                            match &= log.FullMessage?.IndexOf(accountNumber, StringComparison.OrdinalIgnoreCase) >= 0;
-
-                        if (!string.IsNullOrWhiteSpace(userId))
-                            match &= log.UserID == userId;
-
-                        if (!string.IsNullOrWhiteSpace(requestType))
-                            match &= log.FullMessage?.IndexOf(requestType, StringComparison.OrdinalIgnoreCase) >= 0;
-
-                        if (!string.IsNullOrWhiteSpace(logId))
-                            match &= log.EventID.ToString().Contains(logId);
-
-                        if (match)
-                            result.Add(log);
-
-                        current++;
-                        int percent = (int)((double)current / total * 100);
-                        ((IProgress<int>)progress).Report(percent);
-                    }
-                });
-
-                Application.Current.Dispatcher.Invoke(() =>
-                {
-                    LogsListView.ItemsSource = result;
-                    ItemCount = result.Count;
-                });
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error filtering logs: {ex.Message}");
-            }
-            finally
-            {
-                Mouse.OverrideCursor = null;
-                IsLoading = false;
-            }
+        public void ReportProgress(T item)
+        {
+            ProgressValue++;
         }
 
         public event PropertyChangedEventHandler PropertyChanged;
-        protected void OnPropertyChanged([CallerMemberName] string propertyName = "") =>
+
+        protected virtual void OnPropertyChanged(string propertyName) =>
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+}
+
+
+=======================================================
+RetrieveLogsByYearManager.cs
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace HostLogsWPFApp.Logic
+{
+    public class RetrieveLogsByYearManager
+    {
+        private readonly ISqlLogRepository _logRepository;
+
+        public RetrieveLogsByYearManager(ISqlLogRepository logRepository)
+        {
+            _logRepository = logRepository ?? throw new ArgumentNullException(nameof(logRepository));
+        }
+
+        public async Task<List<RequestResponseLogModel>> GetLogsAsync(
+            string environment,
+            int year,
+            int month,
+            ProgressHandler<RequestResponseLogModel> progressHandler = null)
+        {
+            var logs = await _logRepository.GetLogsByYearAndMonthAsync(environment, year, month);
+
+            progressHandler?.SetMaxItems(logs.Count);
+
+            var result = new List<RequestResponseLogModel>();
+            foreach (var log in logs)
+            {
+                result.Add(log);
+                progressHandler?.ReportProgress(log);
+            }
+
+            return result;
+        }
+
+        public List<string> GetDistinctAccountNumbers(List<RequestResponseLogModel> logs)
+        {
+            return logs.Select(l => l.AccountNumber).Distinct().ToList();
+        }
+
+        public List<string> GetDistinctRequestTypes(List<RequestResponseLogModel> logs)
+        {
+            return logs.Select(l => l.RequestType).Distinct().ToList();
+        }
+
+        public List<string> GetDistinctAccessNumbers(List<RequestResponseLogModel> logs)
+        {
+            return logs.Select(l => l.AccessNumber).Distinct().ToList();
+        }
     }
 }
