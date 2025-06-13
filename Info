@@ -1,53 +1,6 @@
-<TextBlock Text="{Binding ItemCount}" />
-<ProgressBar Value="{Binding ProgressValue}" Maximum="100" />
-<ProgressBar Value="{Binding FilterProgressValue}" Maximum="100" />
 
-=======================
-
-private void cmbUserID_SelectionChanged(object sender, SelectionChangedEventArgs e)
-{
-    logManager.SelectedUserID = cmbUserID.SelectedItem?.ToString();
-}
-
-private void cmbRequestType_SelectionChanged(object sender, SelectionChangedEventArgs e)
-{
-    logManager.SelectedRequestType = cmbRequestType.SelectedItem?.ToString();
-}
-
-
-=========================
-
-private async void btnFilter_Click(object sender, RoutedEventArgs e)
-{
-    string accessNumber = txtAccessNumber.Text.Trim();
-    string accountNumber = txtAccountNumber.Text.Trim();
-    string logId = txtLogId.Text.Trim();
-
-    var result = await logManager.FilterLogsAsync(accessNumber, accountNumber, logId);
-    LogsListView.ItemsSource = result;
-}
-
-
-=========================
-private async void EncoreLogsWindow_Loaded(object sender, RoutedEventArgs e)
-{
-    try
-    {
-        await logManager.RetrieveRequestTypesAsync();
-        await logManager.RetrieveUserIDsAsync();
-        await logManager.LoadLogsAsync();
-    }
-    catch (Exception ex)
-    {
-        MessageBox.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-    }
-}
-
-==================
-private readonly EncoreLogsManager logManager = new();
-
-========================
-
+using HostLogsWPFapp;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -56,17 +9,24 @@ using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace HostLogsWPFApp.DataFromSQLite
 {
-    public class EncoreLogsManager : INotifyPropertyChanged
+    public partial class EncoreLogsWindow : Window, INotifyPropertyChanged
     {
-        public ObservableCollection<EncoreLogModel> EncoreLogs { get; } = new();
+        private readonly EncoreLogsManager logManager = new();
+        public ObservableCollection<EncoreLogModel> EncoreLogs { get; set; } = new();
 
-        private List<EncoreLogModel> logsList = new();
-        private List<TypesDbModel> requestTypesList = new();
-        private List<UserIDsDbModel> userIDsList = new();
+        private List<EncoreLogModel> logsList;
+        private EncoreLogModel selectedLog;
+        private List<TypesDbModel> requestTypesList;
+        private List<UserIDsDbModel> userIDsList;
+        private string selectedUserID;
+        private string selectedRequestType;
+        public string Environment;
 
         private int itemCount;
         public int ItemCount
@@ -96,122 +56,101 @@ namespace HostLogsWPFApp.DataFromSQLite
             set { isLoading = value; OnPropertyChanged(); }
         }
 
-        public string SelectedUserID { get; set; }
-        public string SelectedRequestType { get; set; }
-        public string Environment { get; set; }
-
-        public event PropertyChangedEventHandler PropertyChanged;
-        private void OnPropertyChanged([CallerMemberName] string propertyName = "") =>
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-
-        private DbContextSQLite OpenDatabase()
+        public EncoreLogsWindow()
         {
-            var dbPath = Path.Combine("C:\\Code\\EncoreRachida", "SQLiteEncore.db");
-            if (!File.Exists(dbPath)) return null;
-
-            var connectionString = $"Data Source={dbPath}";
-            var optionsBuilder = new DbContextOptionsBuilder<DbContextSQLite>();
-            optionsBuilder.UseSqlite(connectionString);
-            return new DbContextSQLite(optionsBuilder.Options);
+            InitializeComponent();
+            DataContext = this;
         }
 
-        public async Task LoadLogsAsync()
+        private async void EncoreLogsWindowX_Loaded(object sender, RoutedEventArgs e)
         {
-            IsLoading = true;
-            ProgressValue = 0;
-            EncoreLogs.Clear();
-            ItemCount = 0;
-
-            var dbContext = OpenDatabase();
-            if (dbContext == null)
+            try
             {
-                IsLoading = false;
-                throw new FileNotFoundException("Database file not found.");
+                await logManager.RetrieveRequestTypesAsync();
+                await logManager.RetrieveUserIDsAsync();
+                await logManager.LoadLogsAsync();
             }
-
-            int maxItems = await dbContext.EncoreLog.CountAsync();
-
-            var progress = new Progress<EncoreLogModel>(log =>
+            catch (Exception ex)
             {
-                EncoreLogs.Add(log);
-                ItemCount = EncoreLogs.Count;
-                ProgressValue = (int)((double)ItemCount / maxItems * 100);
-            });
-
-            await foreach (var log in dbContext.EncoreLog.OrderBy(x => x.DateTimeStamp).AsAsyncEnumerable())
-            {
-                progress.Report(log);
-                await Task.Delay(1);
+                MessageBox.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
-
-            logsList = EncoreLogs.ToList();
-            IsLoading = false;
         }
 
-        public async Task<List<string>> RetrieveUserIDsAsync()
+        private async void btnLoadLogs_Click(object sender, RoutedEventArgs e)
         {
-            var data = new RetrieveLookupData();
-            var db = data.OpenDatabase();
-            if (db == null) return new();
-
-            userIDsList = await data.GetUserIDsFromDb(db);
-            return userIDsList.Select(x => x.UserID).Distinct().OrderBy(x => x).ToList();
+            await FilterLogs();
         }
 
-        public async Task<List<string>> RetrieveRequestTypesAsync()
+        private async Task FilterLogs()
         {
-            var data = new RetrieveLookupData();
-            var db = data.OpenDatabase();
-            if (db == null) return new();
-
-            requestTypesList = await data.GetTypesDataFromDb(db);
-            return requestTypesList.Select(x => x.RequestType).Distinct().OrderBy(x => x).ToList();
-        }
-
-        public async Task<List<EncoreLogModel>> FilterLogsAsync(string accessNumber, string accountNumber, string logId)
-        {
+            Mouse.OverrideCursor = Cursors.Wait;
             IsLoading = true;
             FilterProgressValue = 0;
 
-            var filtered = logsList;
-            int total = filtered.Count;
-            int current = 0;
-            List<EncoreLogModel> result = new();
-
-            var progress = new Progress<int>(value => FilterProgressValue = value);
-
-            await Task.Run(() =>
+            try
             {
-                foreach (var log in filtered)
+                string accessNumber = txtAccessNumber.Text.Trim();
+                string accountNumber = txtAccountNumber.Text.Trim();
+                string logId = txtLogId.Text.Trim();
+                string userId = selectedUserID;
+                string requestType = selectedRequestType;
+
+                var filtered = EncoreLogs;
+                int total = filtered.Count;
+                int current = 0;
+
+                var progress = new Progress<int>(value => FilterProgressValue = value);
+                List<EncoreLogModel> result = new();
+
+                await Task.Run(() =>
                 {
-                    bool match = true;
+                    foreach (var log in filtered)
+                    {
+                        bool match = true;
 
-                    if (!string.IsNullOrWhiteSpace(accessNumber))
-                        match &= log.FullMessage?.IndexOf(accessNumber, StringComparison.OrdinalIgnoreCase) >= 0;
+                        if (!string.IsNullOrWhiteSpace(accessNumber))
+                            match &= log.FullMessage?.IndexOf(accessNumber, StringComparison.OrdinalIgnoreCase) >= 0;
 
-                    if (!string.IsNullOrWhiteSpace(accountNumber))
-                        match &= log.FullMessage?.IndexOf(accountNumber, StringComparison.OrdinalIgnoreCase) >= 0;
+                        if (!string.IsNullOrWhiteSpace(accountNumber))
+                            match &= log.FullMessage?.IndexOf(accountNumber, StringComparison.OrdinalIgnoreCase) >= 0;
 
-                    if (!string.IsNullOrWhiteSpace(SelectedUserID))
-                        match &= log.UserID == SelectedUserID;
+                        if (!string.IsNullOrWhiteSpace(userId))
+                            match &= log.UserID == userId;
 
-                    if (!string.IsNullOrWhiteSpace(SelectedRequestType))
-                        match &= log.FullMessage?.IndexOf(SelectedRequestType, StringComparison.OrdinalIgnoreCase) >= 0;
+                        if (!string.IsNullOrWhiteSpace(requestType))
+                            match &= log.FullMessage?.IndexOf(requestType, StringComparison.OrdinalIgnoreCase) >= 0;
 
-                    if (!string.IsNullOrWhiteSpace(logId))
-                        match &= log.EventID.ToString().Contains(logId);
+                        if (!string.IsNullOrWhiteSpace(logId))
+                            match &= log.EventID.ToString().Contains(logId);
 
-                    if (match)
-                        result.Add(log);
+                        if (match)
+                            result.Add(log);
 
-                    current++;
-                    ((IProgress<int>)progress).Report((int)((double)current / total * 100));
-                }
-            });
+                        current++;
+                        int percent = (int)((double)current / total * 100);
+                        ((IProgress<int>)progress).Report(percent);
+                    }
+                });
 
-            ItemCount = result.Count;
-            IsLoading = false;
-            return result;
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    LogsListView.ItemsSource = result;
+                    ItemCount = result.Count;
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error filtering logs: {ex.Message}");
+            }
+            finally
+            {
+                Mouse.OverrideCursor = null;
+                IsLoading = false;
+            }
         }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        protected void OnPropertyChanged([CallerMemberName] string propertyName = "") =>
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
