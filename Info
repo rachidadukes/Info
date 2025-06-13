@@ -1,102 +1,62 @@
-<ProgressBar Height="20"
-             Minimum="0"
-             Maximum="{Binding MaxItems}"
-             Value="{Binding ProgressValue}"
-             Margin="10"
-             Foreground="Green"
-             Visibility="Visible"/>
 
 
-========================
+===============================
+
+<ProgressBar 
+    Minimum="0" 
+    Maximum="{Binding MaxItems}" 
+    Value="{Binding ProgressValue}" 
+    Height="20" 
+    Margin="10"/>
 
 
+====================
 
-private readonly RetrieveLogsByYearManager _logsManager;
-private readonly ProgressHandler<RequestResponseLogModel> _progressHandler = new();
+private async void LoadLogsButton_Click(object sender, RoutedEventArgs e)
+{
+    int year = int.Parse(selectedYear);
+    int month = int.Parse(selectedMonth);
+
+    var logs = await _manager.GetLogsAsync(environment, year, month, _progressHandler);
+    LogsListView.ItemsSource = logs;
+}
+
+================================
+
+private RetrieveLogsByYearManager _manager;
+private ProgressBarHandler<RequestResponseLogModel> _progressHandler;
 
 public RetrieveLogsByYearWindow()
 {
     InitializeComponent();
-    DataContext = _progressHandler; // Bind progress bar to this
-    _logsManager = new RetrieveLogsByYearManager(new SqlLogRepository()); // Or your DI instance
+    _manager = new RetrieveLogsByYearManager(new SqlLogRepository()); // Provide your implementation
+    _progressHandler = new ProgressBarHandler<RequestResponseLogModel>();
+    DataContext = _progressHandler;
 }
 
 
-===================================
-ProgressHandler.cs
-
-
-
-using System;
-using System.ComponentModel;
-
-namespace HostLogsWPFApp.Helpers
-{
-    public class ProgressHandler<T> : INotifyPropertyChanged
-    {
-        private int _progressValue;
-        private int _maxItems;
-
-        public int ProgressValue
-        {
-            get => _progressValue;
-            private set
-            {
-                _progressValue = value;
-                OnPropertyChanged(nameof(ProgressValue));
-            }
-        }
-
-        public int MaxItems
-        {
-            get => _maxItems;
-            private set
-            {
-                _maxItems = value;
-                OnPropertyChanged(nameof(MaxItems));
-            }
-        }
-
-        public void SetMaxItems(int count)
-        {
-            MaxItems = count;
-            ProgressValue = 0;
-        }
-
-        public IProgress<T> GetProgressReporter()
-        {
-            return new Progress<T>(_ =>
-            {
-                ProgressValue++;
-            });
-        }
-
-        public void ReportProgress(T item)
-        {
-            ProgressValue++;
-        }
-
-        public event PropertyChangedEventHandler PropertyChanged;
-
-        protected virtual void OnPropertyChanged(string propertyName) =>
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
-}
-
-
-=======================================================
-RetrieveLogsByYearManager.cs
-
+=================================
+using HostLogsWPFApp.Helpers;
+using HostLogsWPFApp.Models;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 
 namespace HostLogsWPFApp.Logic
 {
+    public interface ISqlLogRepository
+    {
+        Task<List<RequestResponseLogModel>> GetLogsByYearAndMonthAsync(string environment, int year, int month);
+    }
+
     public class RetrieveLogsByYearManager
     {
         private readonly ISqlLogRepository _logRepository;
+
+        public List<AccountModel> AccountList { get; private set; }
+        public List<string> AccessNumsList { get; private set; }
+        public List<string> RequestTypesList { get; private set; }
+        public List<RequestResponseLogModel> AllLogs { get; private set; }
 
         public RetrieveLogsByYearManager(ISqlLogRepository logRepository)
         {
@@ -107,35 +67,20 @@ namespace HostLogsWPFApp.Logic
             string environment,
             int year,
             int month,
-            ProgressHandler<RequestResponseLogModel> progressHandler = null)
+            ProgressBarHandler<RequestResponseLogModel> progressHandler = null)
         {
             var logs = await _logRepository.GetLogsByYearAndMonthAsync(environment, year, month);
-
             progressHandler?.SetMaxItems(logs.Count);
 
             var result = new List<RequestResponseLogModel>();
             foreach (var log in logs)
             {
                 result.Add(log);
-                progressHandler?.ReportProgress(log);
+                progressHandler?.IncrementProgress();
             }
 
+            AllLogs = result;
             return result;
-        }
-
-        public List<string> GetDistinctAccountNumbers(List<RequestResponseLogModel> logs)
-        {
-            return logs.Select(l => l.AccountNumber).Distinct().ToList();
-        }
-
-        public List<string> GetDistinctRequestTypes(List<RequestResponseLogModel> logs)
-        {
-            return logs.Select(l => l.RequestType).Distinct().ToList();
-        }
-
-        public List<string> GetDistinctAccessNumbers(List<RequestResponseLogModel> logs)
-        {
-            return logs.Select(l => l.AccessNumber).Distinct().ToList();
         }
     }
 }
