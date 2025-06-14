@@ -1,86 +1,141 @@
-
-
-===============================
-
-<ProgressBar 
-    Minimum="0" 
-    Maximum="{Binding MaxItems}" 
-    Value="{Binding ProgressValue}" 
-    Height="20" 
-    Margin="10"/>
-
-
-====================
-
-private async void LoadLogsButton_Click(object sender, RoutedEventArgs e)
-{
-    int year = int.Parse(selectedYear);
-    int month = int.Parse(selectedMonth);
-
-    var logs = await _manager.GetLogsAsync(environment, year, month, _progressHandler);
-    LogsListView.ItemsSource = logs;
-}
-
-================================
-
-private RetrieveLogsByYearManager _manager;
-private ProgressBarHandler<RequestResponseLogModel> _progressHandler;
-
-public RetrieveLogsByYearWindow()
-{
-    InitializeComponent();
-    _manager = new RetrieveLogsByYearManager(new SqlLogRepository()); // Provide your implementation
-    _progressHandler = new ProgressBarHandler<RequestResponseLogModel>();
-    DataContext = _progressHandler;
-}
-
-
-=================================
 using HostLogsWPFApp.Helpers;
 using HostLogsWPFApp.Models;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Globalization;
+using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
 namespace HostLogsWPFApp.Logic
 {
-    public interface ISqlLogRepository
+    public class RetrieveLogsByYearManager : INotifyPropertyChanged
     {
-        Task<List<RequestResponseLogModel>> GetLogsByYearAndMonthAsync(string environment, int year, int month);
-    }
+        public ObservableCollection<RequestResponseLogModel> EncoreLogs { get; set; } = new();
+        private List<RequestResponseLogModel> logsList = new();
 
-    public class RetrieveLogsByYearManager
-    {
-        private readonly ISqlLogRepository _logRepository;
+        public List<AccountModel> accountList { get; private set; } = new();
+        public List<string> accessNumsList { get; private set; } = new();
+        public List<string> requestTypesList { get; private set; } = new();
+        public List<RequestResponseLogModel>? AllLogs { get; private set; }
 
-        public List<AccountModel> AccountList { get; private set; }
-        public List<string> AccessNumsList { get; private set; }
-        public List<string> RequestTypesList { get; private set; }
-        public List<RequestResponseLogModel> AllLogs { get; private set; }
-
-        public RetrieveLogsByYearManager(ISqlLogRepository logRepository)
+        private int itemCount;
+        public int ItemCount
         {
-            _logRepository = logRepository ?? throw new ArgumentNullException(nameof(logRepository));
+            get => itemCount;
+            set { itemCount = value; OnPropertyChanged(); }
         }
 
-        public async Task<List<RequestResponseLogModel>> GetLogsAsync(
-            string environment,
-            int year,
-            int month,
-            ProgressBarHandler<RequestResponseLogModel> progressHandler = null)
+        private int progressValue;
+        public int ProgressValue
         {
-            var logs = await _logRepository.GetLogsByYearAndMonthAsync(environment, year, month);
-            progressHandler?.SetMaxItems(logs.Count);
+            get => progressValue;
+            set { progressValue = value; OnPropertyChanged(); }
+        }
 
-            var result = new List<RequestResponseLogModel>();
-            foreach (var log in logs)
+        private int filterProgressValue;
+        public int FilterProgressValue
+        {
+            get => filterProgressValue;
+            set { filterProgressValue = value; OnPropertyChanged(); }
+        }
+
+        private bool isLoading;
+        public bool IsLoading
+        {
+            get => isLoading;
+            set { isLoading = value; OnPropertyChanged(); }
+        }
+
+        public string Environment { get; set; } = "";
+        public string selectedYear { get; set; } = "";
+        public string selectedMonth { get; set; } = "";
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+        private void OnPropertyChanged([CallerMemberName] string propertyName = "")
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+
+        private DbContext OpenDatabase()
+        {
+            var dbHelper = new DbContextFactoryHelper();
+            return dbHelper.InitializeDbContextFactory(Environment);
+        }
+
+        public async Task<List<RequestResponseLogModel>> GetLogsAsync()
+        {
+            IsLoading = true;
+            ProgressValue = 0;
+            EncoreLogs.Clear();
+            ItemCount = 0;
+
+            var dbContext = OpenDatabase();
+            if (dbContext == null)
             {
-                result.Add(log);
-                progressHandler?.IncrementProgress();
+                IsLoading = false;
+                throw new FileNotFoundException("Database not found.");
             }
 
-            AllLogs = result;
-            return result;
+            int year = int.Parse(selectedYear);
+            int month = DateTime.ParseExact(selectedMonth, "MMMM", CultureInfo.InvariantCulture).Month;
+
+            var logs = await dbContext.Set<EventDetailsModel>()
+                .Where(e => e.DateTimeStamp.Year == year && e.DateTimeStamp.Month == month)
+                .Select(e => new RequestResponseLogModel
+                {
+                    EventID = e.EventID,
+                    FullMessage = e.EventDesc,
+                    UserID = e.UserID,
+                    DateTimeStamp = e.DateTimeStamp,
+                    Environment = Environment
+                })
+                .ToListAsync();
+
+            logs = logs.OrderByDescending(x => x.DateTimeStamp).ToList();
+            int maxItems = logs.Count;
+
+            var progress = new Progress<RequestResponseLogModel>(log =>
+            {
+                EncoreLogs.Add(log);
+                ItemCount = EncoreLogs.Count;
+                ProgressValue = (int)((double)ItemCount / maxItems * 100);
+            });
+
+            await foreach (var log in logs.ToAsyncEnumerable())
+            {
+                progress.Report(log);
+                await Task.Delay(1);
+            }
+
+            logsList = EncoreLogs.ToList();
+            AllLogs = logsList;
+            IsLoading = false;
+
+            return logsList;
+        }
+
+        public AccountModel GetDistinctAccountNumbers(List<RequestResponseLogModel> logs)
+        {
+            var extract = new ExtractAccountNums();
+            accountList = extract.ExtractAccountAndType(logs);
+            return accountList.FirstOrDefault();
+        }
+
+        public List<string> GetDistinctRequestTypes(List<RequestResponseLogModel> logs)
+        {
+            var extract = new ExtractTypes();
+            var result = extract.ReadRequestTypesOnly(logs);
+            requestTypesList = result.Select(x => x.Type).Distinct().ToList();
+            return requestTypesList;
+        }
+
+        public List<string> GetDistinctAccessNumbers(List<RequestResponseLogModel> logs)
+        {
+            var extract = new ExtractAccessNums();
+            var result = extract.ExtractAccessNumbersOnly(logs);
+            accessNumsList = result.Select(x => x.AccessNumber).Distinct().ToList();
+            return accessNumsList;
         }
     }
 }
