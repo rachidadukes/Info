@@ -1,1 +1,43 @@
 
+  private static async Task TestingAccounts(List<EncoreLogModel> logsWithDetails)
+  {
+      string filePath = Path.Combine("C:\\temp", "LogsWithDetails.txt");
+      StreamWriter allWriter = new StreamWriter(filePath, true);
+
+      string acctsFilePath = Path.Combine("C:\\temp", "accountsLogs.txt");
+      StreamWriter accountsWriter = new StreamWriter(acctsFilePath, true);
+
+      foreach (var log in logsWithDetails)
+      {
+          await allWriter.WriteLineAsync($"EventID: {log.EventID}," +
+              $" AccountNumber: {log.AccountNumber}, " +
+              $"AccountType: {log.AccountType}, AccessNumber: {log.AccessNumber}, ");
+      }
+
+      List<string> SQLAccts = new List<string>();
+      SQLAccts = logsWithDetails.Select(x => x.AccountNumber).Distinct().ToList();
+
+      foreach (var log in SQLAccts)
+      {
+          await accountsWriter.WriteLineAsync(log);
+      }
+
+      await allWriter.FlushAsync();
+      await accountsWriter.FlushAsync();
+      allWriter.Close();
+      accountsWriter.Close();
+
+      OpenSQliteDatabase OpenDb = new OpenSQliteDatabase();
+      var dbContext = OpenDb.OpenDatabase();
+      var dbAccounts = dbContext.Accounts.ToListAsync();
+      List<string> dbLiteAccts =dbAccounts.Result.Select(x => x.AccountNumber).Distinct().ToList();
+      foreach (var dbAcct in dbLiteAccts)
+      {
+          if (!SQLAccts.Contains(dbAcct))
+          {
+              await accountsWriter.WriteLineAsync($"Account {dbAcct} not found in logs with details.");
+          }
+      }
+
+  }
+
