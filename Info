@@ -1,43 +1,52 @@
+public async Task<List<LogAccountsModel>> SearchAccountsFromDb(
+    DbContextSQLite dbContext, 
+    bool boolAcctWithBalance, 
+    string accountNumber, 
+    string accessNumber)
+{
+    try
+    {
+        // Get distinct accounts from LogAccounts
+        var acctsQuery = dbContext.LogAccounts
+            .GroupBy(s => new { s.AccountNumber, s.AccountType, s.Environment })
+            .Select(g => g.First());
 
-  private static async Task TestingAccounts(List<EncoreLogModel> logsWithDetails)
-  {
-      string filePath = Path.Combine("C:\\temp", "LogsWithDetails.txt");
-      StreamWriter allWriter = new StreamWriter(filePath, true);
+        // Apply filters early (more efficient)
+        if (!string.IsNullOrWhiteSpace(accountNumber))
+        {
+            acctsQuery = acctsQuery.Where(s => s.AccountNumber.Contains(accountNumber));
+        }
 
-      string acctsFilePath = Path.Combine("C:\\temp", "accountsLogs.txt");
-      StreamWriter accountsWriter = new StreamWriter(acctsFilePath, true);
+        if (!string.IsNullOrWhiteSpace(accessNumber))
+        {
+            acctsQuery = acctsQuery.Where(s => s.AccessNumber.Contains(accessNumber));
+        }
 
-      foreach (var log in logsWithDetails)
-      {
-          await allWriter.WriteLineAsync($"EventID: {log.EventID}," +
-              $" AccountNumber: {log.AccountNumber}, " +
-              $"AccountType: {log.AccountType}, AccessNumber: {log.AccessNumber}, ");
-      }
+        var accts = await acctsQuery.ToListAsync();
 
-      List<string> SQLAccts = new List<string>();
-      SQLAccts = logsWithDetails.Select(x => x.AccountNumber).Distinct().ToList();
+        // If we don't care about balance, return here
+        if (!boolAcctWithBalance)
+            return accts;
 
-      foreach (var log in SQLAccts)
-      {
-          await accountsWriter.WriteLineAsync(log);
-      }
+        // Filter only accounts with balance
+        var balanceAccounts = await dbContext.AccountBalance
+            .Where(b => EF.Functions.Like(b.AvlBal, "%")) // Optional: Filter out non-numeric strings if needed
+            .Where(b => Convert.ToDecimal(b.AvlBal) > 0)
+            .Select(b => new { b.AccountNumber, b.AccessNumber, b.AcctType, b.Environment })
+            .ToListAsync();
 
-      await allWriter.FlushAsync();
-      await accountsWriter.FlushAsync();
-      allWriter.Close();
-      accountsWriter.Close();
+        var filtered = accts.Where(acct =>
+            balanceAccounts.Any(b => 
+                b.AccountNumber == acct.AccountNumber &&
+                b.AccessNumber == acct.AccessNumber &&
+                b.AcctType == acct.AccountType &&
+                b.Environment == acct.Environment)).ToList();
 
-      OpenSQliteDatabase OpenDb = new OpenSQliteDatabase();
-      var dbContext = OpenDb.OpenDatabase();
-      var dbAccounts = dbContext.Accounts.ToListAsync();
-      List<string> dbLiteAccts =dbAccounts.Result.Select(x => x.AccountNumber).Distinct().ToList();
-      foreach (var dbAcct in dbLiteAccts)
-      {
-          if (!SQLAccts.Contains(dbAcct))
-          {
-              await accountsWriter.WriteLineAsync($"Account {dbAcct} not found in logs with details.");
-          }
-      }
-
-  }
-
+        return filtered;
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[LOG ERROR] Failed to retrieve accounts from DB: {ex.Message}");
+        return new List<LogAccountsModel>();
+    }
+}
