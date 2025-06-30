@@ -1,180 +1,48 @@
-using Microsoft.Data.Sqlite;
-using MyApp.ApplicationLayer.Interfaces;
-using MyApp.Domain;
-
-using System.Text.Json;
-
-namespace MyApp.Infrastructure.Services
-{
-
-
-    public class SampleDataService : ISampleDataService
+    private async Task<List<LogAccountsModel>> FindSuccessfulOrUnSuccessTransaction(List<LogAccountsModel> filteredLogs)
     {
-        public async Task<List<AccessNumsSample>> GetAllAccessNumbsAsync()
+        OpenSQliteDatabase OpenDb = new OpenSQliteDatabase();
+        var dbContext = OpenDb.OpenDatabase();
+        List<LogAccountsModel> newFilteredLogs = new List<LogAccountsModel>();
+        if (logWithSuccess)
         {
-            try
+
+            foreach (var selectedLog in filteredLogs)
             {
-               var accessNumbers = new List<AccessNumsSample>();
-              
-                var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "SampleData", "SqliteAccounts.db");
-                var connectionString = $"Data Source={dbPath};";
+                // select data from ReqResLogsModel database
+                var result = await dbContext.RequestResponseLogs
+                    .Where(e => e.EventID == selectedLog.EventID
+                    && e.Response.Contains("Success"))
+                   .ToListAsync();
 
-                using var connection = new SqliteConnection(connectionString);
-                await connection.OpenAsync();
-
-                // Example: read table
-                var command = connection.CreateCommand();
-                command.CommandText = "SELECT * FROM AccessNumbers";
-
-                using var reader = await command.ExecuteReaderAsync();
-
-                while (await reader.ReadAsync())
+                // generate a list of successful transactions
+                if (result.Any())
                 {
-                    accessNumbers.Add(new AccessNumsSample
-                    {
-                        Id = reader.GetInt32(0),
-                        Environment = reader.IsDBNull(1) ? null : reader.GetString(1),
-                        AccessNumber =reader.IsDBNull(2) ? null : reader.GetString(2)
-                       
-                    });
+                   // add the log to the new list
+                    newFilteredLogs.Add(selectedLog);
                 }
-
-            
-
-                return accessNumbers;
             }
-            catch (Exception ex)
+
+
+        }
+       
+
+        if (logRejected)
+        {
+           
+            // select data from ReqResLogsModel database
+            var result = await dbContext.RequestResponseLogs
+                .Where(e => e.EventID == selectedLog.EventID
+                && e.Response.Contains("Rejected"))
+               .ToListAsync();
+
+
+            // generate a list of successful transactions
+            if (result.Any())
             {
-                Console.WriteLine("Error fetching data: " + ex.Message);
-                return new List<AccessNumsSample>();
+                // add the log to the new list
+                newFilteredLogs.Add(selectedLog);
             }
         }
 
-        public async Task<List<AccountsSample>> GetAllAccountsNumbsAsync()
-        {
-            try
-            {
-                var accounts = new List<AccountsSample>();
-                var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "SampleData", "SqliteAccounts.db");
-                var connectionString = $"Data Source={dbPath};";
-
-                using var connection = new SqliteConnection(connectionString);
-                await connection.OpenAsync();
-
-                // Example: read table
-                var command = connection.CreateCommand();
-                command.CommandText = "SELECT * FROM Accounts";
-
-                using var reader = await command.ExecuteReaderAsync();
-
-                while (await reader.ReadAsync())
-                {
-                    accounts.Add(new AccountsSample
-                    {
-                        Id = reader.GetInt32(0),
-                        Environment = reader.IsDBNull(1) ? null : reader.GetString(1),
-                        AccountNumber = reader.IsDBNull(2) ? null : reader.GetString(2),
-                        AccountType = reader.IsDBNull(3) ? null : reader.GetString(3)
-                    });
-                }
-
-                return accounts;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Error fetching data: " + ex.Message);
-                return new List<AccountsSample>();
-            }
-        }
-
-
-
-
-        public async Task<List<SSN_Sample>> GetAllSSNsAsync()
-        {
-            try
-            {
-
-
-                var ssnList = new List<SSN_Sample>();
-
-                var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "SampleData", "SqliteAccounts.db");
-                var connectionString = $"Data Source={dbPath};";
-
-                using var connection = new SqliteConnection(connectionString);
-                await connection.OpenAsync();
-
-                // Example: read table
-                var command = connection.CreateCommand();
-                command.CommandText = "SELECT * FROM SSNlist";
-                f
-                using var reader = await command.ExecuteReaderAsync();
-
-                while (await reader.ReadAsync())
-                {
-                    ssnList.Add(new SSN_Sample
-                    {
-                        Id = reader.GetInt32(0),
-                        Environment = reader.IsDBNull(1) ? null : reader.GetString(1),
-                        SSN = reader.IsDBNull(2) ? null : reader.GetString(2),
-
-                    });
-                }
-
-
-
-                return ssnList;
-               
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Error fetching data: " + ex.Message);
-                return new List<SSN_Sample>();
-            }
-        }
-
-
-
-        public async Task<List<LastNameSamples>> GetAllLastNamesAsync()
-        {
-            try
-            {
-
-                var lastNameList = new List<LastNameSamples>();
-
-                var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "SampleData", "SqliteAccounts.db");
-                var connectionString = $"Data Source={dbPath};";
-
-                using var connection = new SqliteConnection(connectionString);
-                await connection.OpenAsync();
-
-                // Example: read table
-                var command = connection.CreateCommand();
-                command.CommandText = "SELECT * FROM MemberLastName";
-
-                using var reader = await command.ExecuteReaderAsync();
-
-                while (await reader.ReadAsync())
-                {
-                    lastNameList.Add(new LastNameSamples
-                    {
-                        Id = reader.GetInt32(0),
-                        Environment = reader.IsDBNull(1) ? null : reader.GetString(1),
-                        LastName = reader.IsDBNull(2) ? null : reader.GetString(2),
-
-                    });
-                }
-
-
-
-                return lastNameList;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Error fetching data: " + ex.Message);
-                return new List<LastNameSamples>();
-            }
-        }
-
+        return newFilteredLogs;
     }
-}
