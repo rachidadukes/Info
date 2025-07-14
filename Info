@@ -1,55 +1,62 @@
-Press Ctrl+Shift+B to build 
-Press Ctrl+Shift+D to "Run and Debug" icon on the left.
-Select Launch HostLogsWPFApp from the dropdown.
-Click the green ▶️ run button.
 
-==============================
+  private async void MainWindowX_Loaded(object sender, RoutedEventArgs e)
+  {
+      Mouse.OverrideCursor = Cursors.Wait;
 
-Task	Command or File Needed
-Build	dotnet build HostLogsWPFApp/...
-Run	dotnet run --project HostLogsWPFApp/...
-Debug	Configure launch.json
-Build via Debug	Configure tasks.json
-====================================
-=======================================
-create a .vscode folder in your root solution directory
-============================================
-tasks.json
+      try
+      {
+          var importInfo = new LogFilterService();
+          string lastImportDates = await importInfo.LastImport();              
+          lblTitle.Content = "Latest Import - " + lastImportDates;
+      }
+      catch (Exception ex)
+      {
+          MessageBox.Show($"Error logs: {ex.Message}");
+          return;
+      }
+      finally
+      {
+          Mouse.OverrideCursor = null;
 
-{
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "build",
-      "command": "dotnet",
-      "type": "process",
-      "args": [
-        "build",
-        "${workspaceFolder}/HostLogsWPFApp/HostLogsWPFApp.csproj"
-      ],
-      "problemMatcher": "$msCompile"
-    }
-  ]
-}
+      }
+    
+  }
 
 
-=============================
+===========================
 
-Final launch.json (corrected):
+  <Label Name="lblTitle" Foreground="Red" FontWeight="Bold" FontSize="12"
+         Content="Encore Host Logs WPF Application"></Label>
+           
+=========================
+  public class LogFilterService
+=================
 
-{
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "name": "Launch HostLogsWPFApp",
-      "type": "coreclr",
-      "request": "launch",
-      "preLaunchTask": "build",
-      "program": "${workspaceFolder}/HostLogsWPFApp/bin/Debug/net9.0-windows/HostLogsWPFApp.dll",
-      "args": [],
-      "cwd": "${workspaceFolder}/HostLogsWPFApp",
-      "stopAtEntry": false,
-      "console": "internalConsole"
-    }
-  ]
-}
+public async Task<string> LastImport()
+   {
+       string strImportDate = string.Empty;
+
+       try
+       {
+
+           var dbContext = _openDb.OpenDatabase();
+
+           var maxUnitDate = await dbContext.LogAccounts
+               .Where(e => e.Environment.Contains("UNIT"))
+                .MaxAsync(e => e.DateTimeStamp);
+
+
+           var maxIntgDate = await dbContext.LogAccounts
+              .Where(e => e.Environment.Contains("INTG"))
+               .MaxAsync(e => e.DateTimeStamp);
+
+           strImportDate = "UNIT Max Date: " + maxUnitDate.ToString() +
+                           "  |  INTGMax Date: " + maxIntgDate.ToString();
+           return strImportDate;
+       }
+       catch (Exception ex)
+       {
+           Console.WriteLine($"Error counting data: {ex.Message}");
+           return "";
+       }
+   }
