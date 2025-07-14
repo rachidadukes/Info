@@ -1,4 +1,17 @@
 
+ Run via Debug Panel
+Press Ctrl+Shift+D or click the "Run and Debug" icon on the left.
+
+Select Launch HostLogsWPFApp from the dropdown.
+
+Click the green ▶️ run button.
+==============================
+
+Task	Command or File Needed
+Build	dotnet build HostLogsWPFApp/...
+Run	dotnet run --project HostLogsWPFApp/...
+Debug	Configure launch.json
+Build via Debug	Configure tasks.json
 ====================================
 tasks.json
 
