@@ -1,10 +1,8 @@
-
- Run via Debug Panel
-Press Ctrl+Shift+D or click the "Run and Debug" icon on the left.
-
+Press Ctrl+Shift+B to build 
+Press Ctrl+Shift+D to "Run and Debug" icon on the left.
 Select Launch HostLogsWPFApp from the dropdown.
-
 Click the green ▶️ run button.
+
 ==============================
 
 Task	Command or File Needed
