@@ -13,6 +13,9 @@ Run	dotnet run --project HostLogsWPFApp/...
 Debug	Configure launch.json
 Build via Debug	Configure tasks.json
 ====================================
+=======================================
+create a .vscode folder in your root solution directory
+============================================
 tasks.json
 
 {
