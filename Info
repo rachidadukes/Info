@@ -1,48 +1,41 @@
-    private async Task<List<LogAccountsModel>> FindSuccessfulOrUnSuccessTransaction(List<LogAccountsModel> filteredLogs)
+
+====================================
+tasks.json
+
+{
+  "version": "2.0.0",
+  "tasks": [
     {
-        OpenSQliteDatabase OpenDb = new OpenSQliteDatabase();
-        var dbContext = OpenDb.OpenDatabase();
-        List<LogAccountsModel> newFilteredLogs = new List<LogAccountsModel>();
-        if (logWithSuccess)
-        {
-
-            foreach (var selectedLog in filteredLogs)
-            {
-                // select data from ReqResLogsModel database
-                var result = await dbContext.RequestResponseLogs
-                    .Where(e => e.EventID == selectedLog.EventID
-                    && e.Response.Contains("Success"))
-                   .ToListAsync();
-
-                // generate a list of successful transactions
-                if (result.Any())
-                {
-                   // add the log to the new list
-                    newFilteredLogs.Add(selectedLog);
-                }
-            }
-
-
-        }
-       
-
-        if (logRejected)
-        {
-           
-            // select data from ReqResLogsModel database
-            var result = await dbContext.RequestResponseLogs
-                .Where(e => e.EventID == selectedLog.EventID
-                && e.Response.Contains("Rejected"))
-               .ToListAsync();
-
-
-            // generate a list of successful transactions
-            if (result.Any())
-            {
-                // add the log to the new list
-                newFilteredLogs.Add(selectedLog);
-            }
-        }
-
-        return newFilteredLogs;
+      "label": "build",
+      "command": "dotnet",
+      "type": "process",
+      "args": [
+        "build",
+        "${workspaceFolder}/HostLogsWPFApp/HostLogsWPFApp.csproj"
+      ],
+      "problemMatcher": "$msCompile"
     }
+  ]
+}
+
+
+=============================
+
+Final launch.json (corrected):
+
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch HostLogsWPFApp",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/HostLogsWPFApp/bin/Debug/net9.0-windows/HostLogsWPFApp.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/HostLogsWPFApp",
+      "stopAtEntry": false,
+      "console": "internalConsole"
+    }
+  ]
+}
