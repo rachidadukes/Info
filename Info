@@ -1,25 +1,11 @@
-How to publish a new branch without local changes:
-You can still push the branch manually to make it visible on GitHub, even if there are no code changes:
+ you click “Push”:
+Your local branch Multi-tran_Adjust_Trans will be pushed to the remote (origin).
 
-👉 Option 1: Push using Visual Studio
-Go to Git > Manage Branches from the top menu.
+It will appear under remotes/origin/Multi-tran_Adjust_Trans.
 
-In the list of branches, find Multi-tran_Adjust_Trans.
+From that point forward, any changes and commits will be tracked and syncable between local and GitHub.
 
-Right-click on it and select Push.
 
-👉 Option 2: Use Git CLI (if you prefer)
-Open a terminal and run:
-
-bash
-Copy
-Edit
-git push -u origin Multi-tran_Adjust_Trans
-This command will:
-
-Push the local branch to GitHub
-
-Set the remote tracking so future pushes can just use git push
 
 =================================
 
