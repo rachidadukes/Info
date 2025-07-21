@@ -1,1 +1,23 @@
-lllllllll
+WITH Normalized AS (
+    SELECT 
+        Id,
+        AccessNumber,
+        -- Remove non-digits and trim leading zeros
+        ltrim(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(AccountNumber,
+            '0',''),'1','1'),'2','2'),'3','3'),'4','4'),
+            '5','5'),'6','6'),'7','7'),'8','8'),'9','9'), '0') AS NormalizedAccountNumber,
+        AccountType,
+        Environment
+    FROM AccessAcctNumbers
+),
+Ranked AS (
+    SELECT *,
+        ROW_NUMBER() OVER (
+            PARTITION BY AccessNumber, NormalizedAccountNumber, AccountType, Environment
+            ORDER BY Id
+        ) AS RowNum
+    FROM Normalized
+)
+SELECT Id, AccessNumber, AccountType, Environment
+FROM Ranked
+WHERE RowNum > 1;
