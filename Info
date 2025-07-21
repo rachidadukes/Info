@@ -1,17 +1,30 @@
-SELECT *
-FROM AccessAcctNumbers
-WHERE (AccountNumber, AccessNumber, AccountType, Environment) IN (
-    SELECT 
-        AccountNumber,
-        AccessNumber,
-        AccountType,
-        Environment
-    FROM AccessAcctNumbers
-    GROUP BY 
-        AccountNumber,
-        AccessNumber,
-        AccountType,
-        Environment
-    HAVING COUNT(*) > 1
-)
-ORDER BY AccountNumber;
+Creating a branch locally does not automatically push it to GitHub. You need to push it manually the first time.
+
+In Visual Studio:
+After you create the new branch, go to Git Changes or click the "Publish Branch" button (top bar or bottom-right corner).
+
+Visual Studio will push the new branch to the remote (origin) on GitHub.
+
+
+==============================================
+To publish the branch to GitHub from Visual Studio:
+Open the “Git Changes” tab (you can also open it from View → Git Changes).
+
+In the top bar of the Git Changes window, you should see:
+
+scss
+Copy
+Edit
+YourBranchName (not published)      [Publish Branch]
+Click Publish Branch.
+
+This will push Multi-tran_Adjust_Trans to the origin remote (your GitHub repository).
+
+=================================
+
+ Then, confirm it's on GitHub:
+Go to: https://github.com/NFC-TPO/encore-main
+
+Click the branch dropdown (next to master)
+
+You should see Multi-tran_Adjust_Trans listed under “Branches”
