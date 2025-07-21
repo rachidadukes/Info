@@ -1,22 +1,14 @@
-WITH Ranked AS (
-    SELECT 
-        Id,
-        AccountNumber,
-        AccessNumber,
-        AccountType,
-        Environment,
-        ROW_NUMBER() OVER (
-            PARTITION BY AccountNumber, AccessNumber, AccountType, Environment
-            ORDER BY Id
-        ) AS RowNum
-    FROM AccessAcctNumbers
-)
 SELECT 
-    Id,
     AccountNumber,
     AccessNumber,
     AccountType,
+    Environment,
+    COUNT(*) AS DuplicateCount
+FROM AccessAcctNumbers
+GROUP BY 
+    AccountNumber, 
+    AccessNumber, 
+    AccountType, 
     Environment
-FROM Ranked
-WHERE RowNum > 1
+HAVING COUNT(*) > 1
 ORDER BY AccountNumber;
