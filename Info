@@ -1,14 +1,17 @@
-SELECT 
-    AccountNumber,
-    AccessNumber,
-    AccountType,
-    Environment,
-    COUNT(*) AS DuplicateCount
+SELECT *
 FROM AccessAcctNumbers
-GROUP BY 
-    AccountNumber, 
-    AccessNumber, 
-    AccountType, 
-    Environment
-HAVING COUNT(*) > 1
+WHERE (AccountNumber, AccessNumber, AccountType, Environment) IN (
+    SELECT 
+        AccountNumber,
+        AccessNumber,
+        AccountType,
+        Environment
+    FROM AccessAcctNumbers
+    GROUP BY 
+        AccountNumber,
+        AccessNumber,
+        AccountType,
+        Environment
+    HAVING COUNT(*) > 1
+)
 ORDER BY AccountNumber;
