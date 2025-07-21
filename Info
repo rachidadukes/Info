@@ -1,9 +1,5 @@
- you click “Push”:
-Your local branch Multi-tran_Adjust_Trans will be pushed to the remote (origin).
+git push -u origin Multi-tran_Adjust_Trans
 
-It will appear under remotes/origin/Multi-tran_Adjust_Trans.
-
-From that point forward, any changes and commits will be tracked and syncable between local and GitHub.
 
 
 
