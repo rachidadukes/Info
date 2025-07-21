@@ -1,37 +1,62 @@
-WITH NormalizedData AS (
-    SELECT 
-        Id, -- assuming there's a primary key
-        AccessNumber,
-        AccountNumber,
-        AccountType,
-        Environment,
-        -- Normalize account number: remove non-digits and trim leading zeros
-        -- SQLite doesn't support complex regex easily, so use a simplified assumption
-        -- This might need to be implemented in C# or with a UDF in practice
-        REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(AccountNumber, ' ', ''), '-', ''), '.', ''), '(', ''), ')', ''), '/', ''), '\\', ''), ',', ''), '_', ''), '+', '') AS CleanAcctNum
-    FROM AccessAcctNumbers
-),
-CompositeKeys AS (
-    SELECT *,
-           -- Simulate "normalized" account number and build composite key
-           AccessNumber || 
-           LTRIM(CleanAcctNum, '0') || 
-           AccountType || 
-           Environment AS CompositeKey
-    FROM NormalizedData
-),
-Duplicates AS (
-    SELECT 
-        MIN(Id) AS KeepId,
-        CompositeKey
-    FROM CompositeKeys
-    GROUP BY CompositeKey
-),
-ToDelete AS (
-    SELECT a.*
-    FROM CompositeKeys a
-    LEFT JOIN Duplicates d ON a.CompositeKey = d.CompositeKey AND a.Id = d.KeepId
-    WHERE d.KeepId IS NULL
-)
-DELETE FROM AccessAcctNumbers
-WHERE Id IN (SELECT Id FROM ToDelete);
+ public class DuplicateCleaner
+ {
+     public  int  CleanDuplicates()
+     {
+         string compositeKey;
+         int intCount = 0;
+         var uniqueKeys = new HashSet<string>();
+         List<AccountAccessNumDbModel> allRecords = new List<AccountAccessNumDbModel>();
+         var duplicatesToDelete = new List<AccountAccessNumDbModel>(); 
+
+         OpenSQliteDatabase openDb = new OpenSQliteDatabase();
+         var dbContext = openDb.OpenDatabase();
+        
+         allRecords = dbContext.AccessAcctNumbers.ToList();
+         allRecords = NormalizeAccountNumber(allRecords);
+
+         foreach (var record in allRecords)
+         {
+             compositeKey = $"{record.AccessNumber}|{record.AccountNumber}|{record.AccountType}|{record.Environment}";
+
+             if (!uniqueKeys.Add(compositeKey))
+             {
+                 // It's a duplicate, mark for deletion
+                 duplicatesToDelete.Add(record);
+             }
+         }
+
+
+
+         if (duplicatesToDelete.Any())
+             {
+               intCount = duplicatesToDelete.Count;
+                dbContext.AccessAcctNumbers.RemoveRange(duplicatesToDelete);
+                 dbContext.SaveChanges();
+
+                 Console.WriteLine($"Removed {duplicatesToDelete.Count} duplicate record(s).");
+             }
+             else
+             {
+                 Console.WriteLine("No duplicates found.");
+             }
+       return intCount;
+     }
+
+     private List<AccountAccessNumDbModel> NormalizeAccountNumber(List<AccountAccessNumDbModel> allRecords)
+     {
+
+         string acctNum;
+         
+
+         // clean up the Accountnumber from the leading zeros
+         foreach (var record in allRecords)
+         {
+             acctNum = new string(record.AccountNumber.Where(char.IsDigit).ToArray()).TrimStart('0');
+             record.AccountNumber = acctNum;
+         }
+         return allRecords;  
+     }
+
+
+ 
+ }
