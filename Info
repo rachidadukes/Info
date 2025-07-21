@@ -1,13 +1,37 @@
-git push -u origin Multi-tran_Adjust_Trans
-
-
-
-
-=================================
-
- Then, confirm it's on GitHub:
-Go to: https://github.com/NFC-TPO/encore-main
-
-Click the branch dropdown (next to master)
-
-You should see Multi-tran_Adjust_Trans listed under “Branches”
+WITH NormalizedData AS (
+    SELECT 
+        Id, -- assuming there's a primary key
+        AccessNumber,
+        AccountNumber,
+        AccountType,
+        Environment,
+        -- Normalize account number: remove non-digits and trim leading zeros
+        -- SQLite doesn't support complex regex easily, so use a simplified assumption
+        -- This might need to be implemented in C# or with a UDF in practice
+        REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(AccountNumber, ' ', ''), '-', ''), '.', ''), '(', ''), ')', ''), '/', ''), '\\', ''), ',', ''), '_', ''), '+', '') AS CleanAcctNum
+    FROM AccessAcctNumbers
+),
+CompositeKeys AS (
+    SELECT *,
+           -- Simulate "normalized" account number and build composite key
+           AccessNumber || 
+           LTRIM(CleanAcctNum, '0') || 
+           AccountType || 
+           Environment AS CompositeKey
+    FROM NormalizedData
+),
+Duplicates AS (
+    SELECT 
+        MIN(Id) AS KeepId,
+        CompositeKey
+    FROM CompositeKeys
+    GROUP BY CompositeKey
+),
+ToDelete AS (
+    SELECT a.*
+    FROM CompositeKeys a
+    LEFT JOIN Duplicates d ON a.CompositeKey = d.CompositeKey AND a.Id = d.KeepId
+    WHERE d.KeepId IS NULL
+)
+DELETE FROM AccessAcctNumbers
+WHERE Id IN (SELECT Id FROM ToDelete);
