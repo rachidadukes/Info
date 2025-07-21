@@ -1,24 +1,25 @@
-Creating a branch locally does not automatically push it to GitHub. You need to push it manually the first time.
+How to publish a new branch without local changes:
+You can still push the branch manually to make it visible on GitHub, even if there are no code changes:
 
-In Visual Studio:
-After you create the new branch, go to Git Changes or click the "Publish Branch" button (top bar or bottom-right corner).
+👉 Option 1: Push using Visual Studio
+Go to Git > Manage Branches from the top menu.
 
-Visual Studio will push the new branch to the remote (origin) on GitHub.
+In the list of branches, find Multi-tran_Adjust_Trans.
 
+Right-click on it and select Push.
 
-==============================================
-To publish the branch to GitHub from Visual Studio:
-Open the “Git Changes” tab (you can also open it from View → Git Changes).
+👉 Option 2: Use Git CLI (if you prefer)
+Open a terminal and run:
 
-In the top bar of the Git Changes window, you should see:
-
-scss
+bash
 Copy
 Edit
-YourBranchName (not published)      [Publish Branch]
-Click Publish Branch.
+git push -u origin Multi-tran_Adjust_Trans
+This command will:
 
-This will push Multi-tran_Adjust_Trans to the origin remote (your GitHub repository).
+Push the local branch to GitHub
+
+Set the remote tracking so future pushes can just use git push
 
 =================================
 
