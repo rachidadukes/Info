@@ -3,10 +3,10 @@ WITH Ranked AS (
         Id,
         AccountNumber,
         AccessNumber,
-        AccountType,
+        TRIM(LOWER(AccountType)) AS NormalizedAccountType,
         Environment,
         ROW_NUMBER() OVER (
-            PARTITION BY AccountNumber, AccessNumber, AccountType, Environment
+            PARTITION BY AccountNumber, AccessNumber, TRIM(LOWER(AccountType)), Environment
             ORDER BY Id
         ) AS RowNum
     FROM AccessAcctNumbers
@@ -15,7 +15,7 @@ SELECT
     Id,
     AccountNumber,
     AccessNumber,
-    AccountType,
+    NormalizedAccountType AS AccountType,
     Environment
 FROM Ranked
 WHERE RowNum > 1
