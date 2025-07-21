@@ -3,10 +3,15 @@ WITH Ranked AS (
         Id,
         AccountNumber,
         AccessNumber,
-        TRIM(LOWER(AccountType)) AS NormalizedAccountType,
+        AccountType,
         Environment,
+        TRIM(LOWER(AccountType)) AS NormalizedAccountType,
         ROW_NUMBER() OVER (
-            PARTITION BY AccountNumber, AccessNumber, TRIM(LOWER(AccountType)), Environment
+            PARTITION BY 
+                AccountNumber, 
+                AccessNumber, 
+                TRIM(LOWER(AccountType)),  -- Normalize here too
+                Environment
             ORDER BY Id
         ) AS RowNum
     FROM AccessAcctNumbers
