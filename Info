@@ -1,26 +1,150 @@
-  // testing
-  TestingDuplicate(duplicatesToDelete);
+using ClosedXML.Excel;
+using HostLogsApp.Data;
+using HostLogsApp.Data.Entities;
 
-  return duplicatesToDelete.Count;
 
-===================================
- private static void TestingDuplicate(List<AccountAccessNumDbModel> duplicatesToDelete)
- {
-     string sql;
+namespace AccountBalanceApp
+{
+  
+    public class DuplicateCleaner
+    {
+        public  int  CleanDuplicates()
+        {
+            string compositeKey;
+            int intCount = 0;
+            var uniqueKeys = new HashSet<string>();
+            List<AccountAccessNumDbModel> allRecords = new List<AccountAccessNumDbModel>();
+            var allDuplicates = new List<AccountAccessNumDbModel>();
 
-     //for testing
+           
+            var seenRecords = new Dictionary<string, AccountAccessNumDbModel>();
+            var duplicatesToDelete = new List<AccountAccessNumDbModel>();
 
-     var dupOrdered = duplicatesToDelete.OrderBy(x => x.AccountNumber).ThenBy(x => x.AccessNumber).ToList();
-     var firstDup = dupOrdered.FirstOrDefault();
 
-     if (firstDup != null)
-     {
-         // write sql query to get the first duplicate
-          sql = $"SELECT * FROM AccessAcctNumbers WHERE Id = {firstDup.Id}";
-         sql += $" AND AccountNumber = '{firstDup.AccountNumber}'";
-         sql += $" AND AccessNumber = '{firstDup.AccessNumber}'";
-         sql += $" AND AccountType = '{firstDup.AccountType}'";
-         sql += $" AND Environment = '{firstDup.Environment}'";
+            OpenSQliteDatabase openDb = new OpenSQliteDatabase();
+            var dbContext = openDb.OpenDatabase();
 
-     }
- }
+            allRecords = dbContext.AccessAcctNumbers.ToList();
+            allRecords = NormalizeAccountNumber(allRecords);
+
+            foreach (var record in allRecords)
+            {
+                compositeKey = $"{record.AccessNumber}|{record.AccountNumber}|{record.AccountType}|{record.Environment}";
+
+                if (!uniqueKeys.Add(compositeKey))
+                {
+                    // It's a duplicate, mark for deletion
+                    allDuplicates.Add(record);
+                }
+            }
+            // testing
+            TestingDuplicate(allDuplicates);
+
+            return 0;
+
+            foreach (var record in allRecords)
+            {
+                compositeKey = $"{record.AccessNumber}|{record.AccountNumber}|{record.AccountType}|{record.Environment}";
+
+                if (!seenRecords.ContainsKey(compositeKey))
+                {
+                    // First time we see this composite key — keep this one
+                    seenRecords[compositeKey] = record;
+                }
+                else
+                {
+                    // Already seen — mark this one for deletion
+                    duplicatesToDelete.Add(record);
+                }
+            }
+
+            if (duplicatesToDelete.Any())
+            {
+                intCount = duplicatesToDelete.Count;
+                dbContext.AccessAcctNumbers.RemoveRange(duplicatesToDelete);
+                dbContext.SaveChanges();
+
+                Console.WriteLine($"Removed {intCount} duplicate record(s).");
+            }
+            else
+            {
+                Console.WriteLine("No duplicates found.");
+            }
+
+            return intCount;
+        }
+
+        private static void TestingDuplicate(List<AccountAccessNumDbModel> duplicatesToDelete)
+        {
+            string sql;
+
+            //for testing
+
+            var dupOrdered = duplicatesToDelete.OrderBy(x => x.AccountNumber).ThenBy(x => x.AccessNumber).ToList();
+
+
+            var firstDup = dupOrdered.FirstOrDefault();
+
+            if (firstDup != null)
+            {
+                // write sql query to get the first duplicate
+                 sql = $"SELECT * FROM AccessAcctNumbers WHERE ";
+                sql += $"  AccountNumber LIKE '%{firstDup.AccountNumber}'";
+                sql += $" AND AccessNumber = '{firstDup.AccessNumber}'";
+                sql += $" AND AccountType = '{firstDup.AccountType}'";
+                sql += $" AND Environment = '{firstDup.Environment}'";
+
+            }
+
+
+            using var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Duplicates");
+
+            // Add headers
+            worksheet.Cell(1, 1).Value = "Id";
+            worksheet.Cell(1, 2).Value = "AccessNumber";
+            worksheet.Cell(1, 3).Value = "AccountNumber";
+            worksheet.Cell(1, 4).Value = "AccountType";
+            worksheet.Cell(1, 5).Value = "Environment";
+            worksheet.Cell(1, 6).Value = "Comment";
+
+            // Add rows
+            for (int i = 0; i < dupOrdered.Count; i++)
+            {
+                var row = i + 2;
+                var item = dupOrdered[i];
+
+                worksheet.Cell(row, 1).Value = item.Id;
+                worksheet.Cell(row, 2).Value = item.AccessNumber;
+                worksheet.Cell(row, 3).Value = item.AccountNumber;
+                worksheet.Cell(row, 4).Value = item.AccountType;
+                worksheet.Cell(row, 5).Value = item.Environment;
+                worksheet.Cell(row, 6).Value = item.Comment;
+            }
+
+            // Auto-fit and save
+            worksheet.Columns().AdjustToContents();
+            workbook.SaveAs("c:\\Temp\\duplicatedAccounts.xlsx");
+
+        }
+
+        private List<AccountAccessNumDbModel> NormalizeAccountNumber(List<AccountAccessNumDbModel> allRecords)
+        {
+
+            string acctNum;
+            
+
+            // clean up the Accountnumber from the leading zeros
+            foreach (var record in allRecords)
+            {
+                acctNum = new string(record.AccountNumber.Where(char.IsDigit).ToArray()).TrimStart('0');
+                record.AccountNumber = acctNum;
+            }
+            return allRecords;  
+        }
+
+
+    
+    }
+
+}
