@@ -1,62 +1,26 @@
- public class DuplicateCleaner
+  // testing
+  TestingDuplicate(duplicatesToDelete);
+
+  return duplicatesToDelete.Count;
+
+===================================
+ private static void TestingDuplicate(List<AccountAccessNumDbModel> duplicatesToDelete)
  {
-     public  int  CleanDuplicates()
+     string sql;
+
+     //for testing
+
+     var dupOrdered = duplicatesToDelete.OrderBy(x => x.AccountNumber).ThenBy(x => x.AccessNumber).ToList();
+     var firstDup = dupOrdered.FirstOrDefault();
+
+     if (firstDup != null)
      {
-         string compositeKey;
-         int intCount = 0;
-         var uniqueKeys = new HashSet<string>();
-         List<AccountAccessNumDbModel> allRecords = new List<AccountAccessNumDbModel>();
-         var duplicatesToDelete = new List<AccountAccessNumDbModel>(); 
+         // write sql query to get the first duplicate
+          sql = $"SELECT * FROM AccessAcctNumbers WHERE Id = {firstDup.Id}";
+         sql += $" AND AccountNumber = '{firstDup.AccountNumber}'";
+         sql += $" AND AccessNumber = '{firstDup.AccessNumber}'";
+         sql += $" AND AccountType = '{firstDup.AccountType}'";
+         sql += $" AND Environment = '{firstDup.Environment}'";
 
-         OpenSQliteDatabase openDb = new OpenSQliteDatabase();
-         var dbContext = openDb.OpenDatabase();
-        
-         allRecords = dbContext.AccessAcctNumbers.ToList();
-         allRecords = NormalizeAccountNumber(allRecords);
-
-         foreach (var record in allRecords)
-         {
-             compositeKey = $"{record.AccessNumber}|{record.AccountNumber}|{record.AccountType}|{record.Environment}";
-
-             if (!uniqueKeys.Add(compositeKey))
-             {
-                 // It's a duplicate, mark for deletion
-                 duplicatesToDelete.Add(record);
-             }
-         }
-
-
-
-         if (duplicatesToDelete.Any())
-             {
-               intCount = duplicatesToDelete.Count;
-                dbContext.AccessAcctNumbers.RemoveRange(duplicatesToDelete);
-                 dbContext.SaveChanges();
-
-                 Console.WriteLine($"Removed {duplicatesToDelete.Count} duplicate record(s).");
-             }
-             else
-             {
-                 Console.WriteLine("No duplicates found.");
-             }
-       return intCount;
      }
-
-     private List<AccountAccessNumDbModel> NormalizeAccountNumber(List<AccountAccessNumDbModel> allRecords)
-     {
-
-         string acctNum;
-         
-
-         // clean up the Accountnumber from the leading zeros
-         foreach (var record in allRecords)
-         {
-             acctNum = new string(record.AccountNumber.Where(char.IsDigit).ToArray()).TrimStart('0');
-             record.AccountNumber = acctNum;
-         }
-         return allRecords;  
-     }
-
-
- 
  }
