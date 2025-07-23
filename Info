@@ -1,16 +1,20 @@
-
-[XmlRoot("CreditAddRq")]
-public class CreditAddRequest
-{
+To extract individual fields from the XML you're working with in C#, you should
+ deserialize the XML into your model. You've already started building the
+ CreditAddRequestModel, which is a great step. Now you need:
+ 1. A properly structured set of C# classes matching the XML structure.
+ 2. A deserialization method using XmlSerializer.
+ Step 1: Define Matching Classes
+ [XmlRoot("CreditAddRq", Namespace =
+ "http://schemas.navyfederal.org/2010/04/NFBranchExService")]
+ public class CreditAddRequestModel
+ {
     [XmlElement("MsgRqHdr")]
     public MsgRqHdr MsgRqHdr { get; set; }
-}
-
-public class MsgRqHdr
-{
-    [XmlAttribute("xmlns")]
-    public string Xmlns { get; set; } = "http://schemas.navyfederal.org/2010/04/NFBranchExService";
-
+    [XmlElement("CreditInfo")]
+    public CreditInfo CreditInfo { get; set; }
+ }
+ public class MsgRqHdr
+ {
     public string RqUID { get; set; }
     public string EnvironmentName { get; set; }
     public string TranCode { get; set; }
@@ -30,56 +34,56 @@ public class MsgRqHdr
     public int CustPermId { get; set; }
     public int POAInd { get; set; }
     public int MultiTranFlag { get; set; }
-
     public ConductorId ConductorId { get; set; }
-}
-
-public class ConductorId
-{
+ }
+ public class ConductorId
+ {
     public string IdType { get; set; }
     public string IdNum { get; set; }
+ }
+ public class CreditInfo
+ {
+    [XmlElement("AcctKeys")]
+    public AcctKeys AcctKeys { get; set; }
+    public string DepositType { get; set; }
+    [XmlElement("TransAmt")]
+    public AmountContainer TransAmt { get; set; }
+    [XmlElement("CashInAmt")]
+    public AmountContainer CashInAmt { get; set; }
+    [XmlElement("CashOutAmt")]
+    public AmountContainer CashOutAmt { get; set; }
+    [XmlElement("ScannedChkAmt")]
+    public AmountContainer ScannedChkAmt { get; set; }
+    [XmlElement("UnscannedChkAmt")]
+    public AmountContainer UnscannedChkAmt { get; set; }
+ }
+ public class AcctKeys
+ {
+    public string AcctId { get; set; }
+    public string AcctType { get; set; }
+ }
+ public class AmountContainer
+ {
+    [XmlElement("Amt")]
+    public decimal Amt { get; set; }
+ }
+ Step 2: Deserialize the XML String
+ public CreditAddRequestModel DeserializeCreditAddRequest(string xml)
+ {
+    var serializer = new XmlSerializer(typeof(CreditAddRequestModel));
+    using var reader = new StringReader(xml);
+    return (CreditAddRequestModel)serializer.Deserialize(reader);
+ }
+ Step 3: Use the Object
+ var model = DeserializeCreditAddRequest(xmlString);
+ Console.WriteLine(model.MsgRqHdr.RqUID);
+ Console.WriteLine(model.CreditInfo.AcctKeys.AcctId);
+ Console.WriteLine(model.CreditInfo.CashInAmt.Amt);
+ Optional Cleanup
+ string CleanXml(string input)
+ {
+    var startIndex = input.IndexOf("<CreditAddRq");
 }
-
-
-=================================
-
-INSERT INTO CreditAddRequest (
-    RqUID, EnvironmentName, TranCode, BranchId, PCName, TranCodeQual, CashBoxId,
-    EmployeeId, PostingDt, CalendarDt, TranTime, TranSeqNum, ETSTranStatus,
-    OverrideCode, OverrideEmployeeId, ForwardTranFlag, CustPermId, POAInd,
-    MultiTranFlag, ConductorIdType, ConductorIdNum
-)
-VALUES (
-    'f52489e3-58fd-42f4-b562-5cbbaa542d4c', 'NFCU', '2001', 'D0', 'DT1866DA38F0A9', '0000', 1,
-    56906, '2025-06-09', '2025-06-06', '14:08:46', 19, '',
-    2, 56906, 0, 5000, 0,
-    1, 'A', ''
-);
-
-
-=====================================================
-
-CREATE TABLE CreditAddRequest (
-    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-    RqUID TEXT,
-    EnvironmentName TEXT,
-    TranCode TEXT,
-    BranchId TEXT,
-    PCName TEXT,
-    TranCodeQual TEXT,
-    CashBoxId INTEGER,
-    EmployeeId INTEGER,
-    PostingDt TEXT,
-    CalendarDt TEXT,
-    TranTime TEXT,
-    TranSeqNum INTEGER,
-    ETSTranStatus TEXT,
-    OverrideCode INTEGER,
-    OverrideEmployeeId INTEGER,
-    ForwardTranFlag INTEGER,
-    CustPermId INTEGER,
-    POAInd INTEGER,
-    MultiTranFlag INTEGER,
-    ConductorIdType TEXT,
-    ConductorIdNum TEXT
-);
+    return input.Substring(startIndex).Trim();
+ Let me know if you want this wrapped in a WPF-friendly async command or tested via a
+ button click routine.
