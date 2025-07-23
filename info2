@@ -15,9 +15,23 @@ public static string CleanXml(string xml, string rootTag = "CreditAddRq")
     if (string.IsNullOrWhiteSpace(xml))
         return string.Empty;
 
-    var idx = xml.IndexOf($"<{rootTag}", StringComparison.OrdinalIgnoreCase);
-    return idx >= 0 ? xml.Substring(idx).Trim() : xml.Trim();
+    // Step 1: Trim log/garbage text before the actual XML root
+    int startIdx = xml.IndexOf($"<{rootTag}", StringComparison.OrdinalIgnoreCase);
+    if (startIdx < 0) return string.Empty;
+
+    xml = xml.Substring(startIdx).Trim();
+
+    // Step 2: Remove all xmlns declarations (if you want to deserialize without namespaces)
+    xml = System.Text.RegularExpressions.Regex.Replace(
+        xml,
+        @"\sxmlns(:\w+)?=""[^""]+""",
+        string.Empty,
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase
+    );
+
+    return xml;
 }
+
 =======================
 string rawXmlFromLog = GetRawXmlSomehow(); // From SQL, log file, etc.
 var xmlModel = DeserializeXml(rawXmlFromLog);
