@@ -1,76 +1,27 @@
 
-public class CreditAddDisplayModel
+public static CreditAddRequestXmlModel DeserializeXml(string rawXml)
 {
-    public int Id { get; set; }
-    public string RqUID { get; set; }
-    public string TranCode { get; set; }
-    public string EmployeeId { get; set; }
-    public string PostingDt { get; set; }
-    public string TranTime { get; set; }
+    string cleanedXml = CleanXml(rawXml, "CreditAddRq");
+
+    var serializer = new XmlSerializer(typeof(CreditAddRequestXmlModel));
+
+    using var reader = new StringReader(cleanedXml);
+    return (CreditAddRequestXmlModel)serializer.Deserialize(reader);
 }
 
-
-
-=================================
-
-using System.Collections.ObjectModel;
-using System.Data.SQLite;
-
-public class CreditAddRequestService
+===============================
+public static string CleanXml(string xml, string rootTag = "CreditAddRq")
 {
-    private const string ConnectionString = "Data Source=yourdatabase.db;";
+    if (string.IsNullOrWhiteSpace(xml))
+        return string.Empty;
 
-    public ObservableCollection<CreditAddDisplayModel> GetAllRequests()
-    {
-        var list = new ObservableCollection<CreditAddDisplayModel>();
-
-        using var conn = new SQLiteConnection(ConnectionString);
-        conn.Open();
-
-        var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT Id, RqUID, TranCode, EmployeeId, PostingDt, TranTime FROM CreditAddRequest";
-
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
-        {
-            list.Add(new CreditAddDisplayModel
-            {
-                Id = Convert.ToInt32(reader["Id"]),
-                RqUID = reader["RqUID"].ToString(),
-                TranCode = reader["TranCode"].ToString(),
-                EmployeeId = reader["EmployeeId"].ToString(),
-                PostingDt = reader["PostingDt"].ToString(),
-                TranTime = reader["TranTime"].ToString()
-            });
-        }
-
-        return list;
-    }
+    var idx = xml.IndexOf($"<{rootTag}", StringComparison.OrdinalIgnoreCase);
+    return idx >= 0 ? xml.Substring(idx).Trim() : xml.Trim();
 }
+=======================
+string rawXmlFromLog = GetRawXmlSomehow(); // From SQL, log file, etc.
+var xmlModel = DeserializeXml(rawXmlFromLog);
 
-============================================
-
-
-<ListView x:Name="CreditAddListView" Margin="10">
-    <ListView.View>
-        <GridView>
-            <GridViewColumn Header="ID" Width="40" DisplayMemberBinding="{Binding Id}" />
-            <GridViewColumn Header="RqUID" Width="250" DisplayMemberBinding="{Binding RqUID}" />
-            <GridViewColumn Header="TranCode" Width="70" DisplayMemberBinding="{Binding TranCode}" />
-            <GridViewColumn Header="EmployeeId" Width="80" DisplayMemberBinding="{Binding EmployeeId}" />
-            <GridViewColumn Header="PostingDt" Width="100" DisplayMemberBinding="{Binding PostingDt}" />
-            <GridViewColumn Header="TranTime" Width="100" DisplayMemberBinding="{Binding TranTime}" />
-        </GridView>
-    </ListView.View>
-</ListView>
-
-
-========================================
-
-private void Window_Loaded(object sender, RoutedEventArgs e)
-{
-    var service = new CreditAddRequestService();
-    var requests = service.GetAllRequests();
-    CreditAddListView.ItemsSource = requests;
-}
-
+// Now use fields like:
+string rqId = xmlModel.MsgRqHdr?.RqUID;
+decimal cashIn = xmlModel.CreditInfo?.CashInAmt?.Amt ?? 0;
