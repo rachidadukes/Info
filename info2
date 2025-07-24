@@ -1,14 +1,11 @@
-[XmlRoot("Status")]
-public class StatusModel
-{
-    public string? Severity { get; set; }
-    public string? StatusCode { get; set; }
-    public string? StatusDesc { get; set; }
-}
-
-public static StatusModel? ParseStatus(string xml)
-{
-    var serializer = new XmlSerializer(typeof(StatusModel));
-    using var reader = new StringReader(xml);
-    return (StatusModel?)serializer.Deserialize(reader);
-}
+<GridViewColumn Header="Response Status" Width="400">
+    <GridViewColumn.CellTemplate>
+        <DataTemplate>
+            <TextBox Text="{Binding ResponseStatus}" 
+                     IsReadOnly="True" 
+                     BorderThickness="0" 
+                     Background="Transparent"
+                     ContextMenuOpening="TextBox_ContextMenuOpening"/>
+        </DataTemplate>
+    </GridViewColumn.CellTemplate>
+</GridViewColumn>
