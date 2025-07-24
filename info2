@@ -9,3 +9,18 @@
         </DataTemplate>
     </GridViewColumn.CellTemplate>
 </GridViewColumn>
+
+
+-------------------------
+
+<TextBox Text="{Binding ResponseStatus}"
+         IsReadOnly="True"
+         BorderThickness="0"
+         Background="Transparent">
+    <TextBox.ContextMenu>
+        <ContextMenu>
+            <MenuItem Header="Copy" Command="ApplicationCommands.Copy" />
+        </ContextMenu>
+    </TextBox.ContextMenu>
+</TextBox>
+
