@@ -1,42 +1,14 @@
-
-public static CreditAddRequestXmlModel DeserializeXml(string rawXml)
+[XmlRoot("Status")]
+public class StatusModel
 {
-    string cleanedXml = CleanXml(rawXml, "CreditAddRq");
-
-    var serializer = new XmlSerializer(typeof(CreditAddRequestXmlModel));
-
-    using var reader = new StringReader(cleanedXml);
-    return (CreditAddRequestXmlModel)serializer.Deserialize(reader);
+    public string? Severity { get; set; }
+    public string? StatusCode { get; set; }
+    public string? StatusDesc { get; set; }
 }
 
-===============================
-public static string CleanXml(string xml, string rootTag = "CreditAddRq")
+public static StatusModel? ParseStatus(string xml)
 {
-    if (string.IsNullOrWhiteSpace(xml))
-        return string.Empty;
-
-    // Step 1: Trim log/garbage text before the actual XML root
-    int startIdx = xml.IndexOf($"<{rootTag}", StringComparison.OrdinalIgnoreCase);
-    if (startIdx < 0) return string.Empty;
-
-    xml = xml.Substring(startIdx).Trim();
-
-    // Step 2: Remove ALL xmlns attributes (including in the root)
-    xml = System.Text.RegularExpressions.Regex.Replace(
-        xml,
-        @"\s+xmlns(:\w+)?=""[^""]+""",
-        string.Empty,
-        System.Text.RegularExpressions.RegexOptions.IgnoreCase
-    );
-
-    return xml;
+    var serializer = new XmlSerializer(typeof(StatusModel));
+    using var reader = new StringReader(xml);
+    return (StatusModel?)serializer.Deserialize(reader);
 }
-
-
-=======================
-string rawXmlFromLog = GetRawXmlSomehow(); // From SQL, log file, etc.
-var xmlModel = DeserializeXml(rawXmlFromLog);
-
-// Now use fields like:
-string rqId = xmlModel.MsgRqHdr?.RqUID;
-decimal cashIn = xmlModel.CreditInfo?.CashInAmt?.Amt ?? 0;
