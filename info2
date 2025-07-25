@@ -1,26 +1,45 @@
-<GridViewColumn Header="Response Status" Width="400">
-    <GridViewColumn.CellTemplate>
-        <DataTemplate>
-            <TextBox Text="{Binding ResponseStatus}" 
-                     IsReadOnly="True" 
-                     BorderThickness="0" 
-                     Background="Transparent"
-                     ContextMenuOpening="TextBox_ContextMenuOpening"/>
-        </DataTemplate>
-    </GridViewColumn.CellTemplate>
-</GridViewColumn>
+using System.Xml.Linq;
 
+public static string GenerateCreditAddRqXml(CreditAddRequestModel model)
+{
+    var creditAddRq = new XElement("CreditAddRq",
+        new XElement("MsgRqHdr",
+            new XAttribute("xmlns", "http://schemas.navyfederal.org/2010/04/NFBranchExService"),
+            new XElement("RqUID", model.RqUID),
+            new XElement("EnvironmentName", model.EnvironmentName),
+            new XElement("TranCode", model.TranCode),
+            new XElement("BranchId", model.BranchId),
+            new XElement("PCName", model.PCName),
+            new XElement("TranCodeQual", model.TranCodeQual),
+            new XElement("CashBoxId", model.CashBoxId),
+            new XElement("EmployeeId", model.EmployeeId),
+            new XElement("PostingDt", model.PostingDt),
+            new XElement("CalendarDt", model.CalendarDt),
+            new XElement("TranTime", model.TranTime),
+            new XElement("TranSeqNum", model.TranSeqNum),
+            new XElement("ForwardTranFlag", model.ForwardTranFlag),
+            new XElement("CustPermId", model.CustPermId),
+            new XElement("POAInd", model.POAInd),
+            new XElement("MultiTranFlag", model.MultiTranFlag),
+            new XElement("ConductorId",
+                new XElement("IdType", model.ConductorIdType),
+                new XElement("IdNum", model.ConductorIdNum)
+            )
+        ),
+        new XElement("CreditInfo",
+            new XAttribute("xmlns", "http://schemas.navyfederal.org/2010/04/NFBranchExService"),
+            new XElement("AcctKeys",
+                new XElement("AcctId", model.AcctId),
+                new XElement("AcctType", model.AcctType)
+            ),
+            new XElement("Transacts",
+                new XElement("TransAmt",
+                    new XElement("Amt", model.TransAmt)
+                )
+                // You can add more elements like CashInAmt, etc., here as needed
+            )
+        )
+    );
 
--------------------------
-
-<TextBox Text="{Binding ResponseStatus}"
-         IsReadOnly="True"
-         BorderThickness="0"
-         Background="Transparent">
-    <TextBox.ContextMenu>
-        <ContextMenu>
-            <MenuItem Header="Copy" Command="ApplicationCommands.Copy" />
-        </ContextMenu>
-    </TextBox.ContextMenu>
-</TextBox>
-
+    return creditAddRq.ToString();
+}
