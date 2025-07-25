@@ -1,89 +1,14 @@
-To extract individual fields from the XML you're working with in C#, you should
- deserialize the XML into your model. You've already started building the
- CreditAddRequestModel, which is a great step. Now you need:
- 1. A properly structured set of C# classes matching the XML structure.
- 2. A deserialization method using XmlSerializer.
- Step 1: Define Matching Classes
- [XmlRoot("CreditAddRq", Namespace =
- "http://schemas.navyfederal.org/2010/04/NFBranchExService")]
- public class CreditAddRequestModel
- {
-    [XmlElement("MsgRqHdr")]
-    public MsgRqHdr MsgRqHdr { get; set; }
-    [XmlElement("CreditInfo")]
-    public CreditInfo CreditInfo { get; set; }
- }
- public class MsgRqHdr
- {
-    public string RqUID { get; set; }
-    public string EnvironmentName { get; set; }
-    public string TranCode { get; set; }
-    public string BranchId { get; set; }
-    public string PCName { get; set; }
-    public string TranCodeQual { get; set; }
-    public int CashBoxId { get; set; }
-    public int EmployeeId { get; set; }
-    public string PostingDt { get; set; }
-    public string CalendarDt { get; set; }
-    public string TranTime { get; set; }
-    public int TranSeqNum { get; set; }
-    public string ETSTranStatus { get; set; }
-    public int OverrideCode { get; set; }
-    public int OverrideEmployeeId { get; set; }
-    public int ForwardTranFlag { get; set; }
-    public int CustPermId { get; set; }
-    public int POAInd { get; set; }
-    public int MultiTranFlag { get; set; }
-    public ConductorId ConductorId { get; set; }
- }
- public class ConductorId
- {
-    public string IdType { get; set; }
-    public string IdNum { get; set; }
- }
- public class CreditInfo
- {
-    [XmlElement("AcctKeys")]
-    public AcctKeys AcctKeys { get; set; }
-    public string DepositType { get; set; }
-    [XmlElement("TransAmt")]
-    public AmountContainer TransAmt { get; set; }
-    [XmlElement("CashInAmt")]
-    public AmountContainer CashInAmt { get; set; }
-    [XmlElement("CashOutAmt")]
-    public AmountContainer CashOutAmt { get; set; }
-    [XmlElement("ScannedChkAmt")]
-    public AmountContainer ScannedChkAmt { get; set; }
-    [XmlElement("UnscannedChkAmt")]
-    public AmountContainer UnscannedChkAmt { get; set; }
- }
- public class AcctKeys
- {
-    public string AcctId { get; set; }
-    public string AcctType { get; set; }
- }
- public class AmountContainer
- {
-    [XmlElement("Amt")]
-    public decimal Amt { get; set; }
- }
- Step 2: Deserialize the XML String
- public CreditAddRequestModel DeserializeCreditAddRequest(string xml)
- {
-    var serializer = new XmlSerializer(typeof(CreditAddRequestModel));
-    using var reader = new StringReader(xml);
-    return (CreditAddRequestModel)serializer.Deserialize(reader);
- }
- Step 3: Use the Object
- var model = DeserializeCreditAddRequest(xmlString);
- Console.WriteLine(model.MsgRqHdr.RqUID);
- Console.WriteLine(model.CreditInfo.AcctKeys.AcctId);
- Console.WriteLine(model.CreditInfo.CashInAmt.Amt);
- Optional Cleanup
- string CleanXml(string input)
- {
-    var startIndex = input.IndexOf("<CreditAddRq");
+string rawXml = @"Input from client; len=373;<encore><customers><an>108</an><lastname>PASTWATCH</lastname></customers></encore>";
+
+// Find first '<' character – the beginning of the XML
+int firstTagIndex = rawXml.IndexOf('<');
+
+if (firstTagIndex != -1)
+{
+    string cleanXml = rawXml.Substring(firstTagIndex);
+    Console.WriteLine(cleanXml); // This is now pure XML
 }
-    return input.Substring(startIndex).Trim();
- Let me know if you want this wrapped in a WPF-friendly async command or tested via a
- button click routine.
+else
+{
+    Console.WriteLine("No XML tag found in the input.");
+}
