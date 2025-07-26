@@ -1,15 +1,17 @@
-var stringBuilder = new StringBuilder();
-var settings = new XmlWriterSettings
-{
-    Indent = true,
-    IndentChars = "  ",
-    NewLineOnAttributes = false
-};
+string rawText = @"Send to Host; len=1028 06/22/2025 12:49:04.3407
+<DebitAddRq><MsgRqHdr xmlns=""http://schemas.navyfederal.org/2010/04/NFBranchExService""><RqUID>...</RqUID></MsgRqHdr></DebitAddRq>";
 
-using (var writer = XmlWriter.Create(stringBuilder, settings))
+string xmlOnly = string.Join(Environment.NewLine, rawText.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries).Skip(1));
+
+XElement parsed = XElement.Parse(xmlOnly);
+
+// (Optional) pretty print for debugging:
+Console.WriteLine(parsed.ToString(SaveOptions.None));
+
+================
+public static XElement ExtractXmlFromRaw(string raw)
 {
-    debitAddRq.WriteTo(writer);
+    var xml = string.Join(Environment.NewLine, raw.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries).Skip(1));
+    return XElement.Parse(xml);
 }
-writer.Flush();
-
-strGeneratedRequest = stringBuilder.ToString();
+==============
