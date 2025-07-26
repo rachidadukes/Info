@@ -1,14 +1,15 @@
-string rawXml = @"Input from client; len=373;<encore><customers><an>108</an><lastname>PASTWATCH</lastname></customers></encore>";
-
-// Find first '<' character – the beginning of the XML
-int firstTagIndex = rawXml.IndexOf('<');
-
-if (firstTagIndex != -1)
+var stringBuilder = new StringBuilder();
+var settings = new XmlWriterSettings
 {
-    string cleanXml = rawXml.Substring(firstTagIndex);
-    Console.WriteLine(cleanXml); // This is now pure XML
-}
-else
+    Indent = true,
+    IndentChars = "  ",
+    NewLineOnAttributes = false
+};
+
+using (var writer = XmlWriter.Create(stringBuilder, settings))
 {
-    Console.WriteLine("No XML tag found in the input.");
+    debitAddRq.WriteTo(writer);
 }
+writer.Flush();
+
+strGeneratedRequest = stringBuilder.ToString();
