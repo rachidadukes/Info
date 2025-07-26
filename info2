@@ -1,45 +1,61 @@
-using System.Xml.Linq;
+var msgRqHdr = new XElement("MsgRqHdr",
+    new XAttribute("xmlns", "http://schemas.navyfederal.org/2010/04/NFBranchExService"),
+    new XElement("RqUID", selectedRequest.RqUID),
+    new XElement("EnvironmentName", selectedRequest.EnvironmentName),
+    new XElement("TranCode", selectedRequest.TranCode),
+    new XElement("BranchId", selectedRequest.BranchId),
+    new XElement("PCName", selectedRequest.PCName),
+    new XElement("TranCodeQual", selectedRequest.TranCodeQual),
+    new XElement("CashBoxId", selectedRequest.CashBoxId),
+    new XElement("EmployeeId", selectedRequest.EmployeeId),
+    new XElement("PostingDt", selectedRequest.PostingDt),
+    new XElement("CalendarDt", selectedRequest.CalendarDt)
+);
 
-public static string GenerateCreditAddRqXml(CreditAddRequestModel model)
-{
-    var creditAddRq = new XElement("CreditAddRq",
-        new XElement("MsgRqHdr",
-            new XAttribute("xmlns", "http://schemas.navyfederal.org/2010/04/NFBranchExService"),
-            new XElement("RqUID", model.RqUID),
-            new XElement("EnvironmentName", model.EnvironmentName),
-            new XElement("TranCode", model.TranCode),
-            new XElement("BranchId", model.BranchId),
-            new XElement("PCName", model.PCName),
-            new XElement("TranCodeQual", model.TranCodeQual),
-            new XElement("CashBoxId", model.CashBoxId),
-            new XElement("EmployeeId", model.EmployeeId),
-            new XElement("PostingDt", model.PostingDt),
-            new XElement("CalendarDt", model.CalendarDt),
-            new XElement("TranTime", model.TranTime),
-            new XElement("TranSeqNum", model.TranSeqNum),
-            new XElement("ForwardTranFlag", model.ForwardTranFlag),
-            new XElement("CustPermId", model.CustPermId),
-            new XElement("POAInd", model.POAInd),
-            new XElement("MultiTranFlag", model.MultiTranFlag),
-            new XElement("ConductorId",
-                new XElement("IdType", model.ConductorIdType),
-                new XElement("IdNum", model.ConductorIdNum)
-            )
-        ),
-        new XElement("CreditInfo",
-            new XAttribute("xmlns", "http://schemas.navyfederal.org/2010/04/NFBranchExService"),
-            new XElement("AcctKeys",
-                new XElement("AcctId", model.AcctId),
-                new XElement("AcctType", model.AcctType)
-            ),
-            new XElement("Transacts",
-                new XElement("TransAmt",
-                    new XElement("Amt", model.TransAmt)
-                )
-                // You can add more elements like CashInAmt, etc., here as needed
-            )
-        )
-    );
 
-    return creditAddRq.ToString();
-}
+====================================
+
+msgRqHdr.Add(
+    new XElement("TranTime", selectedRequest.TranTime),
+    new XElement("TranSeqNum", selectedRequest.TranSeqNum),
+    new XElement("ForwardTranFlag", selectedRequest.ForwardTranFlag),
+    new XElement("CustPermId", selectedRequest.CustPermId),
+    new XElement("POAInd", selectedRequest.POAInd),
+    new XElement("MultiTranFlag", selectedRequest.MultiTranFlag),
+    new XElement("ConductorId",
+        new XElement("IdType", selectedRequest.ConductorIdType),
+        new XElement("IdNum", selectedRequest.ConductorIdNum)
+    )
+);
+
+=====================
+
+var creditInfo = new XElement("CreditInfo",
+    new XAttribute("xmlns", "http://schemas.navyfederal.org/2010/04/NFBranchExService"),
+    new XElement("AcctKeys",
+        new XElement("AcctId", selectedRequest.AcctId),
+        new XElement("AcctType", selectedRequest.AcctType)
+    )
+);
+==================
+
+var transacts = new XElement("Transacts",
+    new XElement("TransAmt",
+        new XElement("Amt", selectedRequest.TransAmt)
+    )
+);
+====================
+
+var creditAddRq = new XElement("CreditAddRq",
+    msgRqHdr,
+    creditInfo,
+    transacts
+);
+
+return creditAddRq.ToString();
+
+
+
+
+
+
