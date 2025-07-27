@@ -1,19 +1,11 @@
-
-XmlComparer.CompareLineByLine("original.xml", "generated.xml");
-
-
-
-=======================================================
-
 using System;
-using System.IO;
 
-class XmlComparer
+public class XmlComparer
 {
-    public static void CompareLineByLine(string originalPath, string generatedPath)
+    public static void CompareXmlStrings(string originalXml, string generatedXml)
     {
-        var originalLines = File.ReadAllLines(originalPath);
-        var generatedLines = File.ReadAllLines(generatedPath);
+        var originalLines = originalXml.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+        var generatedLines = generatedXml.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
 
         int lineCount = Math.Max(originalLines.Length, generatedLines.Length);
 
@@ -22,7 +14,7 @@ class XmlComparer
             string originalLine = i < originalLines.Length ? originalLines[i].Trim() : "[Missing]";
             string generatedLine = i < generatedLines.Length ? generatedLines[i].Trim() : "[Missing]";
 
-            if (!string.Equals(originalLine, generatedLine, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(originalLine, generatedLine, StringComparison.Ordinal))
             {
                 Console.WriteLine($"❌ Difference at line {i + 1}:");
                 Console.WriteLine($"Original : {originalLine}");
@@ -31,6 +23,6 @@ class XmlComparer
             }
         }
 
-        Console.WriteLine("✅ The two XML requests are identical (line-by-line).");
+        Console.WriteLine("✅ The two XML strings are identical (line-by-line).");
     }
 }
