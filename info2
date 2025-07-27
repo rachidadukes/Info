@@ -1,2 +1,83 @@
-new XElement(ns + "IdNum", 
-    string.IsNullOrWhiteSpace(selectedRequest.ConductorIdNum) ? null : selectedRequest.ConductorIdNum)
+public class GenerateCreditXmlRequest
+{
+    public string GenerateRequestXml(CreditDebitRqModel selectedRequest)
+    {
+        string strGeneratedRequest;
+        XNamespace ns = "http://schemas.navyfederal.org/2010/04/NFBranchExService";
+
+        try
+        {
+            var msgRqHdr = new XElement(ns + "MsgRqHdr",
+                new XElement(ns + "RqUID", selectedRequest.RqUID),
+                new XElement(ns + "EnvironmentName", selectedRequest.EnvironmentName),
+                new XElement(ns + "TranCode", selectedRequest.TranCode),
+                new XElement(ns + "BranchId", selectedRequest.BranchId),
+                new XElement(ns + "PCName", selectedRequest.PCName),
+                new XElement(ns + "TranCodeQual", selectedRequest.TranCodeQual),
+                new XElement(ns + "CashBoxId", selectedRequest.CashBoxId),
+                new XElement(ns + "EmployeeId", selectedRequest.EmployeeId),
+                new XElement(ns + "PostingDt", selectedRequest.PostingDt),
+                new XElement(ns + "CalendarDt", selectedRequest.CalendarDt)
+            );
+
+            msgRqHdr.Add(
+                new XElement(ns + "TranTime", selectedRequest.TranTime),
+                new XElement(ns + "TranSeqNum", selectedRequest.TranSeqNum),
+                new XElement(ns + "ETSTranStatus", selectedRequest.ETSTranStatus),
+                new XElement(ns + "OverrideCode", selectedRequest.OverrideCode),
+                new XElement(ns + "OverrideEmployeeId", selectedRequest.OverrideEmployeeId),
+                new XElement(ns + "ForwardTranFlag", selectedRequest.ForwardTranFlag),
+                new XElement(ns + "CustPermId", selectedRequest.CustPermId),
+                new XElement(ns + "POAInd", selectedRequest.POAInd),
+                new XElement(ns + "MultiTranFlag", selectedRequest.MultiTranFlag),
+                new XElement(ns + "ConductorId", selectedRequest.ConductorIdType),
+                new XElement(ns + "IdNum", string.IsNullOrWhiteSpace(selectedRequest.ConductorIdNum) ? null : selectedRequest.ConductorIdNum)
+            );
+
+            var creditInfo = new XElement(ns + "CreditInfo",
+                new XElement(ns + "AcctKeys",
+                    new XElement(ns + "AcctId", selectedRequest.AcctId),
+                    new XElement(ns + "AcctType", selectedRequest.AcctType)
+                ),
+                new XElement(ns + "TransAmt",
+                    new XElement(ns + "Amt", selectedRequest.TransAmt)
+                ),
+                new XElement(ns + "CashInAmt",
+                    new XElement(ns + "Amt", selectedRequest.CashInAmt)
+                ),
+                new XElement(ns + "CashOutAmt",
+                    new XElement(ns + "Amt", selectedRequest.CashOutAmt)
+                ),
+                new XElement(ns + "ScannedChkAmt",
+                    new XElement(ns + "Amt", selectedRequest.ScannedChkAmt)
+                ),
+                new XElement(ns + "UnscannedChkAmt",
+                    new XElement(ns + "Amt", selectedRequest.UnscannedChkAmt)
+                ),
+                new XElement(ns + "NumberOfChecks", selectedRequest.NumberOfChecks),
+                new XElement(ns + "FltLvl1",
+                    new XElement(ns + "Amt", selectedRequest.FltLvl1)
+                ),
+                new XElement(ns + "FltLvl2",
+                    new XElement(ns + "Amt", selectedRequest.FltLvl2)
+                ),
+                new XElement(ns + "FltLvl3",
+                    new XElement(ns + "Amt", selectedRequest.FltLvl3)
+                )
+            );
+
+            var debitAddRq = new XElement("CreditAddRq",
+                msgRqHdr,
+                creditInfo
+            );
+
+            strGeneratedRequest = debitAddRq.ToString();
+            return strGeneratedRequest;
+        }
+        catch (Exception ex)
+        {
+            // Handle error accordingly (log or rethrow)
+            throw new ApplicationException("Error generating credit request XML.", ex);
+        }
+    }
+}
