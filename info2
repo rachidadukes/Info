@@ -1,83 +1,36 @@
-public class GenerateCreditXmlRequest
+
+XmlComparer.CompareLineByLine("original.xml", "generated.xml");
+
+
+
+=======================================================
+
+using System;
+using System.IO;
+
+class XmlComparer
 {
-    public string GenerateRequestXml(CreditDebitRqModel selectedRequest)
+    public static void CompareLineByLine(string originalPath, string generatedPath)
     {
-        string strGeneratedRequest;
-        XNamespace ns = "http://schemas.navyfederal.org/2010/04/NFBranchExService";
+        var originalLines = File.ReadAllLines(originalPath);
+        var generatedLines = File.ReadAllLines(generatedPath);
 
-        try
+        int lineCount = Math.Max(originalLines.Length, generatedLines.Length);
+
+        for (int i = 0; i < lineCount; i++)
         {
-            var msgRqHdr = new XElement(ns + "MsgRqHdr",
-                new XElement(ns + "RqUID", selectedRequest.RqUID),
-                new XElement(ns + "EnvironmentName", selectedRequest.EnvironmentName),
-                new XElement(ns + "TranCode", selectedRequest.TranCode),
-                new XElement(ns + "BranchId", selectedRequest.BranchId),
-                new XElement(ns + "PCName", selectedRequest.PCName),
-                new XElement(ns + "TranCodeQual", selectedRequest.TranCodeQual),
-                new XElement(ns + "CashBoxId", selectedRequest.CashBoxId),
-                new XElement(ns + "EmployeeId", selectedRequest.EmployeeId),
-                new XElement(ns + "PostingDt", selectedRequest.PostingDt),
-                new XElement(ns + "CalendarDt", selectedRequest.CalendarDt)
-            );
+            string originalLine = i < originalLines.Length ? originalLines[i].Trim() : "[Missing]";
+            string generatedLine = i < generatedLines.Length ? generatedLines[i].Trim() : "[Missing]";
 
-            msgRqHdr.Add(
-                new XElement(ns + "TranTime", selectedRequest.TranTime),
-                new XElement(ns + "TranSeqNum", selectedRequest.TranSeqNum),
-                new XElement(ns + "ETSTranStatus", selectedRequest.ETSTranStatus),
-                new XElement(ns + "OverrideCode", selectedRequest.OverrideCode),
-                new XElement(ns + "OverrideEmployeeId", selectedRequest.OverrideEmployeeId),
-                new XElement(ns + "ForwardTranFlag", selectedRequest.ForwardTranFlag),
-                new XElement(ns + "CustPermId", selectedRequest.CustPermId),
-                new XElement(ns + "POAInd", selectedRequest.POAInd),
-                new XElement(ns + "MultiTranFlag", selectedRequest.MultiTranFlag),
-                new XElement(ns + "ConductorId", selectedRequest.ConductorIdType),
-                new XElement(ns + "IdNum", string.IsNullOrWhiteSpace(selectedRequest.ConductorIdNum) ? null : selectedRequest.ConductorIdNum)
-            );
-
-            var creditInfo = new XElement(ns + "CreditInfo",
-                new XElement(ns + "AcctKeys",
-                    new XElement(ns + "AcctId", selectedRequest.AcctId),
-                    new XElement(ns + "AcctType", selectedRequest.AcctType)
-                ),
-                new XElement(ns + "TransAmt",
-                    new XElement(ns + "Amt", selectedRequest.TransAmt)
-                ),
-                new XElement(ns + "CashInAmt",
-                    new XElement(ns + "Amt", selectedRequest.CashInAmt)
-                ),
-                new XElement(ns + "CashOutAmt",
-                    new XElement(ns + "Amt", selectedRequest.CashOutAmt)
-                ),
-                new XElement(ns + "ScannedChkAmt",
-                    new XElement(ns + "Amt", selectedRequest.ScannedChkAmt)
-                ),
-                new XElement(ns + "UnscannedChkAmt",
-                    new XElement(ns + "Amt", selectedRequest.UnscannedChkAmt)
-                ),
-                new XElement(ns + "NumberOfChecks", selectedRequest.NumberOfChecks),
-                new XElement(ns + "FltLvl1",
-                    new XElement(ns + "Amt", selectedRequest.FltLvl1)
-                ),
-                new XElement(ns + "FltLvl2",
-                    new XElement(ns + "Amt", selectedRequest.FltLvl2)
-                ),
-                new XElement(ns + "FltLvl3",
-                    new XElement(ns + "Amt", selectedRequest.FltLvl3)
-                )
-            );
-
-            var debitAddRq = new XElement("CreditAddRq",
-                msgRqHdr,
-                creditInfo
-            );
-
-            strGeneratedRequest = debitAddRq.ToString();
-            return strGeneratedRequest;
+            if (!string.Equals(originalLine, generatedLine, StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine($"❌ Difference at line {i + 1}:");
+                Console.WriteLine($"Original : {originalLine}");
+                Console.WriteLine($"Generated: {generatedLine}");
+                return;
+            }
         }
-        catch (Exception ex)
-        {
-            // Handle error accordingly (log or rethrow)
-            throw new ApplicationException("Error generating credit request XML.", ex);
-        }
+
+        Console.WriteLine("✅ The two XML requests are identical (line-by-line).");
     }
 }
