@@ -1,16 +1,3 @@
-public static readonly Dictionary<string, string> DisplayNames = new()
-{
-    { "RqUID", "Request UID" },
-    { "PCName", "Workstation" },
-    { "TranCode", "Transaction Code" },
-    { "PostingDt", "Posting Date" },
-    { "AcctId", "Account ID" },
-    { "AcctType", "Account Type" },
-    { "DepositType", "Deposit Type" },
-    { "CashInAmt", "Cash In" },
-    { "CashOutAmt", "Cash Out" },
-    { "TransAmt", "Transaction Amount" },
-    { "OverrideCode", "Override Code" },
-    { "CalendarDt", "Calendar Date" },
-    // Add more as needed
-};
+string labelText = FieldConfiguration.DisplayNames.TryGetValue(prop.Name, out var friendly)
+    ? friendly
+    : prop.Name;
