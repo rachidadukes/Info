@@ -1,96 +1,71 @@
 
-
-private async void SaveFormDataAsync(long recordId)
+public OriginalCreditDebitRqModel GetUpdatedModel()
 {
-    var updateClauses = new List<string>();
-    var parameters = new List<SqliteParameter>();
+    var updatedModel = new OriginalCreditDebitRqModel();
+    var props = typeof(OriginalCreditDebitRqModel).GetProperties();
 
-    foreach (var child in FormContainer.Children)
+    foreach (var child in FormPanel.Children)
     {
-        if (child is TextBox tb && tb.Tag is string column)
+        if (child is TextBox tb && tb.Tag is string propName)
         {
-            updateClauses.Add($"{column} = @{column}");
-            parameters.Add(new SqliteParameter($"@{column}", tb.Text));
+            var prop = props.FirstOrDefault(p => p.Name == propName);
+            if (prop != null && prop.CanWrite)
+            {
+                prop.SetValue(updatedModel, tb.Text);
+            }
         }
     }
 
-    if (updateClauses.Count > 0)
+    return updatedModel;
+}
+
+
+=====
+
+public partial class TestNewRequestWindow : Window
+{
+    public OriginalCreditDebitRqModel selectedRequest { get; set; }
+
+    public TestNewRequestWindow()
     {
-        string updateSql = $"UPDATE NewCreditDebitRq SET {string.Join(", ", updateClauses)} WHERE Id = {recordId}";
-
-        using var conn = new SqliteConnection("Data Source=SQLiteRequests.db");
-        await conn.OpenAsync();
-
-        using var cmd = new SqliteCommand(updateSql, conn);
-        cmd.Parameters.AddRange(parameters.ToArray());
-
-        int affected = await cmd.ExecuteNonQueryAsync();
-        MessageBox.Show($"{affected} row(s) updated.");
+        InitializeComponent();
+        this.Loaded += TestNewRequestWindow_Loaded;
     }
-}
 
-=========================================
-
-private void btnLoadRecord_Click(object sender, RoutedEventArgs e)
-{
-    // For demo, you can pass any known ID from your table
-    GenerateFormFromSQLiteAsync(recordId: 1);
-}
-
-===================================================
-using Microsoft.Data.Sqlite; // For SQLite
-using System.Windows.Controls;
-
-private async void GenerateFormFromSQLiteAsync(long recordId)
-{
-    FormContainer.Children.Clear(); // Clear any existing controls
-
-    string dbPath = "Data Source=SQLiteRequests.db";
-    string query = $"SELECT * FROM NewCreditDebitRq WHERE Id = {recordId}";
-
-    using var connection = new SqliteConnection(dbPath);
-    await connection.OpenAsync();
-
-    using var command = new SqliteCommand(query, connection);
-    using var reader = await command.ExecuteReaderAsync();
-
-    if (await reader.ReadAsync())
+    private void TestNewRequestWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        for (int i = 0; i < reader.FieldCount; i++)
-        {
-            string columnName = reader.GetName(i);
-            string value = reader.IsDBNull(i) ? "" : reader.GetString(i);
+        if (selectedRequest != null)
+            GenerateForm(selectedRequest);
+    }
 
-            // Create Label
+    private void GenerateForm(OriginalCreditDebitRqModel request)
+    {
+        var properties = typeof(OriginalCreditDebitRqModel).GetProperties();
+
+        foreach (var prop in properties)
+        {
+            string labelText = prop.Name;
+            string value = prop.GetValue(request)?.ToString() ?? "";
+
+            // Label
             var label = new Label
             {
-                Content = columnName,
-                FontWeight = FontWeights.Bold,
+                Content = labelText,
+                FontWeight = FontWeights.SemiBold,
                 Margin = new Thickness(0, 10, 0, 2)
             };
 
-            // Create TextBox
-            var textbox = new TextBox
+            // TextBox
+            var textBox = new TextBox
             {
                 Text = value,
                 Width = 400,
                 Margin = new Thickness(0, 0, 0, 5),
-                Tag = columnName // Store column name for later use
+                Tag = labelText // Store property name
             };
 
-            // Add to UI
-            FormContainer.Children.Add(label);
-            FormContainer.Children.Add(textbox);
+            FormPanel.Children.Add(label);
+            FormPanel.Children.Add(textBox);
         }
     }
-    else
-    {
-        MessageBox.Show("No record found with the given ID.");
-    }
 }
-
-
-======================================
-<ScrollViewer VerticalScrollBarVisibility="Auto">
-    <StackPanel x:Name="FormContainer" Margin="20"/>
-</ScrollViewer>
