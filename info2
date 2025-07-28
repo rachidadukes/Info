@@ -1,9 +1,22 @@
- foreach (var child in FormGrid.Children)
+try
+{
+    foreach (var child in FormGrid.Children)
     {
         if (child is TextBox tb && tb.Tag is string propName)
         {
             var prop = props.FirstOrDefault(p => p.Name == propName);
             if (prop != null && prop.CanWrite)
-                prop.SetValue(selectedRequest, tb.Text);
+            {
+                string textValue = tb.Text;
+                object? convertedValue = ConvertTextToType(textValue, prop.PropertyType);
+                prop.SetValue(newRequest, convertedValue);
+            }
         }
     }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"[ERROR] Failed to update controls: {ex.Message}");
+    if (ex.InnerException != null)
+        Console.WriteLine($"[InnerException] {ex.InnerException.Message}");
+}
