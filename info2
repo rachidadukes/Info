@@ -1,73 +1,41 @@
-
-private void GenerateForm(NewCreditDebitRqModel newRequest)
+public static readonly HashSet<string> HighlightFields = new()
 {
-    FormGrid.Children.Clear();
-    FormGrid.RowDefinitions.Clear();
-
-    var props = typeof(NewCreditDebitRqModel).GetProperties();
-    var orderedProps = props
-        .OrderBy(p => Array.IndexOf(FieldConfiguration.PreferredPropertyOrder, p.Name))
-        .ThenBy(p => p.Name)
-        .ToList();
-
-    int row = 0;
-
-    foreach (var prop in orderedProps)
-    {
-        string name = prop.Name;
-        if (FieldConfiguration.HiddenFields.Contains(name)) continue;
-
-        string labelText = FieldConfiguration.DisplayNames.TryGetValue(name, out var friendly)
-            ? friendly
-            : name;
-
-        string value = prop.GetValue(newRequest)?.ToString() ?? "";
-
-        // Create new row
-        FormGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-        // Label
-        var label = new Label
-        {
-            Content = labelText,
-            Margin = new Thickness(0, 5, 10, 5),
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        Grid.SetRow(label, row);
-        Grid.SetColumn(label, 0);
-
-        // TextBox
-        var textbox = new TextBox
-        {
-            Text = value,
-            Width = 400,
-            Margin = new Thickness(0, 5, 0, 5),
-            Tag = name,
-            IsReadOnly = FieldConfiguration.ReadOnlyFields.Contains(name)
-        };
-        Grid.SetRow(textbox, row);
-        Grid.SetColumn(textbox, 1);
-
-        FormGrid.Children.Add(label);
-        FormGrid.Children.Add(textbox);
-
-        row++;
-    }
-
-    // Ensure columns are defined
-    if (FormGrid.ColumnDefinitions.Count == 0)
-    {
-        FormGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) }); // label column
-        FormGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });      // input column
-    }
-}
+    "RequestType",
+    "CustPermId",
+    "CashOutAmt"
+};
 
 
-==================
 
-<ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
-    <Grid x:Name="FormGrid" Margin="20">
-        <!-- We'll populate this from code-behind -->
-    </Grid>
-</ScrollViewer>
+
+========================================
+
+
+var label = new Label
+{
+    Content = labelText,
+    Margin = new Thickness(0, 5, 10, 5),
+    VerticalAlignment = VerticalAlignment.Center,
+    Foreground = FieldConfiguration.HighlightFields.Contains(name)
+        ? Brushes.Red
+        : Brushes.Black
+};
+
+
+==============================
+
+var textbox = new TextBox
+{
+    Text = value,
+    Width = 400,
+    Margin = new Thickness(0, 5, 0, 5),
+    Tag = name,
+    IsReadOnly = FieldConfiguration.ReadOnlyFields.Contains(name),
+    BorderBrush = FieldConfiguration.HighlightFields.Contains(name)
+        ? Brushes.Red
+        : SystemColors.ControlDarkBrush,
+    BorderThickness = new Thickness(FieldConfiguration.HighlightFields.Contains(name) ? 2 : 1)
+};
+
+
 
