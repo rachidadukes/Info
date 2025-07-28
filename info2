@@ -1,47 +1,16 @@
-using static RequestsSamplesApp.FieldConfiguration; // Use your correct namespace
-
-var orderedProps = props
-    .OrderBy(p => Array.IndexOf(PreferredPropertyOrder, p.Name))
-    .ThenBy(p => p.Name)
-    .ToList();
-
-...
-
-if (HiddenFields.Contains(prop.Name)) continue;
-
-...
-
-var textBox = new TextBox
+public static readonly Dictionary<string, string> DisplayNames = new()
 {
-    ...
-    IsReadOnly = ReadOnlyFields.Contains(prop.Name)
+    { "RqUID", "Request UID" },
+    { "PCName", "Workstation" },
+    { "TranCode", "Transaction Code" },
+    { "PostingDt", "Posting Date" },
+    { "AcctId", "Account ID" },
+    { "AcctType", "Account Type" },
+    { "DepositType", "Deposit Type" },
+    { "CashInAmt", "Cash In" },
+    { "CashOutAmt", "Cash Out" },
+    { "TransAmt", "Transaction Amount" },
+    { "OverrideCode", "Override Code" },
+    { "CalendarDt", "Calendar Date" },
+    // Add more as needed
 };
-
-===========================
-
-public static class FieldConfiguration
-{
-    public static readonly string[] PreferredPropertyOrder =
-    {
-        "RqUID", "EnvironmentName", "TranCode", "BranchId", "PCName",
-        "TranCodeQual", "CashBoxId", "EmployeeId",
-        "PostingDt", "CalendarDt", "TranTime", "TranSeqNum",
-        "ETSTranStatus", "OverrideCode", "OverrideEmployeeId",
-        "ForwardTranFlag", "CustPermId", "POAInd",
-        "MultiTranFlag", "ConductorIdType", "ConductorIdNum",
-        "AcctId", "AcctType", "DepositType",
-        "TransAmt", "CashInAmt", "CashOutAmt", "ScannedChkAmt", "UnscannedChkAmt", "NumberOfChecks",
-        "FltLvl1", "FltLvl2", "FltLvl3",
-        "EventID", "Environment", "RequestType"
-    };
-
-    public static readonly HashSet<string> HiddenFields = new()
-    {
-        "Id", "EventID"
-    };
-
-    public static readonly HashSet<string> ReadOnlyFields = new()
-    {
-        "RqUID", "PostingDt", "CalendarDt"
-    };
-}
