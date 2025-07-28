@@ -1,27 +1,47 @@
+using static RequestsSamplesApp.FieldConfiguration; // Use your correct namespace
 
-<Window x:Class="RequestsSamplesApp.TestNewRequestWindow"
-        ...
-        Title="Testing Request"
-        Height="730" Width="980" ResizeMode="CanResize"
-        WindowStartupLocation="CenterScreen">
-    
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*" /> <!-- Form -->
-            <RowDefinition Height="Auto" /> <!-- Button -->
-        </Grid.RowDefinitions>
+var orderedProps = props
+    .OrderBy(p => Array.IndexOf(PreferredPropertyOrder, p.Name))
+    .ThenBy(p => p.Name)
+    .ToList();
 
-        <!-- Scrollable Form -->
-        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
-            <StackPanel x:Name="FormPanel" Margin="20"/>
-        </ScrollViewer>
+...
 
-        <!-- Bottom Save Button -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal" 
-                    HorizontalAlignment="Center" Margin="20">
-            <Button Content="Save Changes" Width="150"
-                    Name="btnSaveNewRequest"
-                    Click="SaveChanges_Click"/>
-        </StackPanel>
-    </Grid>
-</Window>
+if (HiddenFields.Contains(prop.Name)) continue;
+
+...
+
+var textBox = new TextBox
+{
+    ...
+    IsReadOnly = ReadOnlyFields.Contains(prop.Name)
+};
+
+===========================
+
+public static class FieldConfiguration
+{
+    public static readonly string[] PreferredPropertyOrder =
+    {
+        "RqUID", "EnvironmentName", "TranCode", "BranchId", "PCName",
+        "TranCodeQual", "CashBoxId", "EmployeeId",
+        "PostingDt", "CalendarDt", "TranTime", "TranSeqNum",
+        "ETSTranStatus", "OverrideCode", "OverrideEmployeeId",
+        "ForwardTranFlag", "CustPermId", "POAInd",
+        "MultiTranFlag", "ConductorIdType", "ConductorIdNum",
+        "AcctId", "AcctType", "DepositType",
+        "TransAmt", "CashInAmt", "CashOutAmt", "ScannedChkAmt", "UnscannedChkAmt", "NumberOfChecks",
+        "FltLvl1", "FltLvl2", "FltLvl3",
+        "EventID", "Environment", "RequestType"
+    };
+
+    public static readonly HashSet<string> HiddenFields = new()
+    {
+        "Id", "EventID"
+    };
+
+    public static readonly HashSet<string> ReadOnlyFields = new()
+    {
+        "RqUID", "PostingDt", "CalendarDt"
+    };
+}
