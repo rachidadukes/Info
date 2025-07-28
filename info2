@@ -1,41 +1,9 @@
-public static readonly HashSet<string> HighlightFields = new()
-{
-    "RequestType",
-    "CustPermId",
-    "CashOutAmt"
-};
-
-
-
-
-========================================
-
-
-var label = new Label
-{
-    Content = labelText,
-    Margin = new Thickness(0, 5, 10, 5),
-    VerticalAlignment = VerticalAlignment.Center,
-    Foreground = FieldConfiguration.HighlightFields.Contains(name)
-        ? Brushes.Red
-        : Brushes.Black
-};
-
-
-==============================
-
-var textbox = new TextBox
-{
-    Text = value,
-    Width = 400,
-    Margin = new Thickness(0, 5, 0, 5),
-    Tag = name,
-    IsReadOnly = FieldConfiguration.ReadOnlyFields.Contains(name),
-    BorderBrush = FieldConfiguration.HighlightFields.Contains(name)
-        ? Brushes.Red
-        : SystemColors.ControlDarkBrush,
-    BorderThickness = new Thickness(FieldConfiguration.HighlightFields.Contains(name) ? 2 : 1)
-};
-
-
-
+ foreach (var child in FormGrid.Children)
+    {
+        if (child is TextBox tb && tb.Tag is string propName)
+        {
+            var prop = props.FirstOrDefault(p => p.Name == propName);
+            if (prop != null && prop.CanWrite)
+                prop.SetValue(selectedRequest, tb.Text);
+        }
+    }
