@@ -1,71 +1,27 @@
 
-public OriginalCreditDebitRqModel GetUpdatedModel()
-{
-    var updatedModel = new OriginalCreditDebitRqModel();
-    var props = typeof(OriginalCreditDebitRqModel).GetProperties();
+<Window x:Class="RequestsSamplesApp.TestNewRequestWindow"
+        ...
+        Title="Testing Request"
+        Height="730" Width="980" ResizeMode="CanResize"
+        WindowStartupLocation="CenterScreen">
+    
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" /> <!-- Form -->
+            <RowDefinition Height="Auto" /> <!-- Button -->
+        </Grid.RowDefinitions>
 
-    foreach (var child in FormPanel.Children)
-    {
-        if (child is TextBox tb && tb.Tag is string propName)
-        {
-            var prop = props.FirstOrDefault(p => p.Name == propName);
-            if (prop != null && prop.CanWrite)
-            {
-                prop.SetValue(updatedModel, tb.Text);
-            }
-        }
-    }
+        <!-- Scrollable Form -->
+        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+            <StackPanel x:Name="FormPanel" Margin="20"/>
+        </ScrollViewer>
 
-    return updatedModel;
-}
-
-
-=====
-
-public partial class TestNewRequestWindow : Window
-{
-    public OriginalCreditDebitRqModel selectedRequest { get; set; }
-
-    public TestNewRequestWindow()
-    {
-        InitializeComponent();
-        this.Loaded += TestNewRequestWindow_Loaded;
-    }
-
-    private void TestNewRequestWindow_Loaded(object sender, RoutedEventArgs e)
-    {
-        if (selectedRequest != null)
-            GenerateForm(selectedRequest);
-    }
-
-    private void GenerateForm(OriginalCreditDebitRqModel request)
-    {
-        var properties = typeof(OriginalCreditDebitRqModel).GetProperties();
-
-        foreach (var prop in properties)
-        {
-            string labelText = prop.Name;
-            string value = prop.GetValue(request)?.ToString() ?? "";
-
-            // Label
-            var label = new Label
-            {
-                Content = labelText,
-                FontWeight = FontWeights.SemiBold,
-                Margin = new Thickness(0, 10, 0, 2)
-            };
-
-            // TextBox
-            var textBox = new TextBox
-            {
-                Text = value,
-                Width = 400,
-                Margin = new Thickness(0, 0, 0, 5),
-                Tag = labelText // Store property name
-            };
-
-            FormPanel.Children.Add(label);
-            FormPanel.Children.Add(textBox);
-        }
-    }
-}
+        <!-- Bottom Save Button -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" 
+                    HorizontalAlignment="Center" Margin="20">
+            <Button Content="Save Changes" Width="150"
+                    Name="btnSaveNewRequest"
+                    Click="SaveChanges_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>
