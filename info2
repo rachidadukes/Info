@@ -1,22 +1,20 @@
-try
+private object? ConvertTextToType(string text, Type targetType)
 {
-    foreach (var child in FormGrid.Children)
+    try
     {
-        if (child is TextBox tb && tb.Tag is string propName)
-        {
-            var prop = props.FirstOrDefault(p => p.Name == propName);
-            if (prop != null && prop.CanWrite)
-            {
-                string textValue = tb.Text;
-                object? convertedValue = ConvertTextToType(textValue, prop.PropertyType);
-                prop.SetValue(newRequest, convertedValue);
-            }
-        }
+        if (targetType == typeof(string))
+            return text;
+
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        // Handle nullable types
+        Type baseType = Nullable.GetUnderlyingType(targetType) ?? targetType;
+
+        return Convert.ChangeType(text, baseType);
     }
-}
-catch (Exception ex)
-{
-    Console.WriteLine($"[ERROR] Failed to update controls: {ex.Message}");
-    if (ex.InnerException != null)
-        Console.WriteLine($"[InnerException] {ex.InnerException.Message}");
+    catch
+    {
+        return null;
+    }
 }
