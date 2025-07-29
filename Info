@@ -1,18 +1,17 @@
-// TextBox
-var textbox = new TextBox
+
+
+
+var config = new MapperConfiguration(cfg =>
 {
-    Width = 200,
-    Margin = new Thickness(0, 5, 0, 5),
-    Tag = name
-};
+    cfg.CreateMap<StandardProduct, OtherProduct>();
+});
 
-// ✅ Pre-fill known values
-if (name == "EmployeeId")
-    textbox.Text = pv.UserId; // 👈 use your actual variable/property name here
-else if (name == "PCName")
-    textbox.Text = Environment.MachineName;
+var mapper = config.CreateMapper();
 
-Grid.SetRow(textbox, row);
-Grid.SetColumn(textbox, 1);
-NewDataFormGrid.Children.Add(label);
-NewDataFormGrid.Children.Add(textbox);
+OtherProduct other = mapper.Map<OtherProduct>(standard);
+
+
+======================
+
+Install-Package AutoMapper
+
