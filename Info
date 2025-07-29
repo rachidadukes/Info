@@ -1,21 +1,7 @@
-
-private void ProcessNewRequestWindowX_Loaded(object sender, RoutedEventArgs e)
+private void GenerateForm()
 {
-    if (selectedOriginalRequest != null)
-    {
-        ReadNewRequest();
-        UpdatesomeControlsWithMyparsonalData();
-        GenerateForm();             // Original
-        GenerateEditableForm();     // New input
-    }
-}
-
-
-=======================
-private void GenerateEditableForm()
-{
-    NewDataFormGrid.Children.Clear();
-    NewDataFormGrid.RowDefinitions.Clear();
+    OriginalDataFormGrid.Children.Clear();
+    OriginalDataFormGrid.RowDefinitions.Clear();
 
     var props = typeof(NewCreditDebitRqModel).GetProperties();
     var orderedProps = props
@@ -24,47 +10,59 @@ private void GenerateEditableForm()
         .ToList();
 
     int row = 0;
+
     foreach (var prop in orderedProps)
     {
         string name = prop.Name;
-        if (FieldConfiguration.HiddenFields.Contains(name)) continue;
+
+        if (FieldConfiguration.HiddenFields.Contains(name))
+            continue;
 
         string labelText = FieldConfiguration.DisplayNames.TryGetValue(name, out var friendly)
             ? friendly
             : name;
 
-        NewDataFormGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        string value = prop.GetValue(newRequest)?.ToString() ?? "";
+
+        // Add a new row
+        OriginalDataFormGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         // Label
         var label = new Label
         {
             Content = labelText,
-            Margin = new Thickness(0, 5, 10, 5),
+            Margin = new Thickness(0, 5, 5, 5),
             VerticalAlignment = VerticalAlignment.Center,
-            Foreground = FieldConfiguration.HighlightFields.Contains(name) ? Brushes.DarkRed : Brushes.Black
+            Foreground = FieldConfiguration.HighlightFields.Contains(name) ? Brushes.Red : Brushes.Black
         };
         Grid.SetRow(label, row);
         Grid.SetColumn(label, 0);
 
-        // TextBox
+        // TextBox (Read-Only for original values)
         var textbox = new TextBox
         {
-            Width = 400,
+            Text = value,
+            Width = 200, // Reduced width
             Margin = new Thickness(0, 5, 0, 5),
-            Tag = name
+            Tag = name,
+            IsReadOnly = FieldConfiguration.ReadOnlyFields.Contains(name),
+            BorderBrush = FieldConfiguration.HighlightFields.Contains(name) ? Brushes.Red : SystemColors.ControlDarkBrush,
+            BorderThickness = new Thickness(FieldConfiguration.HighlightFields.Contains(name) ? 2 : 1)
         };
         Grid.SetRow(textbox, row);
         Grid.SetColumn(textbox, 1);
 
-        NewDataFormGrid.Children.Add(label);
-        NewDataFormGrid.Children.Add(textbox);
+        // Add controls to grid
+        OriginalDataFormGrid.Children.Add(label);
+        OriginalDataFormGrid.Children.Add(textbox);
 
         row++;
     }
 
-    if (NewDataFormGrid.ColumnDefinitions.Count == 0)
+    // Ensure columns are defined once
+    if (OriginalDataFormGrid.ColumnDefinitions.Count == 0)
     {
-        NewDataFormGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
-        NewDataFormGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        OriginalDataFormGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
+        OriginalDataFormGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
     }
 }
