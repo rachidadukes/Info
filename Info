@@ -1,58 +1,70 @@
-<Window x:Class="RequestsSamplesApp.ProcessNewRequestWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:RequestsSamplesApp"
-        mc:Ignorable="d"
-        Title="Process New Request"
-        Height="730" MinHeight="730" MaxHeight="730"
-        Width="980" MinWidth="980" MaxWidth="980"
-        WindowStartupLocation="CenterScreen"
-        Name="ProcessNewRequestWindowX"
-        Loaded="ProcessNewRequestWindowX_Loaded">
 
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*" />   <!-- Forms -->
-            <RowDefinition Height="Auto" /> <!-- Button -->
-        </Grid.RowDefinitions>
+private void ProcessNewRequestWindowX_Loaded(object sender, RoutedEventArgs e)
+{
+    if (selectedOriginalRequest != null)
+    {
+        ReadNewRequest();
+        UpdatesomeControlsWithMyparsonalData();
+        GenerateForm();             // Original
+        GenerateEditableForm();     // New input
+    }
+}
 
-        <!-- Two-column layout for forms -->
-        <Grid Grid.Row="0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
 
-            <!-- Original Data Form -->
-            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
-                <Grid x:Name="OriginalDataFormGrid" Margin="20">
-                    <!-- We'll populate this from code-behind -->
-                </Grid>
-            </ScrollViewer>
+=======================
+private void GenerateEditableForm()
+{
+    NewDataFormGrid.Children.Clear();
+    NewDataFormGrid.RowDefinitions.Clear();
 
-            <!-- New Editable Form -->
-            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
-                <Grid x:Name="NewDataFormGrid" Margin="20">
-                    <!-- This will allow user input -->
-                </Grid>
-            </ScrollViewer>
-        </Grid>
+    var props = typeof(NewCreditDebitRqModel).GetProperties();
+    var orderedProps = props
+        .OrderBy(p => Array.IndexOf(FieldConfiguration.PreferredPropertyOrder, p.Name))
+        .ThenBy(p => p.Name)
+        .ToList();
 
-        <!-- Bottom Process Button -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal"
-                    HorizontalAlignment="Center" Margin="20">
+    int row = 0;
+    foreach (var prop in orderedProps)
+    {
+        string name = prop.Name;
+        if (FieldConfiguration.HiddenFields.Contains(name)) continue;
 
-            <Button Content="Process New Transaction"
-                    Name="btnProcessNewRequest"
-                    FontFamily="Consolas"
-                    Background="LightSalmon"
-                    Foreground="DarkGreen"
-                    FontSize="17" Width="400" Height="50"
-                    Margin="20"
-                    FontWeight="Bold"
-                    Click="btnProcessNewRequest_Click" />
-        </StackPanel>
-    </Grid>
-</Window>
+        string labelText = FieldConfiguration.DisplayNames.TryGetValue(name, out var friendly)
+            ? friendly
+            : name;
+
+        NewDataFormGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        // Label
+        var label = new Label
+        {
+            Content = labelText,
+            Margin = new Thickness(0, 5, 10, 5),
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = FieldConfiguration.HighlightFields.Contains(name) ? Brushes.DarkRed : Brushes.Black
+        };
+        Grid.SetRow(label, row);
+        Grid.SetColumn(label, 0);
+
+        // TextBox
+        var textbox = new TextBox
+        {
+            Width = 400,
+            Margin = new Thickness(0, 5, 0, 5),
+            Tag = name
+        };
+        Grid.SetRow(textbox, row);
+        Grid.SetColumn(textbox, 1);
+
+        NewDataFormGrid.Children.Add(label);
+        NewDataFormGrid.Children.Add(textbox);
+
+        row++;
+    }
+
+    if (NewDataFormGrid.ColumnDefinitions.Count == 0)
+    {
+        NewDataFormGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
+        NewDataFormGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+    }
+}
