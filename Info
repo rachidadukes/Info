@@ -1,17 +1,21 @@
-string rawText = @"Send to Host; len=1028 06/22/2025 12:49:04.3407
-<DebitAddRq><MsgRqHdr xmlns=""http://schemas.navyfederal.org/2010/04/NFBranchExService""><RqUID>...</RqUID></MsgRqHdr></DebitAddRq>";
+<Grid.RowDefinitions>
+    <RowDefinition Height="*" /> <!-- Forms -->
+    <RowDefinition Height="Auto" /> <!-- Bottom Button -->
+</Grid.RowDefinitions>
 
-string xmlOnly = string.Join(Environment.NewLine, rawText.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries).Skip(1));
+<Grid Grid.Row="0">
+    <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="*" />
+    </Grid.ColumnDefinitions>
 
-XElement parsed = XElement.Parse(xmlOnly);
+    <!-- Original Data Form -->
+    <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+        <Grid x:Name="OriginalDataFormGrid" Margin="20" />
+    </ScrollViewer>
 
-// (Optional) pretty print for debugging:
-Console.WriteLine(parsed.ToString(SaveOptions.None));
-
-================
-public static XElement ExtractXmlFromRaw(string raw)
-{
-    var xml = string.Join(Environment.NewLine, raw.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries).Skip(1));
-    return XElement.Parse(xml);
-}
-==============
+    <!-- New Data Form -->
+    <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+        <Grid x:Name="NewDataFormGrid" Margin="20" />
+    </ScrollViewer>
+</Grid>
