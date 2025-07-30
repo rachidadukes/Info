@@ -1,17 +1,41 @@
 
 
 
-var config = new MapperConfiguration(cfg =>
+var standard = new StandardProduct
 {
-    cfg.CreateMap<StandardProduct, OtherProduct>();
-});
+    Id = 1,
+    Name = "Example",
+    Price = 123.45m,
+    InStock = true,
+    Origin = "Germany"
+};
 
-var mapper = config.CreateMapper();
+var other = PropertyMapperHelper.Map<StandardProduct, OtherProduct>(standard);
 
-OtherProduct other = mapper.Map<OtherProduct>(standard);
+Console.WriteLine($"{other.Name}, {other.Price}, {other.InStock}");
 
+==============================
 
-======================
+   public static TTarget Map<TSource, TTarget>(TSource source)
+       where TTarget : new()
+   {
+       TTarget target = new TTarget();
 
-Install-Package AutoMapper
+       var sourceProps = typeof(TSource).GetProperties();
+       var targetProps = typeof(TTarget).GetProperties();
 
+       foreach (var targetProp in targetProps)
+       {
+           var sourceProp = sourceProps.FirstOrDefault(
+               sp => sp.Name == targetProp.Name &&
+                     sp.PropertyType == targetProp.PropertyType);
+
+           if (sourceProp != null && sourceProp.CanRead && targetProp.CanWrite)
+           {
+               var value = sourceProp.GetValue(source);
+               targetProp.SetValue(target, value);
+           }
+       }
+
+       return target;
+   }
