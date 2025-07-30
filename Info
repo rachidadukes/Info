@@ -1,24 +1,33 @@
+private TTarget CloneProperties<TSource, TTarget>(TSource source)
+    where TTarget : new()
+{
+    var target = new TTarget();
+    var sourceProps = typeof(TSource).GetProperties();
+    var targetProps = typeof(TTarget).GetProperties();
+
+    foreach (var sProp in sourceProps)
+    {
+        var tProp = targetProps.FirstOrDefault(p => p.Name == sProp.Name && p.PropertyType == sProp.PropertyType);
+        if (tProp != null && tProp.CanWrite)
+        {
+            var value = sProp.GetValue(source);
+            tProp.SetValue(target, value);
+        }
+    }
+
+    return target;
+}
+
+
+=========================
+
 private void CopyDataFromTheOriginalToTheNew()
 {
     try
     {
-        newRequest = new NewCreditDebitRqModel
-        {
-            RqUID = selectedOriginalRequest.RqUID,
-            EnvironmentName = selectedOriginalRequest.EnvironmentName,
-            TranCode = selectedOriginalRequest.TranCode,
-            BranchId = selectedOriginalRequest.BranchId,
-            PCName = selectedOriginalRequest.PCName,
-            TranCodeQual = selectedOriginalRequest.TranCodeQual,
-            CashBoxId = selectedOriginalRequest.CashBoxId,
-            EmployeeId = Environment.UserName, // custom
-            PostingDt = selectedOriginalRequest.PostingDt,
-            CalendarDt = selectedOriginalRequest.CalendarDt,
-            TranTime = selectedOriginalRequest.TranTime,
-            TranSeqNum = selectedOriginalRequest.TranSeqNum,
-            ETSTranStatus = selectedOriginalRequest.ETSTranStatus,
-            // ... and all the rest
-        };
+        newRequest = CloneProperties<OriginalCreditDebitRqModel, NewCreditDebitRqModel>(selectedOriginalRequest);
+        newRequest.EmployeeId = Environment.UserName;
+        newRequest.PCName = Environment.MachineName;
     }
     catch (Exception ex)
     {
