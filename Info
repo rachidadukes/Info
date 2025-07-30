@@ -1,41 +1,17 @@
+ public class StandardProduct
+ {
+     public int Id { get; set; }
+     public string Name { get; set; }
+     public decimal Price { get; set; }
+     public bool InStock { get; set; }
+     public string Origin { get; set; }
+ }
 
-
-
-var standard = new StandardProduct
-{
-    Id = 1,
-    Name = "Example",
-    Price = 123.45m,
-    InStock = true,
-    Origin = "Germany"
-};
-
-var other = PropertyMapperHelper.Map<StandardProduct, OtherProduct>(standard);
-
-Console.WriteLine($"{other.Name}, {other.Price}, {other.InStock}");
-
-==============================
-
-   public static TTarget Map<TSource, TTarget>(TSource source)
-       where TTarget : new()
-   {
-       TTarget target = new TTarget();
-
-       var sourceProps = typeof(TSource).GetProperties();
-       var targetProps = typeof(TTarget).GetProperties();
-
-       foreach (var targetProp in targetProps)
-       {
-           var sourceProp = sourceProps.FirstOrDefault(
-               sp => sp.Name == targetProp.Name &&
-                     sp.PropertyType == targetProp.PropertyType);
-
-           if (sourceProp != null && sourceProp.CanRead && targetProp.CanWrite)
-           {
-               var value = sourceProp.GetValue(source);
-               targetProp.SetValue(target, value);
-           }
-       }
-
-       return target;
-   }
+ public class OtherProduct
+ {
+     public int Id { get; set; }
+     public string Name { get; set; }
+     public decimal Price { get; set; }
+     public bool InStock { get; set; }
+     public string Description { get; set; }
+ }
