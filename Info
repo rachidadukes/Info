@@ -1,17 +1,27 @@
- public class StandardProduct
- {
-     public int Id { get; set; }
-     public string Name { get; set; }
-     public decimal Price { get; set; }
-     public bool InStock { get; set; }
-     public string Origin { get; set; }
- }
-
- public class OtherProduct
- {
-     public int Id { get; set; }
-     public string Name { get; set; }
-     public decimal Price { get; set; }
-     public bool InStock { get; set; }
-     public string Description { get; set; }
- }
+private void CopyDataFromTheOriginalToTheNew()
+{
+    try
+    {
+        newRequest = new NewCreditDebitRqModel
+        {
+            RqUID = selectedOriginalRequest.RqUID,
+            EnvironmentName = selectedOriginalRequest.EnvironmentName,
+            TranCode = selectedOriginalRequest.TranCode,
+            BranchId = selectedOriginalRequest.BranchId,
+            PCName = selectedOriginalRequest.PCName,
+            TranCodeQual = selectedOriginalRequest.TranCodeQual,
+            CashBoxId = selectedOriginalRequest.CashBoxId,
+            EmployeeId = Environment.UserName, // custom
+            PostingDt = selectedOriginalRequest.PostingDt,
+            CalendarDt = selectedOriginalRequest.CalendarDt,
+            TranTime = selectedOriginalRequest.TranTime,
+            TranSeqNum = selectedOriginalRequest.TranSeqNum,
+            ETSTranStatus = selectedOriginalRequest.ETSTranStatus,
+            // ... and all the rest
+        };
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[ERROR] Failed to load newRequest: {ex.Message}");
+    }
+}
