@@ -1,41 +1,29 @@
-foreach (var prop in orderedProps)
-{
-    string name = prop.Name;
-    if (FieldConfiguration.HiddenFields.Contains(name)) continue;
-
-    string labelText = FieldConfiguration.DisplayNames.TryGetValue(name, out var friendly)
-        ? friendly : name;
-
-    // 🧱 Add row for this field
-    NewDataFormGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-    // Label
-    var label = new Label
-    {
-        Content = labelText,
-        Margin = new Thickness(0, 5, 5, 5),
-        VerticalAlignment = VerticalAlignment.Center,
-        Foreground = FieldConfiguration.HighlightFields.Contains(name) ? Brushes.DarkRed : Brushes.Black
-    };
-    Grid.SetRow(label, row);
-    Grid.SetColumn(label, 0);
-
-    // TextBox
-    var textbox = new TextBox
-    {
-        Width = 200,
-        Margin = new Thickness(0, 5, 0, 5),
-        Tag = name
-    };
-    var value = prop.GetValue(newRequest)?.ToString() ?? "";
-    textbox.Text = value;
-
-    Grid.SetRow(textbox, row);
-    Grid.SetColumn(textbox, 1);
-
-    // Add to grid
-    NewDataFormGrid.Children.Add(label);
-    NewDataFormGrid.Children.Add(textbox);
-
-    row++;
-}
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:nfb="http://schemas.navyfederal.org/2010/04/NFBranchExService">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <nfb:CreditAddRq>
+      <nfb:MsgRqHdr>
+        <nfb:RqUID>295362de-7d60-4f17-84c4-c754f9737d37</nfb:RqUID>
+        <nfb:EnvironmentName>NFCU</nfb:EnvironmentName>
+        <nfb:TranCode>3104</nfb:TranCode>
+        <nfb:BranchId>D3</nfb:BranchId>
+        <nfb:PCName>LT4CD717393403</nfb:PCName>
+        <nfb:TranCodeQual>0000</nfb:TranCodeQual>
+        <nfb:CashBoxId>3</nfb:CashBoxId>
+        <nfb:EmployeeId>d8147</nfb:EmployeeId>
+        <nfb:PostingDt>2022-02-18</nfb:PostingDt>
+        <nfb:CalendarDt>2025-06-20</nfb:CalendarDt>
+        <nfb:TranTime>10:45:48</nfb:TranTime>
+        <nfb:TranSeqNum>124</nfb:TranSeqNum>
+        <nfb:ETSTranStatus>T</nfb:ETSTranStatus>
+        <nfb:OverrideCode>2</nfb:OverrideCode>
+        <nfb:OverrideEmployeeId>d8147</nfb:OverrideEmployeeId>
+        <nfb:ForwardTranFlag>0</nfb:ForwardTranFlag>
+        <nfb:CustPermId>108</nfb:CustPermId>
+        <nfb:POATInd/>
+        <nfb:MultiTranFlag>1</nfb:MultiTranFlag>
+        <nfb:ConductorId/>
+      </nfb:MsgRqHdr>
+    </nfb:CreditAddRq>
+  </soapenv:Body>
+</soapenv:Envelope>
