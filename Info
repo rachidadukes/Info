@@ -1,29 +1,51 @@
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:nfb="http://schemas.navyfederal.org/2010/04/NFBranchExService">
-  <soapenv:Header/>
-  <soapenv:Body>
-    <nfb:CreditAddRq>
-      <nfb:MsgRqHdr>
-        <nfb:RqUID>295362de-7d60-4f17-84c4-c754f9737d37</nfb:RqUID>
-        <nfb:EnvironmentName>NFCU</nfb:EnvironmentName>
-        <nfb:TranCode>3104</nfb:TranCode>
-        <nfb:BranchId>D3</nfb:BranchId>
-        <nfb:PCName>LT4CD717393403</nfb:PCName>
-        <nfb:TranCodeQual>0000</nfb:TranCodeQual>
-        <nfb:CashBoxId>3</nfb:CashBoxId>
-        <nfb:EmployeeId>d8147</nfb:EmployeeId>
-        <nfb:PostingDt>2022-02-18</nfb:PostingDt>
-        <nfb:CalendarDt>2025-06-20</nfb:CalendarDt>
-        <nfb:TranTime>10:45:48</nfb:TranTime>
-        <nfb:TranSeqNum>124</nfb:TranSeqNum>
-        <nfb:ETSTranStatus>T</nfb:ETSTranStatus>
-        <nfb:OverrideCode>2</nfb:OverrideCode>
-        <nfb:OverrideEmployeeId>d8147</nfb:OverrideEmployeeId>
-        <nfb:ForwardTranFlag>0</nfb:ForwardTranFlag>
-        <nfb:CustPermId>108</nfb:CustPermId>
-        <nfb:POATInd/>
-        <nfb:MultiTranFlag>1</nfb:MultiTranFlag>
-        <nfb:ConductorId/>
-      </nfb:MsgRqHdr>
-    </nfb:CreditAddRq>
-  </soapenv:Body>
-</soapenv:Envelope>
+public static string BuildCreditAddRqXml(NewCreditDebitRqModel selectedRequest)
+{
+    XNamespace ns = "http://schemas.navyfederal.org/2010/04/NFBranchExService";
+
+    var msgRqHdr = new XElement(ns + "MsgRqHdr",
+        new XElement(ns + "RqUID", selectedRequest.RqUID),
+        new XElement(ns + "EnvironmentName", selectedRequest.EnvironmentName),
+        new XElement(ns + "TranCode", selectedRequest.TranCode),
+        new XElement(ns + "BranchId", selectedRequest.BranchId),
+        new XElement(ns + "PCName", selectedRequest.PCName),
+        new XElement(ns + "TranCodeQual", selectedRequest.TranCodeQual),
+        new XElement(ns + "CashBoxId", selectedRequest.CashBoxId),
+        new XElement(ns + "EmployeeId", selectedRequest.EmployeeId),
+        new XElement(ns + "PostingDt", selectedRequest.PostingDt),
+        new XElement(ns + "CalendarDt", selectedRequest.CalendarDt),
+        new XElement(ns + "TranTime", selectedRequest.TranTime),
+        new XElement(ns + "TranSeqNum", selectedRequest.TranSeqNum),
+        new XElement(ns + "ForwardTranFlag", selectedRequest.ForwardTranFlag),
+        new XElement(ns + "CustPermId", selectedRequest.CustPermId),
+        new XElement(ns + "POAInd", selectedRequest.POAInd ?? string.Empty),
+        new XElement(ns + "MultiTranFlag", selectedRequest.MultiTranFlag),
+        new XElement(ns + "ConductorId", selectedRequest.ConductorId ?? string.Empty)
+    );
+
+    var creditInfo = new XElement(ns + "CreditInfo",
+        new XElement(ns + "AcctKeys", selectedRequest.AcctKeys),
+        new XElement(ns + "TransAmt", selectedRequest.TransAmt),
+        new XElement(ns + "DepositType", selectedRequest.DepositType),
+        new XElement(ns + "CashInAmt", selectedRequest.CashInAmt),
+        new XElement(ns + "CashOutAmt", selectedRequest.CashOutAmt),
+        new XElement(ns + "ScannedChkAmt", selectedRequest.ScannedChkAmt),
+        new XElement(ns + "UnscannedChkAmt", selectedRequest.UnscannedChkAmt),
+        new XElement(ns + "NumberOfChecks", selectedRequest.NumberOfChecks),
+        new XElement(ns + "GLAcctNum", selectedRequest.GLAcctNum),
+        new XElement(ns + "PayeeName", selectedRequest.PayeeName),
+        new XElement(ns + "Reason", selectedRequest.Reason),
+        new XElement(ns + "CurType", selectedRequest.CurType),
+        new XElement(ns + "FFltLvl1", selectedRequest.FFltLvl1),
+        new XElement(ns + "FFltLvl2", selectedRequest.FFltLvl2),
+        new XElement(ns + "FFltLvl3", selectedRequest.FFltLvl3)
+        // ChkData is omitted for now (it's maxOccurs=unbounded; let me know if you need it too)
+    );
+
+    var root = new XElement(ns + "CreditAddRq",
+        new XAttribute(XNamespace.Xmlns + "nfb", ns),
+        msgRqHdr,
+        creditInfo
+    );
+
+    return root.ToString(SaveOptions.DisableFormatting);
+}
