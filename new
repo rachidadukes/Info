@@ -1,10 +1,16 @@
-This will:
-Generate a proxy class (Reference.vb or Reference.cs)
-Add a folder under Web References > HfsEncHostService
-Add entries to App.config with the service URL
+The console app SoapLegacyClient is now correctly referencing the legacy ASMX service (HFS_EncHost.asmx)
+through a Web Reference named HfsEncHostService. You’re also pointing to the correct endpoint via the App.config file.
 
+It is a good idea to change the endpoint
 
-var client = new HfsEncHostService.HFS_EncHost();
-var result = client.CheckHostStatus();
-Console.WriteLine(result);
+<value>http://localhost:2529/HFS_EncHost.asmx</value>
+inside;
+<applicationSettings>
+  <SoapLegacyClient.Properties.Settings>
 
+You will change it programmatically .
+we usually run the legacy services locally during development (like http://localhost:2529/...),
+but in production, the real service might be hosted on a staging/production server
+(e.g., https://legacy.company.com/HFS_EncHost.asmx).
+
+Keeping the endpoint in App.config allows you to change it without recompiling the app.
