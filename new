@@ -1,16 +1,38 @@
-The console app SoapLegacyClient is now correctly referencing the legacy ASMX service (HFS_EncHost.asmx)
-through a Web Reference named HfsEncHostService. You’re also pointing to the correct endpoint via the App.config file.
+using SoapLegacyClient.HfsEncHostService;
+using System;
 
-It is a good idea to change the endpoint
+namespace SoapLegacyClient
+{
+    internal class Program
+    {
+        static void Main(string[] args)
+        {
+            // Create proxy client
+            var client = new HFS_EncHost();
 
-<value>http://localhost:2529/HFS_EncHost.asmx</value>
-inside;
-<applicationSettings>
-  <SoapLegacyClient.Properties.Settings>
+            // Optional: override endpoint from App.config (useful for debugging)
+            // client.Url = "http://localhost:2529/HFS_EncHost.asmx";
 
-You will change it programmatically .
-we usually run the legacy services locally during development (like http://localhost:2529/...),
-but in production, the real service might be hosted on a staging/production server
-(e.g., https://legacy.company.com/HFS_EncHost.asmx).
+            // Replace these with test values
+            string dbid = "test-db";
+            string recordId = "some-id";
 
-Keeping the endpoint in App.config allows you to change it without recompiling the app.
+            try
+            {
+                // Call the service method
+                string response = client.GetStateRateData(dbid, recordId);
+
+                // Display the result
+                Console.WriteLine("Host service response:");
+                Console.WriteLine(response);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error calling SOAP service:");
+                Console.WriteLine(ex.Message);
+            }
+
+            Console.ReadLine(); // Wait for user before closing
+        }
+    }
+}
