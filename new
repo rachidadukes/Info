@@ -1,52 +1,11 @@
-you must run at the same time these two legacy ASMX solutions (HFS_EncHostWebServices and HFS_EncProcessS)
- — with HFS_EncProcessS depending on HFS_EncHostWebServices for specific messaging logic.
+ in the HFS_EncProcessS app references the ASMX service hosted by HFS_EncHostWebServices,
+we have:
 
-Here's the correct startup order and why:
-1. Start HFS_EncHostWebServices first
-It provides core services like:
+<add key="encorehostservice" value="http://localhost:2529/HFS_EncHost.asmx" />
+This means HFS_EncProcessS acts as a client/consumer of the HFS_EncHostWebServices.
 
-HostMsg
+Recommended Order:
+we start HFS_EncHostWebServices (make sure it’s running at http://localhost:2529/HFS_EncHost.asmx)
+Then start HFS_EncProcessS.
+This mirrors the production setup where Process connects to Host
 
-GetSlateRateData
-
-CheckHostStatus
-
-This service processes low-level XML messaging and probably handles communication with the host backend system.
-
-2. Then start HFS_EncProcessS
-This service exposes business-layer operations like:
-
-CreateCustomer, GetCustomerInfo, RequestService, etc.
-
-These likely call into HFS_EncHostWebServices.HostMsg(...) to transmit XML payloads.
-===========================
-
-HFS_EncProcessS is the process orchestrator, preparing the full XML request.
-
-It then calls HFS_EncHostWebServices through something like this in VB.NET:
-
-=================================
-
-=============================
-.NET console app that acts as a client to consume SOAP services (like HFS_EncHostWebServices or HFS_EncProcessS).
-==============================================
-✅ Step 2: Add a Service Reference (for ASMX)
-Right-click the project → Add → Service Reference…
-
-In the URL field, enter the service WSDL URL, e.g.:
-======================
-http://localhost:2529/HFS_EncHost.asmx?WSDL
-==================
-using System;
-using SoapLegacyClient.HfsHostService; // Your namespace
-
-class Program
-{
-    static void Main()
-    {
-        var client = new HFS_EncHost(); // Service proxy
-        var response = client.CheckHostStatus(); // Example method
-        Console.WriteLine("Host status: " + response);
-    }
-}
-============================
