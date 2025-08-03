@@ -1,0 +1,52 @@
+you must run at the same time these two legacy ASMX solutions (HFS_EncHostWebServices and HFS_EncProcessS)
+ — with HFS_EncProcessS depending on HFS_EncHostWebServices for specific messaging logic.
+
+Here's the correct startup order and why:
+1. Start HFS_EncHostWebServices first
+It provides core services like:
+
+HostMsg
+
+GetSlateRateData
+
+CheckHostStatus
+
+This service processes low-level XML messaging and probably handles communication with the host backend system.
+
+2. Then start HFS_EncProcessS
+This service exposes business-layer operations like:
+
+CreateCustomer, GetCustomerInfo, RequestService, etc.
+
+These likely call into HFS_EncHostWebServices.HostMsg(...) to transmit XML payloads.
+===========================
+
+HFS_EncProcessS is the process orchestrator, preparing the full XML request.
+
+It then calls HFS_EncHostWebServices through something like this in VB.NET:
+
+=================================
+
+=============================
+.NET console app that acts as a client to consume SOAP services (like HFS_EncHostWebServices or HFS_EncProcessS).
+==============================================
+✅ Step 2: Add a Service Reference (for ASMX)
+Right-click the project → Add → Service Reference…
+
+In the URL field, enter the service WSDL URL, e.g.:
+======================
+http://localhost:2529/HFS_EncHost.asmx?WSDL
+==================
+using System;
+using SoapLegacyClient.HfsHostService; // Your namespace
+
+class Program
+{
+    static void Main()
+    {
+        var client = new HFS_EncHost(); // Service proxy
+        var response = client.CheckHostStatus(); // Example method
+        Console.WriteLine("Host status: " + response);
+    }
+}
+============================
