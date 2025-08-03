@@ -1,11 +1,8 @@
- in the HFS_EncProcessS app references the ASMX service hosted by HFS_EncHostWebServices,
-we have:
+The Web Reference dialog has successfully located the HFS_EncHost service
+ The right panel shows:
+1 Service Found:
+- HFS_EncHost
 
-<add key="encorehostservice" value="http://localhost:2529/HFS_EncHost.asmx" />
-This means HFS_EncProcessS acts as a client/consumer of the HFS_EncHostWebServices.
+This means the WSDL is loading fine and Visual Studio recognizes the ASMX service.
 
-Recommended Order:
-we start HFS_EncHostWebServices (make sure it’s running at http://localhost:2529/HFS_EncHost.asmx)
-Then start HFS_EncProcessS.
-This mirrors the production setup where Process connects to Host
-
+Rename Web reference name from localhost to HfsEncHostService
