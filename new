@@ -1,8 +1,10 @@
-The Web Reference dialog has successfully located the HFS_EncHost service
- The right panel shows:
-1 Service Found:
-- HFS_EncHost
+This will:
+Generate a proxy class (Reference.vb or Reference.cs)
+Add a folder under Web References > HfsEncHostService
+Add entries to App.config with the service URL
 
-This means the WSDL is loading fine and Visual Studio recognizes the ASMX service.
 
-Rename Web reference name from localhost to HfsEncHostService
+var client = new HfsEncHostService.HFS_EncHost();
+var result = client.CheckHostStatus();
+Console.WriteLine(result);
+
