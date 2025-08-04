@@ -1,0 +1,43 @@
+using System;
+using System.Net.Http;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace SoapManualClient
+{
+    class Program
+    {
+        static async Task Main(string[] args)
+        {
+            string dbid = "encore"; // example value
+            string xmlPayload = "<CreditAddRq>...</CreditAddRq>"; // Replace with actual XML body
+
+            string soapRequest = $@"<?xml version=""1.0"" encoding=""utf-8""?>
+<soap:Envelope xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance""
+               xmlns:xsd=""http://www.w3.org/2001/XMLSchema""
+               xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/"">
+  <soap:Body>
+    <HostMsgXML xmlns=""http://www.encore.harlandfs.com/"">
+      <dbid>{dbid}</dbid>
+      <oXMLRequest>{System.Security.SecurityElement.Escape(xmlPayload)}</oXMLRequest>
+    </HostMsgXML>
+  </soap:Body>
+</soap:Envelope>";
+
+            string url = "http://localhost:2529/HFS_EncHost.asmx";
+            string soapAction = "http://www.encore.harlandfs.com/HostMsgXML";
+
+            var httpClient = new HttpClient();
+            var content = new StringContent(soapRequest, Encoding.UTF8, "text/xml");
+            content.Headers.Add("SOAPAction", soapAction);
+
+            Console.WriteLine("Sending SOAP request...");
+
+            var response = await httpClient.PostAsync(url, content);
+            string responseXml = await response.Content.ReadAsStringAsync();
+
+            Console.WriteLine("Response:");
+            Console.WriteLine(responseXml);
+        }
+    }
+}
