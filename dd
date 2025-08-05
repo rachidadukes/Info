@@ -1,6 +1,19 @@
-<MsgRqHdr>
-  <RqUID>123456789</RqUID>
-  <SPName>MyTestApp</SPName>
-  <TimeZone>EST</TimeZone>
-  <MsgRqHdrVersion>1.0</MsgRqHdrVersion>
-</MsgRqHdr>
+<soapenv:Body>
+  <enc:HostMsgXML>
+    <enc:dbid>encore</enc:dbid>
+    <enc:oxXMLRequest><![CDATA[
+      <CreditAddRq xmlns="http://schemas.navyfederal.org/2010/04/NFBranchExService">
+        <MsgRqHdr>
+          <RqUID>123456789</RqUID>
+          <SPName>enc_ctraddcashtransaction2012</SPName>
+          <TimeZone>EST</TimeZone>
+          <MsgRqHdrVersion>1.0</MsgRqHdrVersion>
+        </MsgRqHdr>
+        <CreditInfo>
+          <TransAmt>100.00</TransAmt>
+          <DepositType>CHECKING</DepositType>
+        </CreditInfo>
+      </CreditAddRq>
+    ]]></enc:oxXMLRequest>
+  </enc:HostMsgXML>
+</soapenv:Body>
