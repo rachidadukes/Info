@@ -1,44 +1,6 @@
-
-
-Open SOAPUI
-Click File > New SOAP Project
-Enter the WSDL: http://localhost:2529/HFS_EncHost.asmx?wsdl
-It will generate all available operations.
-Go to HostMsgXML operation.
-
-In the XML request body, paste this as a starting point:
-
-SoapUI successfully imported the WSDL and generated both SOAP 1.1 and SOAP 1.2 bindings for your HFS_EncHost service.
-That gives you the ability to test the HostMsgXML operation directly.
-Double-click the request to open the request editor.
-
-====================
-Step-by-Step Plan to Call CreditAddRq via HostMsgXML
-using this endpoint: http://localhost:2529/HFS_EncHost.asmx
-The method to call is:HostMsgXML
-
-dbid = "encore"
-oXMLRequest = A serialized XML string containing your business request, = <CreditAddRq>...</CreditAddRq>
-
-
-Step: In the SoapUI request editor, replace the <soapenv:Body> with this exact XML and click the green "Play" button:
-
-xml
-Copy
-Edit
-<soapenv:Body>
-   <enc:HostMsgXML>
-      <enc:dbid>encore</enc:dbid>
-      <enc:oXMLRequest><![CDATA[
-         <CreditAddRq xmlns="http://schemas.navyfederal.org/2010/04/NFBranchExService">
-           <MsgRqHdr>
-             <!-- Fill required header fields -->
-           </MsgRqHdr>
-           <CreditInfo>
-             <TransAmt>100.00</TransAmt>
-             <DepositType>CHECKING</DepositType>
-           </CreditInfo>
-         </CreditAddRq>
-      ]]></enc:oXMLRequest>
-   </enc:HostMsgXML>
-</soapenv:Body>
+<MsgRqHdr>
+  <RqUID>123456789</RqUID>
+  <SPName>MyTestApp</SPName>
+  <TimeZone>EST</TimeZone>
+  <MsgRqHdrVersion>1.0</MsgRqHdrVersion>
+</MsgRqHdr>
