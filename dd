@@ -1,43 +1,44 @@
-using System;
-using System.Net.Http;
-using System.Text;
-using System.Threading.Tasks;
 
-namespace SoapManualClient
-{
-    class Program
-    {
-        static async Task Main(string[] args)
-        {
-            string dbid = "encore"; // example value
-            string xmlPayload = "<CreditAddRq>...</CreditAddRq>"; // Replace with actual XML body
 
-            string soapRequest = $@"<?xml version=""1.0"" encoding=""utf-8""?>
-<soap:Envelope xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance""
-               xmlns:xsd=""http://www.w3.org/2001/XMLSchema""
-               xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/"">
-  <soap:Body>
-    <HostMsgXML xmlns=""http://www.encore.harlandfs.com/"">
-      <dbid>{dbid}</dbid>
-      <oXMLRequest>{System.Security.SecurityElement.Escape(xmlPayload)}</oXMLRequest>
-    </HostMsgXML>
-  </soap:Body>
-</soap:Envelope>";
+Open SOAPUI
+Click File > New SOAP Project
+Enter the WSDL: http://localhost:2529/HFS_EncHost.asmx?wsdl
+It will generate all available operations.
+Go to HostMsgXML operation.
 
-            string url = "http://localhost:2529/HFS_EncHost.asmx";
-            string soapAction = "http://www.encore.harlandfs.com/HostMsgXML";
+In the XML request body, paste this as a starting point:
 
-            var httpClient = new HttpClient();
-            var content = new StringContent(soapRequest, Encoding.UTF8, "text/xml");
-            content.Headers.Add("SOAPAction", soapAction);
+SoapUI successfully imported the WSDL and generated both SOAP 1.1 and SOAP 1.2 bindings for your HFS_EncHost service.
+That gives you the ability to test the HostMsgXML operation directly.
+Double-click the request to open the request editor.
 
-            Console.WriteLine("Sending SOAP request...");
+====================
+Step-by-Step Plan to Call CreditAddRq via HostMsgXML
+using this endpoint: http://localhost:2529/HFS_EncHost.asmx
+The method to call is:HostMsgXML
 
-            var response = await httpClient.PostAsync(url, content);
-            string responseXml = await response.Content.ReadAsStringAsync();
+dbid = "encore"
+oXMLRequest = A serialized XML string containing your business request, = <CreditAddRq>...</CreditAddRq>
 
-            Console.WriteLine("Response:");
-            Console.WriteLine(responseXml);
-        }
-    }
-}
+
+Step: In the SoapUI request editor, replace the <soapenv:Body> with this exact XML and click the green "Play" button:
+
+xml
+Copy
+Edit
+<soapenv:Body>
+   <enc:HostMsgXML>
+      <enc:dbid>encore</enc:dbid>
+      <enc:oXMLRequest><![CDATA[
+         <CreditAddRq xmlns="http://schemas.navyfederal.org/2010/04/NFBranchExService">
+           <MsgRqHdr>
+             <!-- Fill required header fields -->
+           </MsgRqHdr>
+           <CreditInfo>
+             <TransAmt>100.00</TransAmt>
+             <DepositType>CHECKING</DepositType>
+           </CreditInfo>
+         </CreditAddRq>
+      ]]></enc:oXMLRequest>
+   </enc:HostMsgXML>
+</soapenv:Body>
