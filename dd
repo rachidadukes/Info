@@ -1,19 +1,53 @@
-<soapenv:Body>
-  <enc:HostMsgXML>
-    <enc:dbid>encore</enc:dbid>
-    <enc:oxXMLRequest><![CDATA[
-      <CreditAddRq xmlns="http://schemas.navyfederal.org/2010/04/NFBranchExService">
-        <MsgRqHdr>
-          <RqUID>123456789</RqUID>
-          <SPName>enc_ctraddcashtransaction2012</SPName>
-          <TimeZone>EST</TimeZone>
-          <MsgRqHdrVersion>1.0</MsgRqHdrVersion>
-        </MsgRqHdr>
-        <CreditInfo>
-          <TransAmt>100.00</TransAmt>
-          <DepositType>CHECKING</DepositType>
-        </CreditInfo>
-      </CreditAddRq>
-    ]]></enc:oxXMLRequest>
-  </enc:HostMsgXML>
-</soapenv:Body>
+
+
+
+using Spectre.Console;
+
+static void ShowMembers(MemberSearchRespDTO dto)
+{
+    var members = dto?.Members ?? new List<Member>();
+    if (members.Count == 0)
+    {
+        AnsiConsole.MarkupLine("[yellow]No members found.[/]");
+        return;
+    }
+
+    var table = new Table()
+        .Title($"[bold]Members ({members.Count})[/]")
+        .Caption("[grey]↑/↓ to scroll terminal, resize if needed[/]")
+        .Border(TableBorder.Rounded)
+        .Expand();
+
+    table.AddColumn("CustPermId");
+    table.AddColumn("Full Name");
+    table.AddColumn("Access Number");
+    table.AddColumn("Environment");
+
+    foreach (var m in members)
+    {
+        table.AddRow(
+            m.CustPermId?.ToString() ?? "",
+            Markup.Escape(m.FullName ?? ""),
+            Markup.Escape(m.AccessNumber ?? ""),
+            Markup.Escape(m.Environment ?? "")
+        );
+    }
+
+    // Optional alignment
+    table.Columns[0].RightAligned();
+
+    AnsiConsole.Write(table);
+}
+
+
+
+=============================
+var dto = await SearchMembers.SearchMembersByAccessNumber(selectedAccessNumber);
+if (dto is not null)
+    ShowMembers(dto);
+else
+    AnsiConsole.MarkupLine("[red]Lookup failed.[/]");
+
+============================
+
+members.Skip(page*size).Take(size)
