@@ -1,53 +1,33 @@
-
-
-
 using Spectre.Console;
 
-static void ShowMembers(MemberSearchRespDTO dto)
+public static string? ShowMembersAndPickAccessNumber(MemberSearchRespDTO dto, int page = 0, int pageSize = 10)
 {
     var members = dto?.Members ?? new List<Member>();
-    if (members.Count == 0)
+    var pageMembers = members.Skip(page * pageSize).Take(pageSize).ToList();
+    if (pageMembers.Count == 0)
     {
         AnsiConsole.MarkupLine("[yellow]No members found.[/]");
-        return;
+        return null;
     }
 
-    var table = new Table()
-        .Title($"[bold]Members ({members.Count})[/]")
-        .Caption("[grey]↑/↓ to scroll terminal, resize if needed[/]")
-        .Border(TableBorder.Rounded)
-        .Expand();
+    // Optional: print a header that looks like a table
+    AnsiConsole.MarkupLine("[bold underline]Select a Member[/]");
+    AnsiConsole.MarkupLine($"[grey]Page {page + 1} • Showing {pageMembers.Count} of {members.Count}[/]");
 
-    table.AddColumn("CustPermId");
-    table.AddColumn("Full Name");
-    table.AddColumn("Access Number");
-    table.AddColumn("Environment");
+    var selected = AnsiConsole.Prompt(
+        new SelectionPrompt<Member>()
+            .Title("Use arrows to choose and press [green]Enter[/].")
+            .PageSize(pageSize)
+            .MoreChoicesText("[grey](Move up/down for more)[/]")
+            .UseConverter(m =>
+                // format columns (left-aligned with widths)
+                $"{(m.CustPermId?.ToString() ?? ""),-12} " +
+                $"{Markup.Escape(m.FullName ?? ""),-28} " +
+                $"{Markup.Escape(m.AccessNumber ?? ""),-16} " +
+                $"{Markup.Escape(m.Environment ?? "")}"
+            )
+            .AddChoices(pageMembers)
+    );
 
-    foreach (var m in members)
-    {
-        table.AddRow(
-            m.CustPermId?.ToString() ?? "",
-            Markup.Escape(m.FullName ?? ""),
-            Markup.Escape(m.AccessNumber ?? ""),
-            Markup.Escape(m.Environment ?? "")
-        );
-    }
-
-    // Optional alignment
-    table.Columns[0].RightAligned();
-
-    AnsiConsole.Write(table);
+    return selected?.AccessNumber;
 }
-
-
-
-=============================
-var dto = await SearchMembers.SearchMembersByAccessNumber(selectedAccessNumber);
-if (dto is not null)
-    ShowMembers(dto);
-else
-    AnsiConsole.MarkupLine("[red]Lookup failed.[/]");
-
-============================
-
-members.Skip(page*size).Take(size)
