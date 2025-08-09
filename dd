@@ -1,2 +1,76 @@
-  // Store Access Numbers list globally
-    public static List<AccessNumbersModel> AccessNumbers { get; set; } = new();
+
+
+
+selectedAccessNumberByUser = await ShowMembers(response.Data, page, pageSize);
+selectedMemberByUser.AccessNumber = selectedAccessNumberByUser;
+selectedMemberByUser.Environment = envir;
+
+LogHistory.SetSelectedMemberByUser(selectedMemberByUser);
+
+
+
+
+
+====================
+
+
+LogHistory.SetMembersFound(members);
+
+LogHistory.Write($"[yellow]Members found:[/] {members.Count}");
+
+============================
+
+LogHistory.SetSelectedAccessNumber(selectedAccessNumber);
+LogHistory.Write($"[yellow]Selected Access Number:[/] {selectedAccessNumber.AccessNumber} {selectedAccessNumber.Environment}");
+
+
+
+=======================
+
+
+public static class LogHistory
+{
+    private static readonly ConcurrentQueue<string> _lines = new();
+
+    public static AccessNumbersModel? SelectedAccessNumber { get; private set; }
+    public static List<Member> MembersFound { get; } = new();
+    public static AccessNumbersModel? SelectedMemberByUser { get; private set; }
+
+    public static void SetSelectedAccessNumber(AccessNumbersModel? value)
+    {
+        SelectedAccessNumber = value;
+    }
+
+    public static void SetMembersFound(IEnumerable<Member>? members)
+    {
+        MembersFound.Clear();
+        if (members != null) MembersFound.AddRange(members);
+    }
+
+    public static void SetSelectedMemberByUser(AccessNumbersModel? value)
+    {
+        SelectedMemberByUser = value;
+    }
+
+    public static void Write(string markup)
+    {
+        _lines.Enqueue(markup);
+        AnsiConsole.MarkupLine(markup);
+    }
+
+    public static void Reprint()
+    {
+        AnsiConsole.Clear();
+        foreach (var line in _lines)
+            AnsiConsole.MarkupLine(line);
+
+        if (SelectedAccessNumber != null)
+            AnsiConsole.MarkupLine($"[bold]Selected Access Number:[/] {AnsiConsole.Escape(SelectedAccessNumber.AccessNumber)} {AnsiConsole.Escape(SelectedAccessNumber.Environment)}");
+
+        if (SelectedMemberByUser != null)
+            AnsiConsole.MarkupLine($"[bold]Selected Member By User:[/] {AnsiConsole.Escape(SelectedMemberByUser.AccessNumber)} {AnsiConsole.Escape(SelectedMemberByUser.Environment)}");
+
+        AnsiConsole.MarkupLine($"[grey]Members found: {MembersFound.Count}[/]");
+    }
+}
+
