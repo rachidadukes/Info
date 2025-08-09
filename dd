@@ -1,33 +1,46 @@
+
+// Before long ops
+LogHistory.Write("[yellow]Retrieving members...[/]");
+
+// Inside your Status spinner
+AnsiConsole.Status().Start("Processing...", _ =>
+{
+    LogHistory.Write("[green]Step 1 complete[/]");
+});
+
+// After SelectionPrompt (which clears the screen)
+var selected = AnsiConsole.Prompt(prompt);
+LogHistory.Write($"Selected: {selected.AccessNumber} ({selected.Environment})");
+LogHistory.Reprint(); // <- brings back everything you've logged so far
+
+====================================
+
+// LogHistory.cs
+using System.Collections.Concurrent;
 using Spectre.Console;
 
-public static string? ShowMembersAndPickAccessNumber(MemberSearchRespDTO dto, int page = 0, int pageSize = 10)
+public static class LogHistory
 {
-    var members = dto?.Members ?? new List<Member>();
-    var pageMembers = members.Skip(page * pageSize).Take(pageSize).ToList();
-    if (pageMembers.Count == 0)
+    private static readonly ConcurrentQueue<string> _lines = new();
+
+    // Add and print immediately (keeps history + shows user)
+    public static void Write(string markup)
     {
-        AnsiConsole.MarkupLine("[yellow]No members found.[/]");
-        return null;
+        _lines.Enqueue(markup);
+        AnsiConsole.MarkupLine(markup);
     }
 
-    // Optional: print a header that looks like a table
-    AnsiConsole.MarkupLine("[bold underline]Select a Member[/]");
-    AnsiConsole.MarkupLine($"[grey]Page {page + 1} • Showing {pageMembers.Count} of {members.Count}[/]");
+    // Add without printing (useful during silent phases)
+    public static void Add(string markup) => _lines.Enqueue(markup);
 
-    var selected = AnsiConsole.Prompt(
-        new SelectionPrompt<Member>()
-            .Title("Use arrows to choose and press [green]Enter[/].")
-            .PageSize(pageSize)
-            .MoreChoicesText("[grey](Move up/down for more)[/]")
-            .UseConverter(m =>
-                // format columns (left-aligned with widths)
-                $"{(m.CustPermId?.ToString() ?? ""),-12} " +
-                $"{Markup.Escape(m.FullName ?? ""),-28} " +
-                $"{Markup.Escape(m.AccessNumber ?? ""),-16} " +
-                $"{Markup.Escape(m.Environment ?? "")}"
-            )
-            .AddChoices(pageMembers)
-    );
+    // Snapshot if you need it
+    public static IReadOnlyCollection<string> Snapshot() => _lines.ToArray();
 
-    return selected?.AccessNumber;
+    // Re-print everything (e.g., after SelectionPrompt clears the screen)
+    public static void Reprint()
+    {
+        AnsiConsole.Clear();
+        foreach (var line in _lines)
+            AnsiConsole.MarkupLine(line);
+    }
 }
