@@ -1,6 +1,54 @@
-all = await dbContext.AccessAcctNumbers
-    .OrderBy(e => e.Environment)                 // sort by Environment first
-    .ThenByDescending(e => e.AccessNumber)       // then by AccessNumber
-    .GroupBy(e => new { e.AccessNumber, e.Environment })
-    .Select(g => g.First())
-    .ToListAsync();
+
+protected override void OnModelCreating(ModelBuilder modelBuilder)
+{
+    // Part A
+    modelBuilder.Entity<AccessAcctNumbersModel>(eb =>
+    {
+        eb.ToTable("AccessAcctNumbers");
+        eb.HasKey(e => e.Id);
+
+        eb.Property(e => e.AccessNumber);
+        eb.Property(e => e.Environment);
+
+        // 1-1, shared PK
+        eb.HasOne(e => e.Account)
+          .WithOne(e => e.Access)
+          .HasForeignKey<AccountNumbersModel>(e => e.Id);
+    });
+
+    // Part B
+    modelBuilder.Entity<AccountNumbersModel>(eb =>
+    {
+        eb.ToTable("AccessAcctNumbers");
+        eb.HasKey(e => e.Id);
+
+        eb.Property(e => e.AccountNumber);
+        eb.Property(e => e.AccountType);
+        eb.Property(e => e.Environment);
+    });
+}
+
+
+=======================
+
+
+
+public class AccessAcctNumbersModel
+{
+    public long Id { get; set; }                 // shared PK
+    public string? AccessNumber { get; set; }
+    public string? Environment { get; set; }
+
+    // navigation to the other split part
+    public AccountNumbersModel? Account { get; set; }
+}
+
+public class AccountNumbersModel
+{
+    public long Id { get; set; }                 // shared PK (FK to AccessAcctNumbersModel)
+    public string? AccountNumber { get; set; }
+    public string? AccountType { get; set; }
+    public string? Environment { get; set; }
+
+    public AccessAcctNumbersModel? Access { get; set; }
+}
