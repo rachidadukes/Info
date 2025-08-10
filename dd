@@ -7,30 +7,38 @@ public async Task<HttpCallResult> ReadXMLresponse(
     try
     {
         using var content = new StringContent(soapXmlStringRequest, Encoding.UTF8, "text/xml");
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint) { Content = content };
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
-        {
-            Content = content
-        };
-
-        // Correct place for SOAPAction
         if (!string.IsNullOrWhiteSpace(soapAction))
             request.Headers.Add("SOAPAction", $"\"{soapAction}\"");
-
-        // Optional but often helpful
         request.Headers.Accept.ParseAdd("text/xml");
 
-        using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
-                                        .ConfigureAwait(false);
+        // Read full content to sidestep streaming IO quirks while we debug
+        using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, ct);
 
-        var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        string body = "";
+        if (response.Content != null)
+        {
+            try
+            {
+                body = await response.Content.ReadAsStringAsync(ct);
+            }
+            catch
+            {
+                // Fallback if charset is bad or ReadAsStringAsync throws
+                var bytes = await response.Content.ReadAsByteArrayAsync(ct);
+                var charset = response.Content.Headers.ContentType?.CharSet;
+                var enc = !string.IsNullOrWhiteSpace(charset) ? Encoding.GetEncoding(charset) : Encoding.UTF8;
+                body = enc.GetString(bytes);
+            }
+        }
 
         return new HttpCallResult(
             IsSuccess: response.IsSuccessStatusCode,
             StatusCode: (int)response.StatusCode,
             Body: body,
             ErrorMessage: response.IsSuccessStatusCode ? null :
-                          $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+                $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
     }
     catch (OperationCanceledException) when (ct.IsCancellationRequested)
     {
