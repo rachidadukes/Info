@@ -1,71 +1,9 @@
-public sealed record HttpCallResult(
-    bool IsSuccess,
-    int? StatusCode,
-    string Body,
-    string? ErrorMessage);
+var httpResult = await responseObject.ReadXMLresponse(SoapXMLRequest, endpoint);
 
-public class MemberSearchXmlResponse
+if (!httpResult.IsSuccess)
 {
-    private static readonly HttpClient _http = new HttpClient
-    {
-        Timeout = TimeSpan.FromSeconds(30)
-    };
-
-    public async Task<HttpCallResult> ReadXmlResponseAsync(
-        string soapXmlStringRequest,
-        string endpoint,
-        string? soapAction = null,
-        CancellationToken ct = default)
-    {
-        try
-        {
-            using var content = new StringContent(soapXmlStringRequest, Encoding.UTF8, "text/xml");
-            if (!string.IsNullOrWhiteSpace(soapAction))
-            {
-                // Many SOAP services require this header
-                content.Headers.Add("SOAPAction", $"\"{soapAction}\"");
-            }
-
-            using var response = await _http.PostAsync(endpoint, content, ct).ConfigureAwait(false);
-
-            // Don't throw on non-success; SOAP faults are often 500 with useful XML.
-            var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-
-            return new HttpCallResult(
-                IsSuccess: response.IsSuccessStatusCode,
-                StatusCode: (int)response.StatusCode,
-                Body: body,
-                ErrorMessage: response.IsSuccessStatusCode ? null : $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            return new HttpCallResult(false, null, "", "Request was canceled.");
-        }
-        catch (TaskCanceledException)
-        {
-            // Timeout
-            return new HttpCallResult(false, null, "", "Request timed out.");
-        }
-        catch (HttpRequestException ex)
-        {
-            return new HttpCallResult(false, null, "", $"HTTP error: {ex.Message}");
-        }
-        catch (Exception ex)
-        {
-            return new HttpCallResult(false, null, "", $"Unexpected error: {ex.Message}");
-        }
-    }
+    Console.WriteLine(httpResult.ErrorMessage);
+    return null; // or handle the error case
 }
-=========================
 
-
-var result = await service.ReadXmlResponseAsync(soapXml, endpoint, soapAction: "urn:CreditAddRq");
-if (!result.IsSuccess)
-{
-    Console.WriteLine(result.ErrorMessage);
-    // You can still inspect result.Body for a SOAP Fault to parse.
-}
-else
-{
-    var xml = result.Body; // parse it
-}
+originalXMLResponse = httpResult.Body;
