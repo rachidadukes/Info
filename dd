@@ -1,54 +1,69 @@
 
-protected override void OnModelCreating(ModelBuilder modelBuilder)
+SELECT DISTINCT Environment, AccessNumber
+FROM AccessAcctNumbers
+WHERE AccessNumber IS NOT NULL AND AccessNumber <> ''
+ORDER BY AccessNumber, Environment DESC;
+
+
+=================================
+
+
+public class AccessAcctNumsModel
 {
-    // Part A
-    modelBuilder.Entity<AccessAcctNumbersModel>(eb =>
-    {
-        eb.ToTable("AccessAcctNumbers");
-        eb.HasKey(e => e.Id);
-
-        eb.Property(e => e.AccessNumber);
-        eb.Property(e => e.Environment);
-
-        // 1-1, shared PK
-        eb.HasOne(e => e.Account)
-          .WithOne(e => e.Access)
-          .HasForeignKey<AccountNumbersModel>(e => e.Id);
-    });
-
-    // Part B
-    modelBuilder.Entity<AccountNumbersModel>(eb =>
-    {
-        eb.ToTable("AccessAcctNumbers");
-        eb.HasKey(e => e.Id);
-
-        eb.Property(e => e.AccountNumber);
-        eb.Property(e => e.AccountType);
-        eb.Property(e => e.Environment);
-    });
-}
-
-
-=======================
-
-
-
-public class AccessAcctNumbersModel
-{
-    public long Id { get; set; }                 // shared PK
-    public string? AccessNumber { get; set; }
+    public int Id { get; set; }
     public string? Environment { get; set; }
-
-    // navigation to the other split part
-    public AccountNumbersModel? Account { get; set; }
-}
-
-public class AccountNumbersModel
-{
-    public long Id { get; set; }                 // shared PK (FK to AccessAcctNumbersModel)
+    public string? AccessNumber { get; set; }
     public string? AccountNumber { get; set; }
     public string? AccountType { get; set; }
-    public string? Environment { get; set; }
+    public string? Comment { get; set; }
+}
 
-    public AccessAcctNumbersModel? Access { get; set; }
+public DbSet<AccessAcctNumsModel> AccessAcctNumbers => Set<AccessAcctNumsModel>();
+
+public async Task<List<AccessNumsSample>> GetAccessNumsAsync()
+{
+    return await AccessAcctNumbers
+        .Where(x => x.AccessNumber != null && x.AccessNumber != "")
+        .GroupBy(x => new { x.Environment, x.AccessNumber })
+        .Select(g => new AccessNumsSample {
+            // choose a deterministic Id in SQL via MIN()
+            Id = g.Min(x => x.Id),
+            Environment = g.Key.Environment,
+            AccessNumber = g.Key.AccessNumber
+        })
+        .OrderBy(x => x.AccessNumber)
+        .ThenByDescending(x => x.Environment)
+        .ToListAsync();
+}
+
+
+
+========================================
+// Model you want to return
+public sealed class AccessNumsSample
+{
+    public int Id { get; set; }              // choose a stable Id via MIN()
+    public string? Environment { get; set; }
+    public string? AccessNumber { get; set; }
+}
+
+public async Task<List<AccessNumsSample>> GetAccessNumsAsync()
+{
+    var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "sqlite", "SqliteAccounts.db");
+    var cs = $"Data Source={dbPath};";
+
+    const string sql = @"
+        SELECT  MIN(Id)   AS Id,          -- pick a deterministic Id per pair
+                Environment,
+                AccessNumber
+        FROM AccessAcctNumbers
+        WHERE AccessNumber IS NOT NULL AND AccessNumber <> ''
+        GROUP BY Environment, AccessNumber       -- unique pairs
+        ORDER BY AccessNumber, Environment DESC; -- your sort";
+
+    using var conn = new SqliteConnection(cs);
+    await conn.OpenAsync();
+
+    var rows = await conn.QueryAsync<AccessNumsSample>(sql);
+    return rows.ToList();
 }
