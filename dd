@@ -1,69 +1,71 @@
+public sealed record HttpCallResult(
+    bool IsSuccess,
+    int? StatusCode,
+    string Body,
+    string? ErrorMessage);
 
-SELECT DISTINCT Environment, AccessNumber
-FROM AccessAcctNumbers
-WHERE AccessNumber IS NOT NULL AND AccessNumber <> ''
-ORDER BY AccessNumber, Environment DESC;
-
-
-=================================
-
-
-public class AccessAcctNumsModel
+public class MemberSearchXmlResponse
 {
-    public int Id { get; set; }
-    public string? Environment { get; set; }
-    public string? AccessNumber { get; set; }
-    public string? AccountNumber { get; set; }
-    public string? AccountType { get; set; }
-    public string? Comment { get; set; }
+    private static readonly HttpClient _http = new HttpClient
+    {
+        Timeout = TimeSpan.FromSeconds(30)
+    };
+
+    public async Task<HttpCallResult> ReadXmlResponseAsync(
+        string soapXmlStringRequest,
+        string endpoint,
+        string? soapAction = null,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            using var content = new StringContent(soapXmlStringRequest, Encoding.UTF8, "text/xml");
+            if (!string.IsNullOrWhiteSpace(soapAction))
+            {
+                // Many SOAP services require this header
+                content.Headers.Add("SOAPAction", $"\"{soapAction}\"");
+            }
+
+            using var response = await _http.PostAsync(endpoint, content, ct).ConfigureAwait(false);
+
+            // Don't throw on non-success; SOAP faults are often 500 with useful XML.
+            var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+
+            return new HttpCallResult(
+                IsSuccess: response.IsSuccessStatusCode,
+                StatusCode: (int)response.StatusCode,
+                Body: body,
+                ErrorMessage: response.IsSuccessStatusCode ? null : $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return new HttpCallResult(false, null, "", "Request was canceled.");
+        }
+        catch (TaskCanceledException)
+        {
+            // Timeout
+            return new HttpCallResult(false, null, "", "Request timed out.");
+        }
+        catch (HttpRequestException ex)
+        {
+            return new HttpCallResult(false, null, "", $"HTTP error: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            return new HttpCallResult(false, null, "", $"Unexpected error: {ex.Message}");
+        }
+    }
 }
+=========================
 
-public DbSet<AccessAcctNumsModel> AccessAcctNumbers => Set<AccessAcctNumsModel>();
 
-public async Task<List<AccessNumsSample>> GetAccessNumsAsync()
+var result = await service.ReadXmlResponseAsync(soapXml, endpoint, soapAction: "urn:CreditAddRq");
+if (!result.IsSuccess)
 {
-    return await AccessAcctNumbers
-        .Where(x => x.AccessNumber != null && x.AccessNumber != "")
-        .GroupBy(x => new { x.Environment, x.AccessNumber })
-        .Select(g => new AccessNumsSample {
-            // choose a deterministic Id in SQL via MIN()
-            Id = g.Min(x => x.Id),
-            Environment = g.Key.Environment,
-            AccessNumber = g.Key.AccessNumber
-        })
-        .OrderBy(x => x.AccessNumber)
-        .ThenByDescending(x => x.Environment)
-        .ToListAsync();
+    Console.WriteLine(result.ErrorMessage);
+    // You can still inspect result.Body for a SOAP Fault to parse.
 }
-
-
-
-========================================
-// Model you want to return
-public sealed class AccessNumsSample
+else
 {
-    public int Id { get; set; }              // choose a stable Id via MIN()
-    public string? Environment { get; set; }
-    public string? AccessNumber { get; set; }
-}
-
-public async Task<List<AccessNumsSample>> GetAccessNumsAsync()
-{
-    var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "sqlite", "SqliteAccounts.db");
-    var cs = $"Data Source={dbPath};";
-
-    const string sql = @"
-        SELECT  MIN(Id)   AS Id,          -- pick a deterministic Id per pair
-                Environment,
-                AccessNumber
-        FROM AccessAcctNumbers
-        WHERE AccessNumber IS NOT NULL AND AccessNumber <> ''
-        GROUP BY Environment, AccessNumber       -- unique pairs
-        ORDER BY AccessNumber, Environment DESC; -- your sort";
-
-    using var conn = new SqliteConnection(cs);
-    await conn.OpenAsync();
-
-    var rows = await conn.QueryAsync<AccessNumsSample>(sql);
-    return rows.ToList();
+    var xml = result.Body; // parse it
 }
