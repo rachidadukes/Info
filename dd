@@ -1,9 +1,51 @@
-var httpResult = await responseObject.ReadXMLresponse(SoapXMLRequest, endpoint);
-
-if (!httpResult.IsSuccess)
+public async Task<HttpCallResult> ReadXMLresponse(
+    string soapXmlStringRequest,
+    string endpoint,
+    string? soapAction = null,
+    CancellationToken ct = default)
 {
-    Console.WriteLine(httpResult.ErrorMessage);
-    return null; // or handle the error case
-}
+    try
+    {
+        using var content = new StringContent(soapXmlStringRequest, Encoding.UTF8, "text/xml");
 
-originalXMLResponse = httpResult.Body;
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
+        {
+            Content = content
+        };
+
+        // Correct place for SOAPAction
+        if (!string.IsNullOrWhiteSpace(soapAction))
+            request.Headers.Add("SOAPAction", $"\"{soapAction}\"");
+
+        // Optional but often helpful
+        request.Headers.Accept.ParseAdd("text/xml");
+
+        using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
+                                        .ConfigureAwait(false);
+
+        var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+
+        return new HttpCallResult(
+            IsSuccess: response.IsSuccessStatusCode,
+            StatusCode: (int)response.StatusCode,
+            Body: body,
+            ErrorMessage: response.IsSuccessStatusCode ? null :
+                          $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+    }
+    catch (OperationCanceledException) when (ct.IsCancellationRequested)
+    {
+        return new HttpCallResult(false, null, "", "Request was canceled.");
+    }
+    catch (TaskCanceledException)
+    {
+        return new HttpCallResult(false, null, "", "Request timed out.");
+    }
+    catch (HttpRequestException ex)
+    {
+        return new HttpCallResult(false, null, "", $"HTTP error: {ex.Message}");
+    }
+    catch (Exception ex)
+    {
+        return new HttpCallResult(false, null, "", $"Unexpected error: {ex.Message}");
+    }
+}
