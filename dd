@@ -1,86 +1,108 @@
-
-public async Task<string> ReadXMLresponse(string soapXml, string endpoint,
-                                          string? soapAction = null,
-                                          CancellationToken ct = default)
-{
-    var http = HttpClientFactory.Client;
-    http.DefaultRequestHeaders.ExpectContinue = false;
-
-    using var content = new StringContent(soapXml, Encoding.UTF8, "text/xml");
-    // Some servers need explicit charset on the content-type
-    content.Headers.ContentType!.CharSet = "utf-8";
-
-    using var req = new HttpRequestMessage(HttpMethod.Post, endpoint) { Content = content };
-    if (!string.IsNullOrWhiteSpace(soapAction))
-        req.Headers.Add("SOAPAction", $"\"{soapAction}\"");
-    req.Headers.Accept.ParseAdd("text/xml");
-
-    try
-    {
-        using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseContentRead, ct)
-                                   .ConfigureAwait(false);
-
-        string body = "";
-        if (resp.Content is not null)
-        {
-            try
-            {
-                body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            }
-            catch
-            {
-                // Fallback if charset header is bad
-                var bytes = await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
-                var cs = resp.Content.Headers.ContentType?.CharSet;
-                var enc = !string.IsNullOrWhiteSpace(cs) ? Encoding.GetEncoding(cs!) : Encoding.UTF8;
-                body = enc.GetString(bytes);
-            }
-        }
-
-        // Return body even on non-200 (SOAP Faults often come as 500)
-        if (!resp.IsSuccessStatusCode)
-        {
-            Console.WriteLine($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}, len={body?.Length ?? 0}");
-        }
-
-        return body ?? "";
-    }
-    catch (TaskCanceledException) when (!ct.IsCancellationRequested)
-    {
-        // Timeout
-        Console.WriteLine("HTTP timeout");
-        return "";
-    }
-    catch (HttpRequestException ex)
-    {
-        Console.WriteLine($"HTTP error: {ex}");
-        return "";
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Unexpected error: {ex}");
-        return "";
-    }
-}
-
-
-=========================
-
+using System;
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
-public static class HttpClientFactory
+namespace YourNamespace
 {
-    public static readonly HttpClient Client = new HttpClient(
-        new SocketsHttpHandler
-        {
-            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
-            AllowAutoRedirect = true,
-        })
+    public interface IMemberSearchXmlResponse
     {
-        Timeout = TimeSpan.FromSeconds(60),
-        DefaultRequestVersion = HttpVersion.Version11,          // SOAP endpoints often prefer 1.1
-        DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrLower
-    };
+        Task<HttpCallResult> ReadXmlResponseAsync(string soapXml, string endpoint, string soapAction, CancellationToken ct = default);
+
+        // If you MUST keep old callers that expect string:
+        Task<string> ReadXmlResponseStringAsync(string soapXml, string endpoint, string soapAction, CancellationToken ct = default);
+    }
+
+    public sealed class MemberSearchXmlResponse : IMemberSearchXmlResponse
+    {
+        // Reuse one HttpClient (no socket exhaustion)
+        private static readonly HttpClient _http = new HttpClient(
+            new SocketsHttpHandler
+            {
+                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
+            })
+        {
+            Timeout = TimeSpan.FromSeconds(60),
+            DefaultRequestVersion = HttpVersion.Version11,
+            DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrLower
+        };
+
+        public async Task<HttpCallResult> ReadXmlResponseAsync(
+            string soapXml,
+            string endpoint,
+            string soapAction,
+            CancellationToken ct = default)
+        {
+            try
+            {
+                _http.DefaultRequestHeaders.ExpectContinue = false;
+
+                // Build content
+                using var content = new StringContent(soapXml, Encoding.UTF8, "text/xml");
+                content.Headers.ContentType!.CharSet = "utf-8";
+
+                // Build request (SOAPAction MUST be on request headers)
+                using var req = new HttpRequestMessage(HttpMethod.Post, endpoint)
+                {
+                    Content = content
+                };
+                req.Headers.Add("SOAPAction", $"\"{soapAction}\"");
+                req.Headers.Accept.ParseAdd("text/xml");
+
+                using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseContentRead, ct)
+                                            .ConfigureAwait(false);
+
+                // Robust body read (handles weird charset/empty content)
+                string body = "";
+                if (resp.Content is not null)
+                {
+                    try
+                    {
+                        body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        var bytes = await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+                        var cs = resp.Content.Headers.ContentType?.CharSet;
+                        var enc = !string.IsNullOrWhiteSpace(cs) ? Encoding.GetEncoding(cs!) : Encoding.UTF8;
+                        body = enc.GetString(bytes);
+                    }
+                }
+
+                // Return body even on non-200 (SOAP faults often 500 with XML)
+                return new HttpCallResult(
+                    IsSuccess: resp.IsSuccessStatusCode,
+                    StatusCode: (int)resp.StatusCode,
+                    Body: body ?? "",
+                    ErrorMessage: resp.IsSuccessStatusCode ? null :
+                                  $"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}");
+            }
+            catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+            {
+                return new HttpCallResult(false, null, "", "Request timed out.");
+            }
+            catch (HttpRequestException ex)
+            {
+                return new HttpCallResult(false, null, "", $"HTTP error: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                return new HttpCallResult(false, null, "", $"Unexpected error: {ex.Message}");
+            }
+        }
+
+        // Optional wrapper to keep old call sites that expect a string
+        public async Task<string> ReadXmlResponseStringAsync(
+            string soapXml,
+            string endpoint,
+            string soapAction,
+            CancellationToken ct = default)
+        {
+            var r = await ReadXmlResponseAsync(soapXml, endpoint, soapAction, ct).ConfigureAwait(false);
+            // You can log r.StatusCode / r.ErrorMessage here if desired
+            return r.Body ?? "";
+        }
+    }
 }
