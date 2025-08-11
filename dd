@@ -1,59 +1,86 @@
-public async Task<HttpCallResult> ReadXMLresponse(
-    string soapXmlStringRequest,
-    string endpoint,
-    string? soapAction = null,
-    CancellationToken ct = default)
+
+public async Task<string> ReadXMLresponse(string soapXml, string endpoint,
+                                          string? soapAction = null,
+                                          CancellationToken ct = default)
 {
+    var http = HttpClientFactory.Client;
+    http.DefaultRequestHeaders.ExpectContinue = false;
+
+    using var content = new StringContent(soapXml, Encoding.UTF8, "text/xml");
+    // Some servers need explicit charset on the content-type
+    content.Headers.ContentType!.CharSet = "utf-8";
+
+    using var req = new HttpRequestMessage(HttpMethod.Post, endpoint) { Content = content };
+    if (!string.IsNullOrWhiteSpace(soapAction))
+        req.Headers.Add("SOAPAction", $"\"{soapAction}\"");
+    req.Headers.Accept.ParseAdd("text/xml");
+
     try
     {
-        using var content = new StringContent(soapXmlStringRequest, Encoding.UTF8, "text/xml");
-        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint) { Content = content };
-
-        if (!string.IsNullOrWhiteSpace(soapAction))
-            request.Headers.Add("SOAPAction", $"\"{soapAction}\"");
-        request.Headers.Accept.ParseAdd("text/xml");
-
-        // Read full content to sidestep streaming IO quirks while we debug
-        using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, ct);
+        using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseContentRead, ct)
+                                   .ConfigureAwait(false);
 
         string body = "";
-        if (response.Content != null)
+        if (resp.Content is not null)
         {
             try
             {
-                body = await response.Content.ReadAsStringAsync(ct);
+                body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             }
             catch
             {
-                // Fallback if charset is bad or ReadAsStringAsync throws
-                var bytes = await response.Content.ReadAsByteArrayAsync(ct);
-                var charset = response.Content.Headers.ContentType?.CharSet;
-                var enc = !string.IsNullOrWhiteSpace(charset) ? Encoding.GetEncoding(charset) : Encoding.UTF8;
+                // Fallback if charset header is bad
+                var bytes = await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+                var cs = resp.Content.Headers.ContentType?.CharSet;
+                var enc = !string.IsNullOrWhiteSpace(cs) ? Encoding.GetEncoding(cs!) : Encoding.UTF8;
                 body = enc.GetString(bytes);
             }
         }
 
-        return new HttpCallResult(
-            IsSuccess: response.IsSuccessStatusCode,
-            StatusCode: (int)response.StatusCode,
-            Body: body,
-            ErrorMessage: response.IsSuccessStatusCode ? null :
-                $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+        // Return body even on non-200 (SOAP Faults often come as 500)
+        if (!resp.IsSuccessStatusCode)
+        {
+            Console.WriteLine($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}, len={body?.Length ?? 0}");
+        }
+
+        return body ?? "";
     }
-    catch (OperationCanceledException) when (ct.IsCancellationRequested)
+    catch (TaskCanceledException) when (!ct.IsCancellationRequested)
     {
-        return new HttpCallResult(false, null, "", "Request was canceled.");
-    }
-    catch (TaskCanceledException)
-    {
-        return new HttpCallResult(false, null, "", "Request timed out.");
+        // Timeout
+        Console.WriteLine("HTTP timeout");
+        return "";
     }
     catch (HttpRequestException ex)
     {
-        return new HttpCallResult(false, null, "", $"HTTP error: {ex.Message}");
+        Console.WriteLine($"HTTP error: {ex}");
+        return "";
     }
     catch (Exception ex)
     {
-        return new HttpCallResult(false, null, "", $"Unexpected error: {ex.Message}");
+        Console.WriteLine($"Unexpected error: {ex}");
+        return "";
     }
+}
+
+
+=========================
+
+using System.Net;
+using System.Net.Http;
+using System.Text;
+
+public static class HttpClientFactory
+{
+    public static readonly HttpClient Client = new HttpClient(
+        new SocketsHttpHandler
+        {
+            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+            AllowAutoRedirect = true,
+        })
+    {
+        Timeout = TimeSpan.FromSeconds(60),
+        DefaultRequestVersion = HttpVersion.Version11,          // SOAP endpoints often prefer 1.1
+        DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrLower
+    };
 }
