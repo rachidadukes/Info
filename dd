@@ -1,118 +1,195 @@
-OfflineApiCache
+var repo = new ApiCacheRepository("Data Source=SqliteMember.db;Cache=Shared");
 
-=============================);
-namespace OfflineApiCache;
+// From a string (e.g., pasted or captured)
+string soapXml = """
+<soapenv:Body>
+  <SearchMemberRs xmlns="http://schemas.navyfederal.org/2010/04/NFBranchExService">
+    <MsgRsHdr>
+      <RqUID>68f9202e-137f-4d9a-8ac1-6f108e817498</RqUID>
+      <TransactionTime>08:07:00</TransactionTime>
+      <Status>
+        <Severity>0</Severity>
+        <StatusCode>0</StatusCode>
+        <StatusDesc>Request Accepted</StatusDesc>
+        <ResponseCode>4</ResponseCode>
+      </Status>
+    </MsgRsHdr>
+  </SearchMemberRs>
+</soapenv:Body>
+""";
 
-public class ApiCacheRow
+// Save and auto-derive a scenario tag like "success.request-accepted"
+await repo.SaveSoapResponseAsync(
+    requestType: "SearchMemberRs",
+    url: "https://unit-dpa-01-plt0.nfcutest.net:5502/NFBranchExService/MemberSearch",
+    environment: "UNIT",
+    accessNumber: "123456",
+    accountNumber: null,
+    accountType: null,
+    soapXml: soapXml);
+
+// Or, if you want to force a specific scenario label:
+await repo.SaveSoapResponseAsync(
+    requestType: "SearchMemberRs",
+    url: "https://unit-dpa-01-plt0.nfcutest.net:5502/NFBranchExService/MemberSearch",
+    environment: "UNIT",
+    accessNumber: "123456",
+    accountNumber: null,
+    accountType: null,
+    soapXml: soapXml,
+    scenarioStatus: "success.basic");
+
+
+
+
+===============================
+using System.Xml.Linq;
+
+public async Task SaveSoapResponseAsync(
+    string? requestType,
+    string url,
+    string environment,
+    string? accessNumber,
+    string? accountNumber,
+    string? accountType,
+    string soapXml,
+    string? scenarioStatus = null,       // e.g., "success.basic" or "error.validation"
+    int? httpStatusCode = null,          // optional: real HTTP status if you have it
+    bool compactXml = true,              // store minified XML to save space
+    CancellationToken ct = default)
 {
-    public long Id { get; set; }
-    public string? RequestType { get; set; }
-    public string Url { get; set; } = "";
-    public string Environment { get; set; } = "";
-    public string? AccessNumber { get; set; }
-    public string? AccountNumber { get; set; }
-    public string? AccountType { get; set; }
-    public string Response { get; set; } = "";
-}
-=========================
-using Microsoft.Data.Sqlite;
-using System;
-using System.Data;
-using System.Threading;
-using System.Threading.Tasks;
-
-namespace OfflineApiCache;
-
-public class ApiCacheRepository : IApiCacheRepository
-{
-    private readonly string _connectionString;
-
-    public ApiCacheRepository(string connectionString)
-        => _connectionString = connectionString;
-
-    public async Task SaveApiResponseAsync(
-        string? requestType, string url, string environment,
-        string? accessNumber, string? accountNumber, string? accountType,
-        string responseJson, CancellationToken ct = default)
+    // Normalize/minify (helps keep diffs smaller)
+    string normalized = soapXml;
+    if (compactXml)
     {
-        await using var con = new SqliteConnection(_connectionString);
-        await con.OpenAsync(ct);
-
-        const string sql = """
-        INSERT INTO ApiCache
-        (RequestType, Url, Environment, AccessNumber, AccountNumber, AccountType, Response)
-        VALUES (@RequestType, @Url, @Environment, @AccessNumber, @AccountNumber, @AccountType, @Response)
-        """;
-
-        await using var cmd = con.CreateCommand();
-        cmd.CommandText = sql;
-        cmd.Parameters.AddWithValue("@RequestType", (object?)requestType ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@Url", url);
-        cmd.Parameters.AddWithValue("@Environment", environment);
-        cmd.Parameters.AddWithValue("@AccessNumber", (object?)accessNumber ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@AccountNumber", (object?)accountNumber ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@AccountType", (object?)accountType ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@Response", responseJson);
-
-        await cmd.ExecuteNonQueryAsync(ct);
-    }
-
-    public async Task<ApiCacheRow?> GetLatestAsync(
-        string? requestType, string url, string environment,
-        string? accessNumber, CancellationToken ct = default)
-    {
-        await using var con = new SqliteConnection(_connectionString);
-        await con.OpenAsync(ct);
-
-        const string sql = """
-        SELECT Id, RequestType, Url, Environment, AccessNumber, AccountNumber, AccountType, Response
-        FROM ApiCache
-        WHERE (@RequestType IS NULL OR RequestType = @RequestType)
-          AND Url = @Url
-          AND Environment = @Environment
-          AND (@AccessNumber IS NULL OR AccessNumber = @AccessNumber)
-        ORDER BY Id DESC
-        LIMIT 1;
-        """;
-
-        await using var cmd = con.CreateCommand();
-        cmd.CommandText = sql;
-        cmd.Parameters.AddWithValue("@RequestType", (object?)requestType ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@Url", url);
-        cmd.Parameters.AddWithValue("@Environment", environment);
-        cmd.Parameters.AddWithValue("@AccessNumber", (object?)accessNumber ?? DBNull.Value);
-
-        await using var rdr = await cmd.ExecuteReaderAsync(ct);
-        if (!await rdr.ReadAsync(ct)) return null;
-
-        return new ApiCacheRow
+        try
         {
-            Id = rdr.GetInt64(0),
-            RequestType = rdr.IsDBNull(1) ? null : rdr.GetString(1),
-            Url = rdr.GetString(2),
-            Environment = rdr.GetString(3),
-            AccessNumber = rdr.IsDBNull(4) ? null : rdr.GetString(4),
-            AccountNumber = rdr.IsDBNull(5) ? null : rdr.GetString(5),
-            AccountType = rdr.IsDBNull(6) ? null : rdr.GetString(6),
-            Response = rdr.GetString(7)
-        };
+            var xdoc = XDocument.Parse(soapXml, LoadOptions.PreserveWhitespace);
+            normalized = xdoc.ToString(SaveOptions.DisableFormatting);
+        }
+        catch
+        {
+            // If it's not well-formed, just store as-is
+        }
     }
+
+    // Auto-derive a Status tag from SOAP content if caller didn't provide one
+    string? derivedStatus = scenarioStatus ?? TryDeriveStatusTagFromSoap(soapXml);
+
+    await SaveApiResponseAsync(
+        requestType: requestType,
+        url: url,
+        environment: environment,
+        accessNumber: accessNumber,
+        accountNumber: accountNumber,
+        accountType: accountType,
+        responseJson: normalized,
+        status: derivedStatus,
+        httpStatusCode: httpStatusCode,
+        ct: ct);
 }
-============================
 
-using System.Threading;
-using System.Threading.Tasks;
-
-namespace OfflineApiCache;
-
-public interface IApiCacheRepository
+// Optional: load XML from a file path and save
+public async Task SaveSoapResponseFromFileAsync(
+    string? requestType,
+    string url,
+    string environment,
+    string? accessNumber,
+    string? accountNumber,
+    string? accountType,
+    string filePath,
+    string? scenarioStatus = null,
+    int? httpStatusCode = null,
+    CancellationToken ct = default)
 {
-    Task SaveApiResponseAsync(
-        string? requestType, string url, string environment,
-        string? accessNumber, string? accountNumber, string? accountType,
-        string responseJson, CancellationToken ct = default);
+    string xml = await File.ReadAllTextAsync(filePath, ct);
+    await SaveSoapResponseAsync(
+        requestType, url, environment, accessNumber, accountNumber, accountType,
+        xml, scenarioStatus, httpStatusCode, compactXml: true, ct: ct);
+}
 
-    Task<ApiCacheRow?> GetLatestAsync(
-        string? requestType, string url, string environment,
-        string? accessNumber, CancellationToken ct = default);
+/// <summary>
+/// Tries to derive a friendly status tag from a SOAP body like:
+/// <Status><Severity>0</Severity><StatusCode>0</StatusCode><StatusDesc>Request Accepted</StatusDesc><ResponseCode>4</ResponseCode></Status>
+/// Returns e.g. "success.accepted" or "error.code404".
+/// </summary>
+private static string? TryDeriveStatusTagFromSoap(string xml)
+{
+    try
+    {
+        var x = XDocument.Parse(xml);
+        // Find a <Status> element anywhere
+        var status = x.Descendants().FirstOrDefault(e => e.Name.LocalName == "Status");
+        if (status == null) return null;
+
+        string? statusCode = status.Elements().FirstOrDefault(e => e.Name.LocalName == "StatusCode")?.Value?.Trim();
+        string? statusDesc = status.Elements().FirstOrDefault(e => e.Name.LocalName == "StatusDesc")?.Value?.Trim();
+        string? severity   = status.Elements().FirstOrDefault(e => e.Name.LocalName == "Severity")?.Value?.Trim();
+
+        // Heuristic: code "0" or severity "0" => success
+        bool success = statusCode == "0" || severity == "0";
+        if (success)
+        {
+            if (!string.IsNullOrWhiteSpace(statusDesc))
+                return "success." + Slug(statusDesc); // e.g., "success.request-accepted"
+            return "success.code0";
+        }
+
+        if (!string.IsNullOrWhiteSpace(statusDesc))
+            return "error." + Slug(statusDesc);       // e.g., "error.member-not-found"
+
+        if (!string.IsNullOrWhiteSpace(statusCode))
+            return "error.code" + statusCode;
+
+        return "error.unknown";
+    }
+    catch
+    {
+        return null;
+    }
+
+    static string Slug(string s)
+        => new string(s.ToLowerInvariant()
+                         .Select(ch => char.IsLetterOrDigit(ch) ? ch : '-')
+                         .ToArray())
+            .Trim('-');
+}
+
+
+=============================================
+// in ApiCacheRepository
+public async Task SaveApiResponseAsync(
+    string? requestType,
+    string url,
+    string environment,
+    string? accessNumber,
+    string? accountNumber,
+    string? accountType,
+    string responseJson,
+    string? status = null,
+    int? httpStatusCode = null,
+    CancellationToken ct = default)
+{
+    await using var con = new Microsoft.Data.Sqlite.SqliteConnection(_connectionString);
+    await con.OpenAsync(ct);
+
+    const string sql = """
+    INSERT INTO ApiCache
+    (RequestType, Url, Environment, AccessNumber, AccountNumber, AccountType, Response, Status, HttpStatusCode)
+    VALUES (@RequestType, @Url, @Environment, @AccessNumber, @AccountNumber, @AccountType, @Response, @Status, @HttpStatusCode)
+    """;
+
+    await using var cmd = con.CreateCommand();
+    cmd.CommandText = sql;
+    cmd.Parameters.AddWithValue("@RequestType", (object?)requestType ?? DBNull.Value);
+    cmd.Parameters.AddWithValue("@Url", url);
+    cmd.Parameters.AddWithValue("@Environment", environment);
+    cmd.Parameters.AddWithValue("@AccessNumber", (object?)accessNumber ?? DBNull.Value);
+    cmd.Parameters.AddWithValue("@AccountNumber", (object?)accountNumber ?? DBNull.Value);
+    cmd.Parameters.AddWithValue("@AccountType", (object?)accountType ?? DBNull.Value);
+    cmd.Parameters.AddWithValue("@Response", responseJson);
+    cmd.Parameters.AddWithValue("@Status", (object?)status ?? DBNull.Value);
+    cmd.Parameters.AddWithValue("@HttpStatusCode", (object?)httpStatusCode ?? DBNull.Value);
+
+    await cmd.ExecuteNonQueryAsync(ct);
 }
