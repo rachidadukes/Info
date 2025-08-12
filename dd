@@ -1,1 +1,8 @@
 
+var memberSearchRepository = new MemberSearchRepository(
+    new MemberSearchXMLResponse(),
+    new GenerateByAccessRequest(),
+    new GenerateByAcctRequest(),
+    new GenerateBySSNRequest(),
+    new GenerateByLastNameRequest()
+);
