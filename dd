@@ -1,8 +1,118 @@
+OfflineApiCache
 
-var memberSearchRepository = new MemberSearchRepository(
-    new MemberSearchXMLResponse(),
-    new GenerateByAccessRequest(),
-    new GenerateByAcctRequest(),
-    new GenerateBySSNRequest(),
-    new GenerateByLastNameRequest()
-);
+=============================);
+namespace OfflineApiCache;
+
+public class ApiCacheRow
+{
+    public long Id { get; set; }
+    public string? RequestType { get; set; }
+    public string Url { get; set; } = "";
+    public string Environment { get; set; } = "";
+    public string? AccessNumber { get; set; }
+    public string? AccountNumber { get; set; }
+    public string? AccountType { get; set; }
+    public string Response { get; set; } = "";
+}
+=========================
+using Microsoft.Data.Sqlite;
+using System;
+using System.Data;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace OfflineApiCache;
+
+public class ApiCacheRepository : IApiCacheRepository
+{
+    private readonly string _connectionString;
+
+    public ApiCacheRepository(string connectionString)
+        => _connectionString = connectionString;
+
+    public async Task SaveApiResponseAsync(
+        string? requestType, string url, string environment,
+        string? accessNumber, string? accountNumber, string? accountType,
+        string responseJson, CancellationToken ct = default)
+    {
+        await using var con = new SqliteConnection(_connectionString);
+        await con.OpenAsync(ct);
+
+        const string sql = """
+        INSERT INTO ApiCache
+        (RequestType, Url, Environment, AccessNumber, AccountNumber, AccountType, Response)
+        VALUES (@RequestType, @Url, @Environment, @AccessNumber, @AccountNumber, @AccountType, @Response)
+        """;
+
+        await using var cmd = con.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.Parameters.AddWithValue("@RequestType", (object?)requestType ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@Url", url);
+        cmd.Parameters.AddWithValue("@Environment", environment);
+        cmd.Parameters.AddWithValue("@AccessNumber", (object?)accessNumber ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@AccountNumber", (object?)accountNumber ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@AccountType", (object?)accountType ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@Response", responseJson);
+
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    public async Task<ApiCacheRow?> GetLatestAsync(
+        string? requestType, string url, string environment,
+        string? accessNumber, CancellationToken ct = default)
+    {
+        await using var con = new SqliteConnection(_connectionString);
+        await con.OpenAsync(ct);
+
+        const string sql = """
+        SELECT Id, RequestType, Url, Environment, AccessNumber, AccountNumber, AccountType, Response
+        FROM ApiCache
+        WHERE (@RequestType IS NULL OR RequestType = @RequestType)
+          AND Url = @Url
+          AND Environment = @Environment
+          AND (@AccessNumber IS NULL OR AccessNumber = @AccessNumber)
+        ORDER BY Id DESC
+        LIMIT 1;
+        """;
+
+        await using var cmd = con.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.Parameters.AddWithValue("@RequestType", (object?)requestType ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@Url", url);
+        cmd.Parameters.AddWithValue("@Environment", environment);
+        cmd.Parameters.AddWithValue("@AccessNumber", (object?)accessNumber ?? DBNull.Value);
+
+        await using var rdr = await cmd.ExecuteReaderAsync(ct);
+        if (!await rdr.ReadAsync(ct)) return null;
+
+        return new ApiCacheRow
+        {
+            Id = rdr.GetInt64(0),
+            RequestType = rdr.IsDBNull(1) ? null : rdr.GetString(1),
+            Url = rdr.GetString(2),
+            Environment = rdr.GetString(3),
+            AccessNumber = rdr.IsDBNull(4) ? null : rdr.GetString(4),
+            AccountNumber = rdr.IsDBNull(5) ? null : rdr.GetString(5),
+            AccountType = rdr.IsDBNull(6) ? null : rdr.GetString(6),
+            Response = rdr.GetString(7)
+        };
+    }
+}
+============================
+
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace OfflineApiCache;
+
+public interface IApiCacheRepository
+{
+    Task SaveApiResponseAsync(
+        string? requestType, string url, string environment,
+        string? accessNumber, string? accountNumber, string? accountType,
+        string responseJson, CancellationToken ct = default);
+
+    Task<ApiCacheRow?> GetLatestAsync(
+        string? requestType, string url, string environment,
+        string? accessNumber, CancellationToken ct = default);
+}
