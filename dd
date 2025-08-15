@@ -1,152 +1,39 @@
-using System.Net;
+using System;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Threading.Tasks;
 
-internal class Program
+namespace SoapApiApp
 {
-    // === HARD-CODE THESE THREE ===
-    private const string EndpointUrl = "https://your-endpoint-here/NFBranchExService/MemberTransactionService";
-    private const string SoapAction   = "http://schemas.navyfederal.org/2010/04/NFBranchExService/SearchMemberRq"; // SOAP 1.1 only
-    private static readonly string SoapXml = @"<?xml version=""1.0"" encoding=""utf-8""?>
-<soapenv:Envelope xmlns:soapenv=""http://schemas.xmlsoap.org/soap/envelope/"" xmlns:nfb=""http://schemas.navyfederal.org/2010/04/NFBranchExService"">
-  <soapenv:Header/>
-  <soapenv:Body>
-    <!-- your nfb:SearchMemberRq here -->
-  </soapenv:Body>
-</soapenv:Envelope>";
-
-    private static async Task<int> Main()
+    public static class SoapPoster
     {
-        try
+        private static readonly HttpClient _http = new HttpClient
         {
-            Console.WriteLine("== SOAP 1.1 test (HTTP/1.1, no chunking, no 100-continue) ==");
-            var resp1 = await CallSoap11Async(EndpointUrl, SoapAction, SoapXml);
-            Console.WriteLine($"HTTP {(int)resp1.StatusCode} {resp1.ReasonPhrase}");
-            var body1 = await resp1.Content.ReadAsStringAsync();
-            Console.WriteLine(body1);
-
-            // If 415/500 or other protocol issues, uncomment this block to try SOAP 1.2:
-            /*
-            Console.WriteLine("\n== SOAP 1.2 test ==");
-            var resp2 = await CallSoap12Async(EndpointUrl, "http://schemas.navyfederal.org/2010/04/NFBranchExService/SearchMemberRq", SoapXml12Equivalent());
-            Console.WriteLine($"HTTP {(int)resp2.StatusCode} {resp2.ReasonPhrase}");
-            var body2 = await resp2.Content.ReadAsStringAsync();
-            Console.WriteLine(body2);
-            */
-
-            return 0;
-        }
-        catch (HttpRequestException ex)
-        {
-            Console.Error.WriteLine("HTTP error:");
-            Console.Error.WriteLine(ex.Message);
-            if (ex.InnerException != null) Console.Error.WriteLine(ex.InnerException.Message);
-            return 2;
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine("Unhandled error:");
-            Console.Error.WriteLine(ex.ToString());
-            return 1;
-        }
-    }
-
-    // --- SAFE CONSOLE CALL: SOAP 1.1 ---
-    private static async Task<HttpResponseMessage> CallSoap11Async(string url, string soapAction, string xmlBody)
-    {
-        var handler = new HttpClientHandler
-        {
-            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
-            // If you need a corporate proxy:
-            // UseProxy = true,
-            // Proxy = new WebProxy("http://proxy:8080") { UseDefaultCredentials = true },
-            // SslProtocols = System.Security.Authentication.SslProtocols.Tls12
-        };
-
-        var client = new HttpClient(handler)
-        {
-            DefaultRequestVersion = HttpVersion.Version11,
-            DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact,
             Timeout = TimeSpan.FromSeconds(100)
         };
 
-        var req = new HttpRequestMessage(HttpMethod.Post, url)
+        public static async Task<string> PostAsync(string endpoint, string soapXml, string? soapAction = null)
         {
-            Version = HttpVersion.Version11
-        };
+            if (endpoint is null) throw new ArgumentNullException(nameof(endpoint));
+            if (soapXml is null) throw new ArgumentNullException(nameof(soapXml));
 
-        // Avoid server quirks
-        req.Headers.ExpectContinue = false;          // no 100-continue
-        req.Headers.TransferEncodingChunked = false; // send Content-Length
-        req.Headers.ConnectionClose = true;          // some LBs prefer this
+            // SOAP servers typically expect text/xml; charset=utf-8
+            using var content = new StringContent(soapXml, Encoding.UTF8, "text/xml");
+            content.Headers.ContentType = new MediaTypeHeaderValue("text/xml") { CharSet = "utf-8" };
+            if (!string.IsNullOrWhiteSpace(soapAction))
+                content.Headers.Add("SOAPAction", soapAction);
 
-        // SOAP 1.1 requires SOAPAction header
-        if (!string.IsNullOrEmpty(soapAction))
-        {
-            req.Headers.Remove("SOAPAction");
-            req.Headers.TryAddWithoutValidation("SOAPAction", $"\"{soapAction}\""); // quotes matter for some servers
+            Console.WriteLine($"POST {endpoint}");
+            Console.WriteLine($"XML length: {soapXml.Length}");
+
+            var resp = await _http.PostAsync(endpoint, content);
+            var body = await resp.Content.ReadAsStringAsync();
+
+            if (!resp.IsSuccessStatusCode)
+                throw new HttpRequestException($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}\n{body}");
+
+            return body;
         }
-        else
-        {
-            req.Headers.TryAddWithoutValidation("SOAPAction", "\"\"");
-        }
-
-        // UTF-8 without BOM; exact Content-Type
-        var content = new StringContent(xmlBody, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), "text/xml");
-        content.Headers.ContentType = new MediaTypeHeaderValue("text/xml") { CharSet = "utf-8" };
-        req.Content = content;
-
-        // Fire
-        var resp = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
-        return resp;
     }
-
-    // --- Alternative: SOAP 1.2 (try this if 1.1 fails with 415/500) ---
-    private static async Task<HttpResponseMessage> CallSoap12Async(string url, string actionUri, string xmlBodySoap12)
-    {
-        var handler = new HttpClientHandler
-        {
-            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
-        };
-
-        var client = new HttpClient(handler)
-        {
-            DefaultRequestVersion = HttpVersion.Version11,
-            DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact,
-            Timeout = TimeSpan.FromSeconds(100)
-        };
-
-        var req = new HttpRequestMessage(HttpMethod.Post, url)
-        {
-            Version = HttpVersion.Version11
-        };
-
-        req.Headers.ExpectContinue = false;
-        req.Headers.TransferEncodingChunked = false;
-        req.Headers.ConnectionClose = true;
-
-        var content = new StringContent(xmlBodySoap12, new UTF8Encoding(false), "application/soap+xml");
-        content.Headers.ContentType!.CharSet = "utf-8";
-
-        // Some SOAP 1.2 servers require the action parameter on Content-Type:
-        if (!string.IsNullOrEmpty(actionUri))
-        {
-            content.Headers.ContentType.Parameters.Add(new NameValueHeaderValue("action", $"\"{actionUri}\""));
-        }
-
-        req.Content = content;
-
-        var resp = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
-        return resp;
-    }
-
-    // Helper to convert your 1.1 envelope to a 1.2 envelope (adjust body namespaces as needed)
-    private static string SoapXml12Equivalent() => @"<?xml version=""1.0"" encoding=""utf-8""?>
-<env:Envelope xmlns:env=""http://www.w3.org/2003/05/soap-envelope"" xmlns:nfb=""http://schemas.navyfederal.org/2010/04/NFBranchExService"">
-  <env:Header/>
-  <env:Body>
-    <!-- your nfb:SearchMemberRq here (same payload) -->
-  </env:Body>
-</env:Envelope>";
 }
