@@ -1,10 +1,15 @@
- // Thin facade: no HttpClient here, no try/catch that swallows errors.
-    public class sMemberSearchXmlResponse : IsMemberSearchXmlResponse
-    {
-        public Task<string> ReadXmlResponseAsync(string soapXml, string endpoint, string? soapAction = null)
-            => SoapPoster.PostAsync(endpoint, soapXml, soapAction);
+var endpoint = sAPI_url.MemberSearch;   // replace with your actual URL constant
+var soapXml = SoapStore.LoadRequestXml(); // your existing helper
 
-        // Keep your existing implementation if you actually use this.
-        public Task<string> GenerateCleanXmlResponseAsync(string originalXmlResponse)
-            => Task.FromResult(originalXmlResponse);
-    }
+var xmlClient = new MemberSearchLibrary.sMemberSearchXMLResponse();
+
+try
+{
+    var response = await xmlClient.ReadXMLresponse(soapXml, endpoint);
+    Console.WriteLine("Instance path succeeded, response length: " + response.Length);
+    Console.WriteLine(response.Substring(0, Math.Min(400, response.Length)));
+}
+catch (Exception ex)
+{
+    Console.Error.WriteLine("Instance path failed: " + ex.ToString());
+}
