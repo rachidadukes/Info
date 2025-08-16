@@ -1,39 +1,10 @@
-using System;
-using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace SoapApiApp
-{
-    public static class SoapPoster
+ // Thin facade: no HttpClient here, no try/catch that swallows errors.
+    public class sMemberSearchXmlResponse : IsMemberSearchXmlResponse
     {
-        private static readonly HttpClient _http = new HttpClient
-        {
-            Timeout = TimeSpan.FromSeconds(100)
-        };
+        public Task<string> ReadXmlResponseAsync(string soapXml, string endpoint, string? soapAction = null)
+            => SoapPoster.PostAsync(endpoint, soapXml, soapAction);
 
-        public static async Task<string> PostAsync(string endpoint, string soapXml, string? soapAction = null)
-        {
-            if (endpoint is null) throw new ArgumentNullException(nameof(endpoint));
-            if (soapXml is null) throw new ArgumentNullException(nameof(soapXml));
-
-            // SOAP servers typically expect text/xml; charset=utf-8
-            using var content = new StringContent(soapXml, Encoding.UTF8, "text/xml");
-            content.Headers.ContentType = new MediaTypeHeaderValue("text/xml") { CharSet = "utf-8" };
-            if (!string.IsNullOrWhiteSpace(soapAction))
-                content.Headers.Add("SOAPAction", soapAction);
-
-            Console.WriteLine($"POST {endpoint}");
-            Console.WriteLine($"XML length: {soapXml.Length}");
-
-            var resp = await _http.PostAsync(endpoint, content);
-            var body = await resp.Content.ReadAsStringAsync();
-
-            if (!resp.IsSuccessStatusCode)
-                throw new HttpRequestException($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}\n{body}");
-
-            return body;
-        }
+        // Keep your existing implementation if you actually use this.
+        public Task<string> GenerateCleanXmlResponseAsync(string originalXmlResponse)
+            => Task.FromResult(originalXmlResponse);
     }
-}
