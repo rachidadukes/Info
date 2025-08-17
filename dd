@@ -1,5 +1,22 @@
-var envChoices = new List<string> { "UNIT", "INTG" };
-var selectedEnvironment = "UNIT";
-var sysResponses = new List<string> { "Environment initialized", "DB connection ready" };
+public void PrintSummary()
+{
+    AnsiConsole.MarkupLine("\n[green]=== Summary of Session ===[/]\n");
 
-AppLogger.Summary.Add(envChoices, selectedEnvironment, sysResponses);
+    foreach (var entry in Entries)
+    {
+        var table = new Table()
+            .Border(TableBorder.Rounded)
+            .AddColumn("[bold yellow]PromptItems[/]")
+            .AddColumn("[bold cyan]UserSelection[/]")
+            .AddColumn("[bold green]SystemResponses[/]");
+
+        // Join items into one string per column
+        var promptStr = string.Join("\n", entry.PromptItems);
+        var responseStr = string.Join("\n", entry.SystemResponses);
+
+        table.AddRow(promptStr, entry.UserSelection, responseStr);
+
+        AnsiConsole.Write(table);
+        AnsiConsole.WriteLine();
+    }
+}
