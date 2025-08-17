@@ -1,78 +1,22 @@
-
-
-static async Task Main(string[] args)
+public void PrintSummary()
 {
-    var summary = new SummaryLog();
+    AnsiConsole.MarkupLine("\n[green]=== Summary of Session ===[/]\n");
 
-    // 1. Environment
-    var envChoices = new[] { "UNIT", "INTG" };
-    string selectedEnvironment = PromptAndFreeze("Select one environment.", envChoices);
-    summary.Add("Environment selection", selectedEnvironment);
-
-    // 2. Access #
-    var accessChoices = (await GetAccessNumbersFor(selectedEnvironment))
-        .Select(m => m.ToString())
-        .ToList();
-
-    string selectedAccess = PromptAndFreeze("Select an access number.", accessChoices);
-    summary.Add("Access number selection", selectedAccess);
-
-    // 3. System action
-    // (e.g., search members)
-    await SearchMembers.SearchMembersByAccessNumber(selectedAccess);
-    summary.Add("SearchMembers", selectedAccess, "Search completed successfully");
-
-    // 4. Print entire session summary
-    summary.PrintSummary();
-
-    // Keep console open if launched by double-click
-    if (!System.Diagnostics.Debugger.IsAttached)
+    foreach (var entry in Entries)
     {
-        Console.WriteLine();
-        Console.Write("Press Enter to close...");
-        Console.ReadLine();
-    }
-}
+        AnsiConsole.MarkupLine("[bold]Prompt choices:[/]");
+        foreach (var p in entry.PromptItems)
+            AnsiConsole.MarkupLine($"  - {p}");
 
+        AnsiConsole.MarkupLine($"[bold]User selected:[/] [yellow]{entry.UserSelection}[/]");
 
-
-===============================
-
-
-public class SummaryLog
-{
-    public List<LogEntry> Entries { get; } = new();
-
-    public void Add(string prompt, string selection, string systemResponse = "")
-    {
-        Entries.Add(new LogEntry
+        if (entry.SystemResponses.Any())
         {
-            Prompt = prompt,
-            UserSelection = selection,
-            SystemResponse = systemResponse
-        });
-    }
-
-    public void PrintSummary()
-    {
-        AnsiConsole.MarkupLine("\n[green]=== Summary of Session ===[/]\n");
-
-        foreach (var entry in Entries)
-        {
-            AnsiConsole.MarkupLine($"[bold]{entry.Prompt}[/]");
-            AnsiConsole.MarkupLine($"  You selected: [yellow]{entry.UserSelection}[/]");
-
-            if (!string.IsNullOrWhiteSpace(entry.SystemResponse))
-                AnsiConsole.MarkupLine($"  System response: [grey]{entry.SystemResponse}[/]");
-
-            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine("[bold]System responses:[/]");
+            foreach (var resp in entry.SystemResponses)
+                AnsiConsole.MarkupLine($"  - [grey]{resp}[/]");
         }
-    }
-}
 
-public class LogEntry
-{
-    public string Prompt { get; set; } = "";
-    public string UserSelection { get; set; } = "";
-    public string SystemResponse { get; set; } = "";
+        AnsiConsole.WriteLine();
+    }
 }
