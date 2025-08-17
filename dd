@@ -1,22 +1,25 @@
-public void PrintSummary()
+private static string SelectEnvirement()
 {
-    AnsiConsole.MarkupLine("\n[green]=== Summary of Session ===[/]\n");
+    // Define the choices
+    var promptItems = new List<string> { "UNIT", "INTG" };
 
-    foreach (var entry in Entries)
+    // Ask user to select
+    var environment = AnsiConsole.Prompt(
+        new SelectionPrompt<string>()
+            .Title("Select one environment.")
+            .AddChoices(promptItems));
+
+    // Print confirmation to console
+    AnsiConsole.MarkupLine($"You selected environment: [red]{environment}[/].");
+
+    // Build system responses (optional)
+    var systemResponses = new List<string>
     {
-        var table = new Table()
-            .Border(TableBorder.Rounded)
-            .AddColumn("[bold yellow]PromptItems[/]")
-            .AddColumn("[bold cyan]UserSelection[/]")
-            .AddColumn("[bold green]SystemResponses[/]");
+        $"Environment {environment} confirmed"
+    };
 
-        // Join items into one string per column
-        var promptStr = string.Join("\n", entry.PromptItems);
-        var responseStr = string.Join("\n", entry.SystemResponses);
+    // Log everything in Summary
+    AppLogger.Summary.Add(promptItems, environment, systemResponses);
 
-        table.AddRow(promptStr, entry.UserSelection, responseStr);
-
-        AnsiConsole.Write(table);
-        AnsiConsole.WriteLine();
-    }
+    return environment;
 }
