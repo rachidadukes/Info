@@ -1,25 +1,115 @@
-private static string SelectEnvirement()
+
+
+
+
+
+
+
+
+
+===========================
+
+
+using Spectre.Console;
+
+namespace YourApp;
+
+public class LogEntry
 {
-    // Define the choices
-    var promptItems = new List<string> { "UNIT", "INTG" };
+    public List<string> PromptItems { get; set; } = new();
+    public string UserSelection { get; set; } = "";
+    public List<string> SystemResponses { get; set; } = new();
+}
 
-    // Ask user to select
-    var environment = AnsiConsole.Prompt(
-        new SelectionPrompt<string>()
-            .Title("Select one environment.")
-            .AddChoices(promptItems));
+public class SummaryLog
+{
+    public List<LogEntry> Entries { get; } = new();
 
-    // Print confirmation to console
-    AnsiConsole.MarkupLine($"You selected environment: [red]{environment}[/].");
-
-    // Build system responses (optional)
-    var systemResponses = new List<string>
+    /// <summary>
+    /// Add a step to the session summary.
+    /// promptItems: the list the user saw; selection: the chosen value; systemResponses: any messages/results.
+    /// </summary>
+    public void Add(IEnumerable<string> promptItems, string selection, IEnumerable<string>? systemResponses = null)
     {
-        $"Environment {environment} confirmed"
-    };
+        Entries.Add(new LogEntry
+        {
+            PromptItems     = promptItems.ToList(),
+            UserSelection   = selection,
+            SystemResponses = systemResponses?.ToList() ?? new List<string>()
+        });
+    }
 
-    // Log everything in Summary
-    AppLogger.Summary.Add(promptItems, environment, systemResponses);
+    /// <summary>
+    /// Print a stacked one-column summary. Long lists render as nested grids.
+    /// </summary>
+    public void PrintSummary()
+    {
+        AnsiConsole.MarkupLine("\n[green]=== Summary of Session ===[/]\n");
 
-    return environment;
+        foreach (var entry in Entries)
+        {
+            var outer = new Table()
+                .Border(TableBorder.Rounded)
+                .AddColumn("[bold white]Session Log[/]");
+
+            // Prompt Items (nested grid; highlight the selected value inside the list)
+            outer.AddRow("[bold yellow]Prompt Items:[/]");
+            outer.AddRow(BuildListGrid(entry.PromptItems, columns: 4, maxItemsToShow: 40, highlight: entry.UserSelection));
+
+            // User Selection
+            outer.AddEmptyRow();
+            outer.AddRow($"[bold cyan]User Selection:[/] {entry.UserSelection}");
+
+            // System Responses (also a nested grid so long lists stay tidy)
+            if (entry.SystemResponses.Any())
+            {
+                outer.AddEmptyRow();
+                outer.AddRow("[bold green]System Responses:[/]");
+                outer.AddRow(BuildListGrid(entry.SystemResponses, columns: 3, maxItemsToShow: 60));
+            }
+
+            AnsiConsole.Write(outer);
+            AnsiConsole.WriteLine();
+        }
+    }
+
+    /// <summary>
+    /// Build a compact, headerless grid (multi-column) for long lists.
+    /// Truncates with "… and N more" if maxItemsToShow is set and exceeded.
+    /// </summary>
+    private static IRenderable BuildListGrid(
+        IReadOnlyList<string> items,
+        int columns = 4,
+        int maxItemsToShow = 40,
+        string? highlight = null)
+    {
+        var grid = new Table()
+            .Border(TableBorder.None)
+            .HideHeaders();
+
+        for (int i = 0; i < columns; i++)
+            grid.AddColumn(new TableColumn(""));
+
+        var toShow = (maxItemsToShow > 0 ? items.Take(maxItemsToShow) : items).ToList();
+
+        foreach (var row in toShow.Chunk(columns))
+        {
+            var cells = row.Select(v => v == highlight ? $"[cyan]> {v}[/]" : v).ToList();
+            while (cells.Count < columns) cells.Add(string.Empty);
+            grid.AddRow(cells.ToArray());
+        }
+
+        if (items.Count > toShow.Count)
+            grid.AddRow($"[grey]… and {items.Count - toShow.Count} more[/]");
+
+        return grid;
+    }
+}
+
+/// <summary>
+/// Global access point—use from anywhere: AppLogger.Summary.Add(...);
+/// </summary>
+public static class AppLogger
+{
+    public static SummaryLog Summary { get; } = new SummaryLog();
 }
