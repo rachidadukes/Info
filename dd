@@ -1,22 +1,5 @@
-public void PrintSummary()
-{
-    AnsiConsole.MarkupLine("\n[green]=== Summary of Session ===[/]\n");
+var envChoices = new List<string> { "UNIT", "INTG" };
+var selectedEnvironment = "UNIT";
+var sysResponses = new List<string> { "Environment initialized", "DB connection ready" };
 
-    foreach (var entry in Entries)
-    {
-        AnsiConsole.MarkupLine("[bold]Prompt choices:[/]");
-        foreach (var p in entry.PromptItems)
-            AnsiConsole.MarkupLine($"  - {p}");
-
-        AnsiConsole.MarkupLine($"[bold]User selected:[/] [yellow]{entry.UserSelection}[/]");
-
-        if (entry.SystemResponses.Any())
-        {
-            AnsiConsole.MarkupLine("[bold]System responses:[/]");
-            foreach (var resp in entry.SystemResponses)
-                AnsiConsole.MarkupLine($"  - [grey]{resp}[/]");
-        }
-
-        AnsiConsole.WriteLine();
-    }
-}
+AppLogger.Summary.Add(envChoices, selectedEnvironment, sysResponses);
