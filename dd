@@ -1,15 +1,78 @@
-var endpoint = sAPI_url.MemberSearch;   // replace with your actual URL constant
-var soapXml = SoapStore.LoadRequestXml(); // your existing helper
 
-var xmlClient = new MemberSearchLibrary.sMemberSearchXMLResponse();
 
-try
+static async Task Main(string[] args)
 {
-    var response = await xmlClient.ReadXMLresponse(soapXml, endpoint);
-    Console.WriteLine("Instance path succeeded, response length: " + response.Length);
-    Console.WriteLine(response.Substring(0, Math.Min(400, response.Length)));
+    var summary = new SummaryLog();
+
+    // 1. Environment
+    var envChoices = new[] { "UNIT", "INTG" };
+    string selectedEnvironment = PromptAndFreeze("Select one environment.", envChoices);
+    summary.Add("Environment selection", selectedEnvironment);
+
+    // 2. Access #
+    var accessChoices = (await GetAccessNumbersFor(selectedEnvironment))
+        .Select(m => m.ToString())
+        .ToList();
+
+    string selectedAccess = PromptAndFreeze("Select an access number.", accessChoices);
+    summary.Add("Access number selection", selectedAccess);
+
+    // 3. System action
+    // (e.g., search members)
+    await SearchMembers.SearchMembersByAccessNumber(selectedAccess);
+    summary.Add("SearchMembers", selectedAccess, "Search completed successfully");
+
+    // 4. Print entire session summary
+    summary.PrintSummary();
+
+    // Keep console open if launched by double-click
+    if (!System.Diagnostics.Debugger.IsAttached)
+    {
+        Console.WriteLine();
+        Console.Write("Press Enter to close...");
+        Console.ReadLine();
+    }
 }
-catch (Exception ex)
+
+
+
+===============================
+
+
+public class SummaryLog
 {
-    Console.Error.WriteLine("Instance path failed: " + ex.ToString());
+    public List<LogEntry> Entries { get; } = new();
+
+    public void Add(string prompt, string selection, string systemResponse = "")
+    {
+        Entries.Add(new LogEntry
+        {
+            Prompt = prompt,
+            UserSelection = selection,
+            SystemResponse = systemResponse
+        });
+    }
+
+    public void PrintSummary()
+    {
+        AnsiConsole.MarkupLine("\n[green]=== Summary of Session ===[/]\n");
+
+        foreach (var entry in Entries)
+        {
+            AnsiConsole.MarkupLine($"[bold]{entry.Prompt}[/]");
+            AnsiConsole.MarkupLine($"  You selected: [yellow]{entry.UserSelection}[/]");
+
+            if (!string.IsNullOrWhiteSpace(entry.SystemResponse))
+                AnsiConsole.MarkupLine($"  System response: [grey]{entry.SystemResponse}[/]");
+
+            AnsiConsole.WriteLine();
+        }
+    }
+}
+
+public class LogEntry
+{
+    public string Prompt { get; set; } = "";
+    public string UserSelection { get; set; } = "";
+    public string SystemResponse { get; set; } = "";
 }
