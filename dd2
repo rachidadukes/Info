@@ -1,81 +1,36 @@
-using Spectre.Console;
-using YourApp;
+  // ---- SUMMARY LOG: build the strings the logger expects ----
+            // what the user saw (prompt list)
+            var promptItems = (membersFound ?? new List<Member>())
+                .Select(m => $"{m.FullName} | {m.AccountNumber}")
+                .ToList();
 
-internal class Program
-{
-    static async Task Main(string[] args)
-    {
-        // 1) Environment selection
-        var envChoices = new List<string> { "UNIT", "INTG" };
-        var selectedEnvironment = AnsiConsole.Prompt(
-            new SelectionPrompt<string>()
-                .Title("Select one environment.")
-                .AddChoices(envChoices));
+            // what the user selected
+            var selectionText = selectedAccessNumByUser is null
+                ? "(none)"
+                : $"{selectedAccessNumByUser.FullName} | {selectedAccessNumByUser.AccountNumber}";
 
-        AnsiConsole.MarkupLine($"You selected environment: [yellow]{selectedEnvironment}[/].");
+            // system responses (any messages you want to keep)
+            var systemMessages = new[]
+            {
+                "Access number accepted",
+                "Search will begin…"
+            };
 
-        AppLogger.Summary.Add(
-            promptItems: envChoices,
-            selection: selectedEnvironment,
-            systemResponses: new[] { $"Environment {selectedEnvironment} confirmed" });
+            AppLogger.Summary.Add(
+                promptItems: promptItems,
+                selection: selectionText,
+                systemResponses: systemMessages);
 
-        // 2) Access number selection (pretend these came from a DB/API)
-        var accessNumbers = await RetrieveAccessNumbers(selectedEnvironment);
-        var selectedAccess = AnsiConsole.Prompt(
-            new SelectionPrompt<string>()
-                .Title("Select an access number.")
-                .PageSize(10)
-                .MoreChoicesText("[grey](Move up and down to reveal more Access Numbers)[/]")
-                .AddChoices(accessNumbers));
-
-        AppLogger.Summary.Add(
-            promptItems: accessNumbers,
-            selection: selectedAccess,
-            systemResponses: new[] { "Access number accepted", "Search will begin…" });
-
-        // 3) Call into some service that also logs
-        await new SearchMembersService().SearchMembersByAccessNumberAsync(selectedAccess);
-
-        // 4) Print the full stacked summary at the end
-        AppLogger.Summary.PrintSummary();
-
-        // Keep console open if launched by double-click
-        if (!System.Diagnostics.Debugger.IsAttached)
+            await GetMemberProfile.RetrieveMembersProfile(selectedAccessNumByUser, envir);
+        }
+        else
         {
-            Console.WriteLine();
-            Console.Write("Press Enter to close...");
-            Console.ReadLine();
+            Console.WriteLine($"Failed to retrieve member data: {response?.ErrorMessage}");
+            AppLogger.Summary.Add(
+                promptItems: new[] { $"Env: {envir}", $"Access#: {AccessNumber}" },
+                selection: "No member selected",
+                systemResponses: new[] { $"Error: {response?.ErrorMessage ?? "Unknown"}" });
         }
     }
-
-    // Example data fetch
-    private static Task<List<string>> RetrieveAccessNumbers(string env)
+    catch (Exception ex)
     {
-        // Replace with your real retrieval logic
-        var demo = new List<string>
-        {
-            "00000000005228 (UNIT)", "10 (UNIT)", "108 (UNIT)", "10818 (UNIT)",
-            "1220 (UNIT)", "124 (UNIT)", "15 (UNIT)", "2638 (UNIT)",
-            "31342 (UNIT)", "346491 (UNIT)", "55555 (UNIT)", "77777 (UNIT)"
-        };
-
-        // If env == "INTG", swap to some other list, etc.
-        return Task.FromResult(demo);
-    }
-}
-
-// Example service showing you can log from ANY class
-public class SearchMembersService
-{
-    public async Task SearchMembersByAccessNumberAsync(string access)
-    {
-        // Do your real work here…
-        await Task.Delay(150); // simulate
-
-        // Log any messages you want to show in the summary
-        AppLogger.Summary.Add(
-            promptItems: new[] { "SearchMembersByAccessNumber" },
-            selection: access,
-            systemResponses: new[] { "Search completed successfully", "2 members found" });
-    }
-}
