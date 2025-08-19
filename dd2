@@ -1,9 +1,0 @@
-AnsiConsole.Status()
-    .Start("Please wait, loading data...", ctx =>
-    {
-        // Simulate work
-        Thread.Sleep(2000);
-
-        // Or run your actual processing here
-        LoadData(selectedAccessNumber);
-    });
