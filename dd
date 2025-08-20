@@ -1,3 +1,50 @@
+using Spectre.Console;
+using System.Linq;
+
+void PrintSummary()
+{
+    AnsiConsole.MarkupLine("\n[green]=== Summary of Session ===[/]\n");
+
+    foreach (var entry in Entries)
+    {
+        var outer = new Table()
+            .Border(TableBorder.Rounded)
+            .Expand()
+            .AddColumn(new TableColumn("[bold white]Session Log[/]"));
+
+        // Prompt Items (single column; highlight the selected value inside the list)
+        outer.AddRow("[bold yellow]Prompt Items:[/]");
+        outer.AddRow(
+            BuildListGrid(
+                entry.PromptItems,
+                columns: 1,                 // ⬅️ single column
+                maxItemsToShow: 40,
+                highlight: entry.UserSelection
+            )
+        );
+
+        // User Selection
+        outer.AddEmptyRow();
+        outer.AddRow($"[bold cyan]User Selection:[/] {Markup.Escape(entry.UserSelection ?? string.Empty)}");
+
+        // System Responses (also single column to keep long lists tidy)
+        if (entry.SystemResponses != null && entry.SystemResponses.Any())
+        {
+            outer.AddEmptyRow();
+            outer.AddRow("[bold green]System Responses:[/]");
+            outer.AddRow(
+                BuildListGrid(
+                    entry.SystemResponses,
+                    columns: 1,              // ⬅️ single column
+                    maxItemsToShow: 60
+                )
+            );
+        }
+
+        AnsiConsole.Write(outer);
+        AnsiConsole.WriteLine();
+    }
+}
 
 
 
