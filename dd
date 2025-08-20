@@ -1,67 +1,26 @@
-public static async Task RetrieveMembersProfile(Member selectedAccessNumByUser, string envir)
+public void PrintSummary()
 {
-    ResultWrapper<MemberProfileRespDTO>? memberProfile;
-    string? apiUrl;
+    AnsiConsole.MarkupLine("\n[green]=== Summary of Session ===[/]\n");
 
-    try
+    foreach (var entry in Entries)
     {
-        apiUrl = FindUrl(envir);
-        string accessNumber = selectedAccessNumByUser.CustPermId;
+        var outer = new Table()
+            .Border(TableBorder.Rounded)
+            .Expand()
+            .AddColumn(new TableColumn($"[bold white]{entry.Title}[/]"));
 
-        var memberProfileRepository = new MemberProfileRepository();
-        memberProfile = await memberProfileRepository.GetMemberProfileAsync(envir, apiUrl, accessNumber);
+        // Prompt Items
+        outer.AddRow("[bold yellow]Prompt Items:[/]");
+        outer.AddRow(BuildListGrid(entry.PromptItems, columns: 1, maxItemsToShow: 40, highlight: entry.UserSelection));
 
-        if (memberProfile?.Data != null && memberProfile.IsSuccess)
+        // ✅ Only show User Selection if not null/empty
+        if (!string.IsNullOrWhiteSpace(entry.UserSelection))
         {
-            AnsiConsole.Write(new Rule("[green]Member Profile data retrieved successfully.[/]"));
-
-            // ✅ SUMMARY LOGGING BLOCK
-            // what the user saw (prompt items)
-            var promptItems = new List<string>
-            {
-                $"Profile for {selectedAccessNumByUser.FullName} ({selectedAccessNumByUser.CustPermId})"
-            };
-
-            // what the user selected
-            var selectionText = $"{selectedAccessNumByUser.FullName} ({selectedAccessNumByUser.CustPermId})";
-
-            // system responses (messages you want to keep)
-            var systemMessages = new[]
-            {
-                "Member profile retrieved successfully",
-                $"Accounts found: {memberProfile.Data.ProfileAccts?.Count ?? 0}"
-            };
-
-            AppLogger.Summary.Add(
-                promptItems: promptItems,
-                userSelection: selectionText,
-                systemResponses: systemMessages
-            );
-            // ✅ END SUMMARY LOGGING BLOCK
-
-            RetrieveAccounts(memberProfile, envir, accessNumber);
+            outer.AddEmptyRow();
+            outer.AddRow($"[bold cyan]User Selection:[/] {Markup.Escape(entry.UserSelection)}");
         }
-        else
-        {
-            Console.WriteLine($"Failed to retrieve member data: {memberProfile?.ErrorMessage}");
 
-            // log failure too
-            AppLogger.Summary.Add(
-                promptItems: new List<string> { $"Access Number {selectedAccessNumByUser.CustPermId}" },
-                userSelection: selectedAccessNumByUser.FullName ?? "(unknown)",
-                systemResponses: new[] { $"Failed: {memberProfile?.ErrorMessage}" }
-            );
-        }
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine("Error retrieving data: " + ex.Message);
-
-        // log exception too
-        AppLogger.Summary.Add(
-            promptItems: new List<string> { $"Access Number {selectedAccessNumByUser.CustPermId}" },
-            userSelection: selectedAccessNumByUser.FullName ?? "(unknown)",
-            systemResponses: new[] { $"Exception: {ex.Message}" }
-        );
+        AnsiConsole.Write(outer);
+        AnsiConsole.WriteLine();
     }
 }
