@@ -1,52 +1,67 @@
-using Spectre.Console;
-using System.Linq;
-
-void PrintSummary()
+public static async Task RetrieveMembersProfile(Member selectedAccessNumByUser, string envir)
 {
-    AnsiConsole.MarkupLine("\n[green]=== Summary of Session ===[/]\n");
+    ResultWrapper<MemberProfileRespDTO>? memberProfile;
+    string? apiUrl;
 
-    foreach (var entry in Entries)
+    try
     {
-        var outer = new Table()
-            .Border(TableBorder.Rounded)
-            .Expand()
-            .AddColumn(new TableColumn("[bold white]Session Log[/]"));
+        apiUrl = FindUrl(envir);
+        string accessNumber = selectedAccessNumByUser.CustPermId;
 
-        // Prompt Items (single column; highlight the selected value inside the list)
-        outer.AddRow("[bold yellow]Prompt Items:[/]");
-        outer.AddRow(
-            BuildListGrid(
-                entry.PromptItems,
-                columns: 1,                 // ⬅️ single column
-                maxItemsToShow: 40,
-                highlight: entry.UserSelection
-            )
-        );
+        var memberProfileRepository = new MemberProfileRepository();
+        memberProfile = await memberProfileRepository.GetMemberProfileAsync(envir, apiUrl, accessNumber);
 
-        // User Selection
-        outer.AddEmptyRow();
-        outer.AddRow($"[bold cyan]User Selection:[/] {Markup.Escape(entry.UserSelection ?? string.Empty)}");
-
-        // System Responses (also single column to keep long lists tidy)
-        if (entry.SystemResponses != null && entry.SystemResponses.Any())
+        if (memberProfile?.Data != null && memberProfile.IsSuccess)
         {
-            outer.AddEmptyRow();
-            outer.AddRow("[bold green]System Responses:[/]");
-            outer.AddRow(
-                BuildListGrid(
-                    entry.SystemResponses,
-                    columns: 1,              // ⬅️ single column
-                    maxItemsToShow: 60
-                )
+            AnsiConsole.Write(new Rule("[green]Member Profile data retrieved successfully.[/]"));
+
+            // ✅ SUMMARY LOGGING BLOCK
+            // what the user saw (prompt items)
+            var promptItems = new List<string>
+            {
+                $"Profile for {selectedAccessNumByUser.FullName} ({selectedAccessNumByUser.CustPermId})"
+            };
+
+            // what the user selected
+            var selectionText = $"{selectedAccessNumByUser.FullName} ({selectedAccessNumByUser.CustPermId})";
+
+            // system responses (messages you want to keep)
+            var systemMessages = new[]
+            {
+                "Member profile retrieved successfully",
+                $"Accounts found: {memberProfile.Data.ProfileAccts?.Count ?? 0}"
+            };
+
+            AppLogger.Summary.Add(
+                promptItems: promptItems,
+                userSelection: selectionText,
+                systemResponses: systemMessages
+            );
+            // ✅ END SUMMARY LOGGING BLOCK
+
+            RetrieveAccounts(memberProfile, envir, accessNumber);
+        }
+        else
+        {
+            Console.WriteLine($"Failed to retrieve member data: {memberProfile?.ErrorMessage}");
+
+            // log failure too
+            AppLogger.Summary.Add(
+                promptItems: new List<string> { $"Access Number {selectedAccessNumByUser.CustPermId}" },
+                userSelection: selectedAccessNumByUser.FullName ?? "(unknown)",
+                systemResponses: new[] { $"Failed: {memberProfile?.ErrorMessage}" }
             );
         }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine("Error retrieving data: " + ex.Message);
 
-        AnsiConsole.Write(outer);
-        AnsiConsole.WriteLine();
+        // log exception too
+        AppLogger.Summary.Add(
+            promptItems: new List<string> { $"Access Number {selectedAccessNumByUser.CustPermId}" },
+            userSelection: selectedAccessNumByUser.FullName ?? "(unknown)",
+            systemResponses: new[] { $"Exception: {ex.Message}" }
+        );
     }
 }
-
-
-
-
-
