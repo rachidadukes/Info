@@ -1,26 +1,48 @@
-public void PrintSummary()
-{
-    AnsiConsole.MarkupLine("\n[green]=== Summary of Session ===[/]\n");
 
-    foreach (var entry in Entries)
-    {
-        var outer = new Table()
-            .Border(TableBorder.Rounded)
-            .Expand()
-            .AddColumn(new TableColumn($"[bold white]{entry.Title}[/]"));
+====================================
+Private cacheHashTable As Hashtable
+Private mstrAcctID As String
+'CNCB changes for ST migration
+Private stHostTranCodes As String() = {"1806", "1807", "1810", "1906", "1907", "1910", 
+                                       "2906", "2907", "2910", "3101", "3102", "3103", 
+                                       "3104", "3111", "3112", "3113", "3201", "3202"}
 
-        // Prompt Items
-        outer.AddRow("[bold yellow]Prompt Items:[/]");
-        outer.AddRow(BuildListGrid(entry.PromptItems, columns: 1, maxItemsToShow: 40, highlight: entry.UserSelection));
+' The Host Business Rules (host messaging) dll is intended to be utilized in both the server
+' and client environments. So, it cannot have references to assemblies that are client only
+' or are server only. Three of these previously used are for error logging, db reads, and
+' caching of the read datasets.
+' The calling code is now expected to provide these services on behalf of the Business
+' Rules assembly.
 
-        // ✅ Only show User Selection if not null/empty
-        if (!string.IsNullOrWhiteSpace(entry.UserSelection))
-        {
-            outer.AddEmptyRow();
-            outer.AddRow($"[bold cyan]User Selection:[/] {Markup.Escape(entry.UserSelection)}");
-        }
+1806, 1807, 1810, 1906, 1907, 1910,
+2906, 2907, 2910, 3101, 3102, 3103,
+3104, 3111, 3112, 3113, 3201, 3202
 
-        AnsiConsole.Write(outer);
-        AnsiConsole.WriteLine();
-    }
-}
+=====================================
+
+#Region "CNCB - ST Migration"
+Public Function ShouldRouteToSTEndpoint(xml As String) As Boolean
+    Dim doc As XDocument
+    Dim tranCode As String
+
+    doc = XDocument.Parse(xml)
+    tranCode = doc.Descendants("TranCode").FirstOrDefault()?.Value?.Trim()
+
+    Return stHostTranCodes.Contains(tranCode)
+End Function
+#End Region
+
+==========================================================
+
+' CNCB changes for ST migration
+If ShouldRouteToSTEndpoint(sSendBuf) Then
+    ' send the requests for ST accounts to the new service
+    SendToSTEndpoint(sSendBuf, sRecvBuf)
+Else
+    ' continue sending to the existing service
+    sSendBuf = ReplaceSpecialChars(sSendBuf)
+    Sending(sMsgCategory, sHostAdapterAssembly, sSendBuf, sRecvBuf)
+End If
+' end CNCB changes
+
+======================================
