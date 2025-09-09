@@ -1,1 +1,49 @@
+Private Sub SendToSTEndpoint(ByRef xml As String, ByRef response As String)
+    Const ROUTINE As String = "HostMsg.SendToSTEndpoint"
+    Const LogTraceKey As String = "HostMsgLogTrace"
 
+    Dim trace As New StringBuilder()
+    Dim endpointUrl As String = ConfigurationManager.AppSettings.Get("MessageConverterURL")
+
+    Try
+        ' setup trace logging
+        trace.Append(ConfigurationManager.AppSettings.Get(LogTraceKey))
+        If trace.Length = 0 Then trace.Append(Constants.Trace.None)
+
+        ' Force TLS 1.2 for .NET Framework 4.7
+        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12
+
+        ' ----------------------------------------------------------------
+        ' TEMPORARY TRANSCODE OVERRIDE FOR TESTING
+        ' (remove this block once environment stabilizes)
+        Try
+            Dim x As XDocument = XDocument.Parse(xml)
+            Dim tc = x.Descendants("TranCode").FirstOrDefault()
+            If tc IsNot Nothing Then
+                ' force to 1001 for testing; change to 1002 if needed
+                tc.Value = "1001"
+                xml = x.ToString(SaveOptions.DisableFormatting)
+            End If
+        Catch parseEx As Exception
+            ' if XML parsing fails, continue without override
+        End Try
+        ' ----------------------------------------------------------------
+
+        ' Send the request
+        Using client As New HttpClient()
+            client.Timeout = TimeSpan.FromSeconds(30)
+
+            Dim content As New StringContent(xml, Encoding.UTF8, "application/xml")
+            Dim resp As HttpResponseMessage = client.PostAsync(endpointUrl, content).Result
+            response = resp.Content.ReadAsStringAsync().Result
+
+            If Not resp.IsSuccessStatusCode Then
+                Throw New HttpRequestException($"[{ROUTINE}] Error {CInt(resp.StatusCode)}: {response}")
+            End If
+        End Using
+
+    Catch ex As Exception
+        RaiseEvent LogError("encore", ex.Message, ROUTINE)
+        Throw
+    End Try
+End Sub
