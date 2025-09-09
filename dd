@@ -1,25 +1,9 @@
+Public Function ShouldRouteToSTEndpoint(xml As String) As Boolean
+    Dim doc As XDocument
+    Dim tranCode As String
 
-Imports System.Net.Http
-Imports System.Text
-Imports System.Configuration
+    doc = XDocument.Parse(xml)
+    tranCode = doc.Descendants("TranCode").FirstOrDefault()?.Value.Trim()
 
-Module MessageConverterHelper
-
-    Public Function SendToSTEndpoint(requestXml As String) As String
-        Dim url As String = ConfigurationManager.AppSettings("MessageConverterURL")
-        Using client As New HttpClient()
-            client.Timeout = TimeSpan.FromSeconds(30)
-
-            Dim content As New StringContent(requestXml, Encoding.UTF8, "application/xml")
-            Dim response = client.PostAsync(url, content).Result
-            Dim respString As String = response.Content.ReadAsStringAsync().Result
-
-            If Not response.IsSuccessStatusCode Then
-                Throw New Exception($"Error {CInt(response.StatusCode)}: {respString}")
-            End If
-
-            Return respString
-        End Using
-    End Function
-
-End Module
+    Return stHostTranCodes.Contains(tranCode)
+End Function
