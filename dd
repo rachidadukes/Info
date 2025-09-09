@@ -1,9 +1,52 @@
-Public Function ShouldRouteToSTEndpoint(xml As String) As Boolean
-    Dim doc As XDocument
-    Dim tranCode As String
+Add the new method ShouldRouteToSTEndpoint(xml As String) As Boolean
 
-    doc = XDocument.Parse(xml)
-    tranCode = doc.Descendants("TranCode").FirstOrDefault()?.Value.Trim()
+This is brand new.
 
-    Return stHostTranCodes.Contains(tranCode)
-End Function
+It inspects the XML request (sSendBuf), pulls out the <TranCode>, and decides if the request should be routed to the new service.
+
+Update / complete the method SendToSTEndpoint(ByRef xml As String, ByRef response As String)
+
+This was stubbed out by your colleague under the CNCB – ST Migration region.
+
+Right now it only has a skeleton (trace, try/catch).
+
+You need to fill it in so it actually makes the HTTP POST call to the new MessageConverter endpoint.
+
+Use both methods in HostMsg.vb
+===============================================
+
+
+
+Private Sub SendToSTEndpoint(ByRef xml As String, ByRef response As String)
+    Const ROUTINE As String = "HostMsg.SendToSTEndpoint"
+    Dim trace As New StringBuilder()
+    Dim url As String = ConfigurationManager.AppSettings("MessageConverterURL")
+
+    Try
+        ' Logging setup
+        trace.Append(ConfigurationManager.AppSettings.Get(LogTraceKey))
+        If trace.Length = 0 Then
+            trace.Append(Constants.Trace.None)
+        End If
+
+        ' Ensure TLS
+        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 Or SecurityProtocolType.Tls13
+
+        ' Prepare HttpClient and request
+        Using client As New HttpClient()
+            client.Timeout = TimeSpan.FromSeconds(30)
+
+            Dim content As New StringContent(xml, Encoding.UTF8, "application/xml")
+            Dim resp = client.PostAsync(url, content).Result
+            response = resp.Content.ReadAsStringAsync().Result
+
+            If Not resp.IsSuccessStatusCode Then
+                Throw New HttpRequestException($"[{ROUTINE}] Error {CInt(resp.StatusCode)}: {response}")
+            End If
+        End Using
+
+    Catch ex As Exception
+        RaiseEvent LogError("encore", ex.Message, ROUTINE)
+        Throw
+    End Try
+End Sub
