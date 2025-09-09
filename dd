@@ -1,1 +1,25 @@
 
+Imports System.Net.Http
+Imports System.Text
+Imports System.Configuration
+
+Module MessageConverterHelper
+
+    Public Function SendToSTEndpoint(requestXml As String) As String
+        Dim url As String = ConfigurationManager.AppSettings("MessageConverterURL")
+        Using client As New HttpClient()
+            client.Timeout = TimeSpan.FromSeconds(30)
+
+            Dim content As New StringContent(requestXml, Encoding.UTF8, "application/xml")
+            Dim response = client.PostAsync(url, content).Result
+            Dim respString As String = response.Content.ReadAsStringAsync().Result
+
+            If Not response.IsSuccessStatusCode Then
+                Throw New Exception($"Error {CInt(response.StatusCode)}: {respString}")
+            End If
+
+            Return respString
+        End Using
+    End Function
+
+End Module
