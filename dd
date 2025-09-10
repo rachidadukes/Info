@@ -1,95 +1,18 @@
-using System.Xml.Linq; // if not already
-
-public class SearchMembers
+private static async Task<string> RouteRequestAsync(
+    string soapXml,
+    string apiUrl,
+    AppSettings settings)
 {
-    public static async Task SearchMembersByAccessNumber(
-        AccessAcctNumbersModel selectedAccessNumber,
-        AppSettings settings)
+    if (MessageRouter.ShouldRouteToST(soapXml))
     {
-        ResultWrapper<MemberSearchRespDTO>? response;
-        string apiUrl;
-        string envir;
-        string AccessNumber;
-        string SoapXMLRequest = "";
-        string originalXMLResponse = "";
-        Member selectedAccessNumByUser;
-        List<Member> membersFound;
-
-        try
-        {
-            envir = selectedAccessNumber.Environment;
-            AccessNumber = selectedAccessNumber.AccessNumber;
-            apiUrl = FindUrl(envir);
-
-            var memberSearchRepository = new MemberSearchRepository();
-            SoapXMLRequest = await GenerateByAccessRequest.GenerateSoapXMLrequest(envir, AccessNumber);
-
-            // --- ROUTING STARTS HERE ---
-            if (MessageRouter.ShouldRouteToST(SoapXMLRequest))
-            {
-                // New REST endpoint (ConvertMessage)
-                originalXMLResponse = await MessageRouter.SendToSTAsync(
-                    SoapXMLRequest,
-                    settings.MessageConverterUrl,
-                    settings.TimeoutSeconds,
-                    settings.ForceTranCode,
-                    settings.ForceTranCodeValue);
-            }
-            else
-            {
-                // Legacy member API (your existing path)
-                var responseObject = new MemberSearchXMLresponse();
-                originalXMLResponse = await responseObject.ReadXMLresponse(SoapXMLRequest, apiUrl);
-            }
-            // --- ROUTING ENDS HERE ---
-
-            // Keep your existing pipeline (clean + deserialize + map)
-            var responseObject2 = new MemberSearchXMLresponse();
-            var cleanXMLResponse = await responseObject2.GenerateCleanXMLresponse(originalXMLResponse);
-            await SaveAPIlogsToDb(apiUrl, SoapXMLRequest, originalXMLResponse, cleanXMLResponse);
-
-            var serializer = new XmlSerializer(typeof(SearchMemberRs));
-            using var stringReader = new StringReader(cleanXMLResponse);
-            var rootResponse = (SearchMemberRs?)serializer.Deserialize(stringReader);
-
-            if (rootResponse is not null)
-            {
-                var memberSearchSimplified = MemberEntityMapper.MapSearchMember(rootResponse);
-                response = new ResultWrapper<MemberSearchRespDTO>
-                {
-                    IsSuccess = true,
-                    Data = memberSearchSimplified ?? new MemberSearchRespDTO()
-                };
-            }
-            else
-            {
-                response = new ResultWrapper<MemberSearchRespDTO>
-                {
-                    IsSuccess = false,
-                    ErrorMessage = "Failed to deserialize XML response."
-                };
-            }
-
-            if (response?.Data != null && response.IsSuccess)
-            {
-                // ... your existing UI/console output and selection logic ...
-            }
-        }
-        catch (HttpRequestException ex)
-        {
-            response = new ResultWrapper<MemberSearchRespDTO>
-            {
-                IsSuccess = false,
-                ErrorMessage = $"HTTP Error: {ex.Message}"
-            };
-        }
-        catch (Exception ex)
-        {
-            response = new ResultWrapper<MemberSearchRespDTO>
-            {
-                IsSuccess = false,
-                ErrorMessage = $"Unexpected Error: {ex.Message}"
-            };
-        }
+        return await MessageRouter.SendToSTAsync(
+            soapXml,
+            settings.MessageConverterUrl,
+            settings.TimeoutSeconds,
+            settings.ForceTranCode,
+            settings.ForceTranCodeValue);
     }
+
+    var legacy = new MemberSearchXMLresponse();
+    return await legacy.ReadXMLresponse(soapXml, apiUrl);
 }
