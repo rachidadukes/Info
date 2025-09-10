@@ -1,2 +1,1 @@
-   // 🔑 Use CNCBchanges instead of directly calling XML/REST
-        originalXMLResponse = await CNCBchanges(SoapXMLRequest, apiUrl);
+
