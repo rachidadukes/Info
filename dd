@@ -1,13 +1,52 @@
 
+
+=================
+public class AppSettings
 {
-  "Endpoints": {
-    "MessageConverter": "https://swvdcdvencaej01.nfcu.net/EncoreCore/api/MessageConverter/ConvertMessage"
-  },
-  "Http": {
-    "TimeoutSeconds": 30
-  },
-  "Testing": {
-    "ForceTranCode": true,
-    "TranCode": "1001"
-  }
+    public string MessageConverterUrl { get; set; } = "";
+    public int TimeoutSeconds { get; set; } = 30;
+    public bool ForceTranCode { get; set; } = false;
+    public string ForceTranCodeValue { get; set; } = "1001";
+}
+===========================
+
+private static AppSettings LoadAppSettings()
+{
+    var config = new ConfigurationBuilder()
+        .SetBasePath(Directory.GetCurrentDirectory())
+        .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+        .Build();
+
+    return new AppSettings
+    {
+        MessageConverterUrl = config["Endpoints:MessageConverter"] ?? "",
+        TimeoutSeconds = int.TryParse(config["Http:TimeoutSeconds"], out var t) ? t : 30,
+        ForceTranCode = bool.TryParse(config["Testing:ForceTranCode"], out var f) && f,
+        ForceTranCodeValue = config["Testing:TranCode"] ?? "1001"
+    };
+}
+========================================
+
+static async Task Main(string[] args)
+{
+    // Load settings once
+    var settings = LoadAppSettings();
+
+    Console.WriteLine($"MessageConverterURL = {settings.MessageConverterUrl}");
+    Console.WriteLine($"TimeoutSeconds = {settings.TimeoutSeconds}");
+    Console.WriteLine($"ForceTranCode = {settings.ForceTranCode}, Value = {settings.ForceTranCodeValue}");
+
+    // Your existing logic
+    string selectedEnvironment = SelectEnvirenment();
+    var selectedAccessNumber = await GetAccessNumbers.SelectOneAccessNumber(selectedEnvironment);
+    await SearchMembers.SearchMembersByAccessNumber(selectedAccessNumber);
+
+    AppLogger.Summary.PrintSummary();
+
+    if (!System.Diagnostics.Debugger.IsAttached)
+    {
+        Console.WriteLine();
+        Console.Write("Press Enter to close...");
+        Console.ReadLine();
+    }
 }
