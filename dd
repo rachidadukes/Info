@@ -1,52 +1,76 @@
+using System.Net.Http;
+using System.Text;
+using System.Xml.Linq;
 
-
-=================
-public class AppSettings
+namespace MemberSearchConsoleApp
 {
-    public string MessageConverterUrl { get; set; } = "";
-    public int TimeoutSeconds { get; set; } = 30;
-    public bool ForceTranCode { get; set; } = false;
-    public string ForceTranCodeValue { get; set; } = "1001";
-}
-===========================
-
-private static AppSettings LoadAppSettings()
-{
-    var config = new ConfigurationBuilder()
-        .SetBasePath(Directory.GetCurrentDirectory())
-        .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-        .Build();
-
-    return new AppSettings
+    public static class MessageRouter
     {
-        MessageConverterUrl = config["Endpoints:MessageConverter"] ?? "",
-        TimeoutSeconds = int.TryParse(config["Http:TimeoutSeconds"], out var t) ? t : 30,
-        ForceTranCode = bool.TryParse(config["Testing:ForceTranCode"], out var f) && f,
-        ForceTranCodeValue = config["Testing:TranCode"] ?? "1001"
-    };
-}
-========================================
+        // List of TranCodes that should go to the new service
+        private static readonly HashSet<string> StTranCodes = new()
+        {
+            "1001", "1002" // expand this list as needed
+        };
 
-static async Task Main(string[] args)
-{
-    // Load settings once
-    var settings = LoadAppSettings();
+        /// <summary>
+        /// Decides whether this request should go to the ST endpoint.
+        /// </summary>
+        public static bool ShouldRouteToST(string xml)
+        {
+            try
+            {
+                var doc = XDocument.Parse(xml);
+                var tranCode = doc.Descendants("TranCode").FirstOrDefault()?.Value?.Trim();
+                return !string.IsNullOrEmpty(tranCode) && StTranCodes.Contains(tranCode);
+            }
+            catch
+            {
+                return false;
+            }
+        }
 
-    Console.WriteLine($"MessageConverterURL = {settings.MessageConverterUrl}");
-    Console.WriteLine($"TimeoutSeconds = {settings.TimeoutSeconds}");
-    Console.WriteLine($"ForceTranCode = {settings.ForceTranCode}, Value = {settings.ForceTranCodeValue}");
+        /// <summary>
+        /// Sends the XML to the ST endpoint and returns the response.
+        /// </summary>
+        public static async Task<string> SendToSTAsync(
+            string xml,
+            string endpointUrl,
+            int timeoutSeconds,
+            bool forceTranCode = false,
+            string forceValue = "1001",
+            CancellationToken ct = default)
+        {
+            // Temporary TranCode override (like your VB code block)
+            if (forceTranCode && !string.IsNullOrWhiteSpace(forceValue))
+            {
+                try
+                {
+                    var xdoc = XDocument.Parse(xml);
+                    var tc = xdoc.Descendants("TranCode").FirstOrDefault();
+                    if (tc != null)
+                    {
+                        tc.Value = forceValue;
+                        xml = xdoc.ToString(SaveOptions.DisableFormatting);
+                    }
+                }
+                catch
+                {
+                    // ignore if parsing fails
+                }
+            }
 
-    // Your existing logic
-    string selectedEnvironment = SelectEnvirenment();
-    var selectedAccessNumber = await GetAccessNumbers.SelectOneAccessNumber(selectedEnvironment);
-    await SearchMembers.SearchMembersByAccessNumber(selectedAccessNumber);
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(timeoutSeconds) };
+            using var content = new StringContent(xml, Encoding.UTF8, "application/xml");
 
-    AppLogger.Summary.PrintSummary();
+            var resp = await http.PostAsync(endpointUrl, content, ct);
+            var body = await resp.Content.ReadAsStringAsync(ct);
 
-    if (!System.Diagnostics.Debugger.IsAttached)
-    {
-        Console.WriteLine();
-        Console.Write("Press Enter to close...");
-        Console.ReadLine();
+            if (!resp.IsSuccessStatusCode)
+            {
+                throw new HttpRequestException($"[{resp.StatusCode}] {body}");
+            }
+
+            return body;
+        }
     }
 }
