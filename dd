@@ -1,76 +1,22 @@
-using System.Net.Http;
-using System.Text;
-using System.Xml.Linq;
+// Load appsettings.json
+var settings = LoadAppSettings();
 
-namespace MemberSearchConsoleApp
+// Build your SOAP request (you already have SoapXMLRequest variable)
+string originalXMLResponse;
+
+if (MessageRouter.ShouldRouteToST(SoapXMLRequest))
 {
-    public static class MessageRouter
-    {
-        // List of TranCodes that should go to the new service
-        private static readonly HashSet<string> StTranCodes = new()
-        {
-            "1001", "1002" // expand this list as needed
-        };
-
-        /// <summary>
-        /// Decides whether this request should go to the ST endpoint.
-        /// </summary>
-        public static bool ShouldRouteToST(string xml)
-        {
-            try
-            {
-                var doc = XDocument.Parse(xml);
-                var tranCode = doc.Descendants("TranCode").FirstOrDefault()?.Value?.Trim();
-                return !string.IsNullOrEmpty(tranCode) && StTranCodes.Contains(tranCode);
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        /// <summary>
-        /// Sends the XML to the ST endpoint and returns the response.
-        /// </summary>
-        public static async Task<string> SendToSTAsync(
-            string xml,
-            string endpointUrl,
-            int timeoutSeconds,
-            bool forceTranCode = false,
-            string forceValue = "1001",
-            CancellationToken ct = default)
-        {
-            // Temporary TranCode override (like your VB code block)
-            if (forceTranCode && !string.IsNullOrWhiteSpace(forceValue))
-            {
-                try
-                {
-                    var xdoc = XDocument.Parse(xml);
-                    var tc = xdoc.Descendants("TranCode").FirstOrDefault();
-                    if (tc != null)
-                    {
-                        tc.Value = forceValue;
-                        xml = xdoc.ToString(SaveOptions.DisableFormatting);
-                    }
-                }
-                catch
-                {
-                    // ignore if parsing fails
-                }
-            }
-
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(timeoutSeconds) };
-            using var content = new StringContent(xml, Encoding.UTF8, "application/xml");
-
-            var resp = await http.PostAsync(endpointUrl, content, ct);
-            var body = await resp.Content.ReadAsStringAsync(ct);
-
-            if (!resp.IsSuccessStatusCode)
-            {
-                throw new HttpRequestException($"[{resp.StatusCode}] {body}");
-            }
-
-            return body;
-        }
-    }
+    // Route to the new MessageConverter endpoint
+    originalXMLResponse = await MessageRouter.SendToSTAsync(
+        SoapXMLRequest,
+        settings.MessageConverterUrl,
+        settings.TimeoutSeconds,
+        settings.ForceTranCode,
+        settings.ForceTranCodeValue);
+}
+else
+{
+    // Route to the legacy member API
+    var responseObject = new MemberSearchXMLresponse();
+    originalXMLResponse = await responseObject.ReadXMLresponse(SoapXMLRequest, apiUrl);
 }
