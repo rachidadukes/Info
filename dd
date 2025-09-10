@@ -1,1 +1,17 @@
 
+var trace = new StringBuilder();
+string endpointUrl = ConfigurationManager.AppSettings["MessageConverterURL"];
+
+try
+{
+    trace.Append(ConfigurationManager.AppSettings[LogTraceKey]);
+    if (trace.Length == 0)
+    {
+        trace.Append(Constants.Trace.None);
+    }
+}
+catch
+{
+    // swallow just like VB's behavior, or log it
+}
+==============================
