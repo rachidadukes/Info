@@ -1,29 +1,24 @@
-using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
+using System.IO;
 
 namespace MemberSearchConsoleApp
 {
-    public static class RoutingHelper
+    public static class ConfigHelper
     {
-        public static async Task<string> RouteRequestAsync(
-            string soapXml,
-            string apiUrl,
-            AppSettings settings)
+        public static AppSettings LoadAppSettings()
         {
-            // Route decision
-            if (MessageRouter.ShouldRouteToST(soapXml))
-            {
-                // New REST API endpoint
-                return await MessageRouter.SendToSTAsync(
-                    soapXml,
-                    settings.MessageConverterUrl,
-                    settings.TimeoutSeconds,
-                    settings.ForceTranCode,
-                    settings.ForceTranCodeValue);
-            }
+            var config = new ConfigurationBuilder()
+                .SetBasePath(Directory.GetCurrentDirectory())
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .Build();
 
-            // Legacy path
-            var legacy = new MemberSearchXMLresponse();
-            return await legacy.ReadXMLresponse(soapXml, apiUrl);
+            return new AppSettings
+            {
+                MessageConverterUrl = config["Endpoints:MessageConverter"] ?? "",
+                TimeoutSeconds = int.TryParse(config["Http:TimeoutSeconds"], out var t) ? t : 30,
+                ForceTranCode = bool.TryParse(config["Testing:ForceTranCode"], out var f) && f,
+                ForceTranCodeValue = config["Testing:TranCode"] ?? "1001"
+            };
         }
     }
 }
