@@ -1,1 +1,13 @@
 
+{
+  "Endpoints": {
+    "MessageConverter": "https://swvdcdvencaej01.nfcu.net/EncoreCore/api/MessageConverter/ConvertMessage"
+  },
+  "Http": {
+    "TimeoutSeconds": 30
+  },
+  "Testing": {
+    "ForceTranCode": true,
+    "TranCode": "1001"
+  }
+}
