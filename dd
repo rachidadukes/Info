@@ -1,55 +1,95 @@
-using System.Net.Http;
-using System.Text;
-using System.Xml.Linq;
+using System.Xml.Linq; // if not already
 
-namespace MemberSearchConsoleApp
+public class SearchMembers
 {
-    public static class MessageRouter
+    public static async Task SearchMembersByAccessNumber(
+        AccessAcctNumbersModel selectedAccessNumber,
+        AppSettings settings)
     {
-        // Adjust this set when ST allows more TranCodes.
-        private static readonly HashSet<string> StTranCodes = new() { "1001", "1002" };
+        ResultWrapper<MemberSearchRespDTO>? response;
+        string apiUrl;
+        string envir;
+        string AccessNumber;
+        string SoapXMLRequest = "";
+        string originalXMLResponse = "";
+        Member selectedAccessNumByUser;
+        List<Member> membersFound;
 
-        public static bool ShouldRouteToST(string xml)
+        try
         {
-            try
+            envir = selectedAccessNumber.Environment;
+            AccessNumber = selectedAccessNumber.AccessNumber;
+            apiUrl = FindUrl(envir);
+
+            var memberSearchRepository = new MemberSearchRepository();
+            SoapXMLRequest = await GenerateByAccessRequest.GenerateSoapXMLrequest(envir, AccessNumber);
+
+            // --- ROUTING STARTS HERE ---
+            if (MessageRouter.ShouldRouteToST(SoapXMLRequest))
             {
-                var x = XDocument.Parse(xml);
-                var tran = x.Descendants("TranCode").FirstOrDefault()?.Value?.Trim();
-                return !string.IsNullOrEmpty(tran) && StTranCodes.Contains(tran);
+                // New REST endpoint (ConvertMessage)
+                originalXMLResponse = await MessageRouter.SendToSTAsync(
+                    SoapXMLRequest,
+                    settings.MessageConverterUrl,
+                    settings.TimeoutSeconds,
+                    settings.ForceTranCode,
+                    settings.ForceTranCodeValue);
             }
-            catch { return false; }
-        }
-
-        public static async Task<string> SendToSTAsync(
-            string xml,
-            string endpointUrl,
-            int timeoutSeconds,
-            bool forceTranCode = false,
-            string forceValue = "1001",
-            CancellationToken ct = default)
-        {
-            // TEMP override (mirrors your VB block). Delete when env stabilizes.
-            if (forceTranCode && !string.IsNullOrWhiteSpace(forceValue))
+            else
             {
-                try
+                // Legacy member API (your existing path)
+                var responseObject = new MemberSearchXMLresponse();
+                originalXMLResponse = await responseObject.ReadXMLresponse(SoapXMLRequest, apiUrl);
+            }
+            // --- ROUTING ENDS HERE ---
+
+            // Keep your existing pipeline (clean + deserialize + map)
+            var responseObject2 = new MemberSearchXMLresponse();
+            var cleanXMLResponse = await responseObject2.GenerateCleanXMLresponse(originalXMLResponse);
+            await SaveAPIlogsToDb(apiUrl, SoapXMLRequest, originalXMLResponse, cleanXMLResponse);
+
+            var serializer = new XmlSerializer(typeof(SearchMemberRs));
+            using var stringReader = new StringReader(cleanXMLResponse);
+            var rootResponse = (SearchMemberRs?)serializer.Deserialize(stringReader);
+
+            if (rootResponse is not null)
+            {
+                var memberSearchSimplified = MemberEntityMapper.MapSearchMember(rootResponse);
+                response = new ResultWrapper<MemberSearchRespDTO>
                 {
-                    var xdoc = XDocument.Parse(xml);
-                    var tc = xdoc.Descendants("TranCode").FirstOrDefault();
-                    if (tc != null)
-                    {
-                        tc.Value = forceValue.Trim();
-                        xml = xdoc.ToString(SaveOptions.DisableFormatting);
-                    }
-                }
-                catch { /* swallow – send original xml */ }
+                    IsSuccess = true,
+                    Data = memberSearchSimplified ?? new MemberSearchRespDTO()
+                };
+            }
+            else
+            {
+                response = new ResultWrapper<MemberSearchRespDTO>
+                {
+                    IsSuccess = false,
+                    ErrorMessage = "Failed to deserialize XML response."
+                };
             }
 
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(timeoutSeconds) };
-            using var content = new StringContent(xml, Encoding.UTF8, "application/xml");
-            using var resp = await http.PostAsync(endpointUrl, content, ct);
-            var body = await resp.Content.ReadAsStringAsync(ct);
-            resp.EnsureSuccessStatusCode();
-            return body;
+            if (response?.Data != null && response.IsSuccess)
+            {
+                // ... your existing UI/console output and selection logic ...
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            response = new ResultWrapper<MemberSearchRespDTO>
+            {
+                IsSuccess = false,
+                ErrorMessage = $"HTTP Error: {ex.Message}"
+            };
+        }
+        catch (Exception ex)
+        {
+            response = new ResultWrapper<MemberSearchRespDTO>
+            {
+                IsSuccess = false,
+                ErrorMessage = $"Unexpected Error: {ex.Message}"
+            };
         }
     }
 }
