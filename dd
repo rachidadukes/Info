@@ -1,18 +1,29 @@
-private static async Task<string> RouteRequestAsync(
-    string soapXml,
-    string apiUrl,
-    AppSettings settings)
-{
-    if (MessageRouter.ShouldRouteToST(soapXml))
-    {
-        return await MessageRouter.SendToSTAsync(
-            soapXml,
-            settings.MessageConverterUrl,
-            settings.TimeoutSeconds,
-            settings.ForceTranCode,
-            settings.ForceTranCodeValue);
-    }
+using System.Threading.Tasks;
 
-    var legacy = new MemberSearchXMLresponse();
-    return await legacy.ReadXMLresponse(soapXml, apiUrl);
+namespace MemberSearchConsoleApp
+{
+    public static class RoutingHelper
+    {
+        public static async Task<string> RouteRequestAsync(
+            string soapXml,
+            string apiUrl,
+            AppSettings settings)
+        {
+            // Route decision
+            if (MessageRouter.ShouldRouteToST(soapXml))
+            {
+                // New REST API endpoint
+                return await MessageRouter.SendToSTAsync(
+                    soapXml,
+                    settings.MessageConverterUrl,
+                    settings.TimeoutSeconds,
+                    settings.ForceTranCode,
+                    settings.ForceTranCodeValue);
+            }
+
+            // Legacy path
+            var legacy = new MemberSearchXMLresponse();
+            return await legacy.ReadXMLresponse(soapXml, apiUrl);
+        }
+    }
 }
