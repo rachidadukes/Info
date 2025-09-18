@@ -1,17 +1,78 @@
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
 
-var trace = new StringBuilder();
-string endpointUrl = ConfigurationManager.AppSettings["MessageConverterURL"];
-
-try
+namespace HostLogsWPFApp.Services
 {
-    trace.Append(ConfigurationManager.AppSettings[LogTraceKey]);
-    if (trace.Length == 0)
+    public class MemberProfileService
     {
-        trace.Append(Constants.Trace.None);
+        private readonly MemberProfileRepository _memberProfileRepository;
+
+        public MemberProfileService()
+        {
+            _memberProfileRepository = new MemberProfileRepository();
+        }
+
+        public async Task RetrieveMembersProfile(LogAccountsModel selectedAcctAccessNumber, Label lblAccountsInfo)
+        {
+            ResultWrapper<MemberProfileRespDTO>? memberProfile;
+            List<AcctProfileDTO> accounts;
+            string selectedAcct;
+            string acctProdDesc;
+            string balance;
+            string status;
+            string info;
+            string selectedAccessNum;
+            string envir;
+
+            try
+            {
+                selectedAccessNum = selectedAcctAccessNumber.AccessNumber;
+                selectedAcct     = selectedAcctAccessNumber.AccountNumber;
+                envir            = selectedAcctAccessNumber.Environment;
+
+                memberProfile = await _memberProfileRepository.GetMemberProfileAsync(envir, selectedAccessNum);
+
+                if (memberProfile?.Data != null && memberProfile.IsSuccess)
+                {
+                    accounts = memberProfile.Data.ProfileAccts ?? new List<AcctProfileDTO>();
+
+                    foreach (var acct in accounts)
+                    {
+                        if (acct.AccountNumber.Contains(selectedAcct) || selectedAcct.Contains(acct.AccountNumber))
+                        {
+                            acctProdDesc = acct.AcctProdDesc ?? "No Description Available";
+                            balance      = acct.AvBal.HasValue ? acct.AvBal.Value.ToString("C") : "N/A";
+                            status       = acct.AcctStat ?? "N/A";
+
+                            info = $"Account Number: {acct.AccountNumber}\n" +
+                                   $"Account Description: {acctProdDesc}\n" +
+                                   $"Available Balance: {balance}\n" +
+                                   $"Account Status: {status}";
+
+                            // Safe UI update
+                            lblAccountsInfo.Dispatcher.Invoke(() =>
+                            {
+                                lblAccountsInfo.Content = info;
+                            });
+
+                            MessageBox.Show(info, "Account Details", MessageBoxButton.OK, MessageBoxImage.Information);
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Failed to retrieve member profile: {memberProfile?.ErrorMessage}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in RetrieveMembersProfile: {ex.Message}");
+            }
+        }
     }
 }
-catch
-{
-    // swallow just like VB's behavior, or log it
-}
-==============================
+
