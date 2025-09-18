@@ -1,3 +1,1 @@
-INSERT INTO ProdDesc (AcctType, AcctProdCode, AcctProdDesc)
-SELECT DISTINCT AcctType, AcctProdCode, AcctProdDesc
-FROM AccountBalance;
+
