@@ -1,24 +1,3 @@
-using HostLogsWPFApp.Services;
-
-public partial class MainWindow : Window
-{
-    private readonly MemberProfileService _memberProfileService;
-
-    public MainWindow()
-    {
-        InitializeComponent();
-        _memberProfileService = new MemberProfileService();
-    }
-
-    private async void BtnRetrieve_Click(object sender, RoutedEventArgs e)
-    {
-        var logAccount = new LogAccountsModel
-        {
-            AccessNumber  = "123456",
-            AccountNumber = "987654",
-            Environment   = "UNIT"
-        };
-
-        await _memberProfileService.RetrieveMembersProfile(logAccount, lblAccountsInfo);
-    }
-}
+INSERT INTO ProdDesc (AcctType, AcctProdCode, AcctProdDesc)
+SELECT AcctType, AcctProdCode, AcctProdDesc
+FROM AccountBalance;
