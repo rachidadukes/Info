@@ -1,53 +1,175 @@
+using System;
+using System.Globalization;
+using System.IO;
+using System.Xml;
+using System.Xml.Serialization;
 
+#region Models
 
-class Program
+[XmlRoot("CreditAddRq")]
+public class CreditAddRq
 {
-    static void Main()
-    {
-        // Pass in your test values
-        var req = CreditAddRqFactory.Create(
-            tranCode: "1001",
-            acctId: "000068000004269605",
-            acctType: "SC",
-            amount: 15.00m
-        );
+    [XmlElement("MsgRqHdr", Order = 1)]
+    public MsgRqHdr MsgRqHdr { get; set; } = new();
 
-        string xml = XmlUtil.ToXml(req);
-        Console.WriteLine(xml);
+    [XmlElement("CreditInfo", Order = 2)]
+    public CreditInfo CreditInfo { get; set; } = new();
+}
+
+public class MsgRqHdr
+{
+    [XmlElement(Order = 1)]
+    public string RqUID { get; set; } = Guid.NewGuid().ToString();
+
+    [XmlElement(Order = 2)]
+    public string EnvironmentName { get; set; } = "NFCU";
+
+    [XmlElement(Order = 3)]
+    public string TranCode { get; set; } = "1001";
+
+    [XmlElement(Order = 4)]
+    public string BranchId { get; set; } = "D3";
+
+    [XmlElement(Order = 5)]
+    public string PCName { get; set; } = "LTCC483A3490BE4"; // from your screenshot
+
+    [XmlElement(Order = 6)]
+    public string TranCodeQual { get; set; } = "0000";
+
+    [XmlElement(Order = 7)]
+    public string CashBoxId { get; set; } = "1";
+
+    [XmlElement(Order = 8)]
+    public string EmployeeId { get; set; } = "15308";
+
+    // Keep dates/times as strings to preserve exact formatting
+    [XmlElement(Order = 9)]
+    public string PostingDt { get; set; } = "2022-02-18";
+
+    [XmlElement(Order = 10)]
+    public string CalendarDt { get; set; } = "2025-09-23";
+
+    [XmlElement(Order = 11)]
+    public string TranTime { get; set; } = "14:32:57";
+
+    [XmlElement(Order = 12)]
+    public string TranSeqNum { get; set; } = "745";
+
+    [XmlElement(Order = 13)]
+    public string ForwardTranFlag { get; set; } = "0";
+
+    [XmlElement(Order = 14)]
+    public string POAInd { get; set; } = "0";
+
+    [XmlElement(Order = 15)]
+    public string MultiTranFlag { get; set; } = "1";
+
+    [XmlElement("ConductorId", Order = 16)]
+    public ConductorId ConductorId { get; set; } = new();
+}
+
+public class ConductorId
+{
+    [XmlElement(Order = 1)]
+    public string IdType { get; set; } = "C";
+
+    [XmlElement(Order = 2)]
+    public string IdNum { get; set; } = "123456";
+}
+
+public class CreditInfo
+{
+    [XmlElement("AcctKeys", Order = 1)]
+    public AcctKeys AcctKeys { get; set; } = new();
+
+    [XmlElement("TransAmt", Order = 2)]
+    public Amount TransAmt { get; set; } = new(15.00m);
+
+    [XmlElement("CashInAmt", Order = 3)]
+    public Amount CashInAmt { get; set; } = new(15.00m);
+
+    [XmlElement("CashOutAmt", Order = 4)]
+    public Amount CashOutAmt { get; set; } = new(0.00m);
+
+    [XmlElement("ScannedChkAmt", Order = 5)]
+    public Amount ScannedChkAmt { get; set; } = new(0.00m);
+
+    [XmlElement("UnscannedChkAmt", Order = 6)]
+    public Amount UnscannedChkAmt { get; set; } = new(0.00m);
+}
+
+public class AcctKeys
+{
+    [XmlElement(Order = 1)]
+    public string AcctId { get; set; } = "000068000004269605";
+
+    [XmlElement(Order = 2)]
+    public string AcctType { get; set; } = "SC";
+}
+
+/// <summary>
+/// Produces:
+///   <TransAmt>
+///     <Amt>15.00</Amt>
+///   </TransAmt>
+/// </summary>
+public class Amount
+{
+    public Amount() { }
+    public Amount(decimal value) => Amt = value;
+
+    [XmlElement("Amt", Order = 1)]
+    public decimal Amt { get; set; }
+}
+
+#endregion
+
+public static class XmlUtil
+{
+    /// <summary>
+    /// Serialize any object to an XML string with no declaration, no namespaces, and pretty indentation.
+    /// </summary>
+    public static string ToXml<T>(T value)
+    {
+        var ns = new XmlSerializerNamespaces();
+        ns.Add("", ""); // remove xmlns
+
+        var serializer = new XmlSerializer(typeof(T));
+        var settings = new XmlWriterSettings
+        {
+            OmitXmlDeclaration = true,
+            Indent = true,
+            IndentChars = "  "
+        };
+
+        using var sw = new StringWriter(CultureInfo.InvariantCulture);
+        using (var xw = XmlWriter.Create(sw, settings))
+        {
+            serializer.Serialize(xw, value, ns);
+        }
+        return sw.ToString();
     }
 }
 
-
-
-
-=========================
-
-public static class CreditAddRqFactory
+public class Program
 {
-    /// <summary>
-    /// Creates a CreditAddRq object with key test values.
-    /// </summary>
-    public static CreditAddRq Create(
-        string tranCode,
-        string acctId,
-        string acctType,
-        decimal amount)
+    public static void Main()
     {
-        return new CreditAddRq
+        var req = new CreditAddRq
         {
             MsgRqHdr = new MsgRqHdr
             {
-                RqUID = Guid.NewGuid().ToString(),
+                RqUID = "e8dae74c-cf5a-40e8-88d0-380b20f95a1d",
                 EnvironmentName = "NFCU",
-                TranCode = tranCode,
+                TranCode = "1001",
                 BranchId = "D3",
                 PCName = "LTCC483A3490BE4",
                 TranCodeQual = "0000",
                 CashBoxId = "1",
                 EmployeeId = "15308",
                 PostingDt = "2022-02-18",
-                CalendarDt = DateTime.Now.ToString("yyyy-MM-dd"),
-                TranTime = DateTime.Now.ToString("HH:mm:ss"),
+                CalendarDt = "2025-09-23",
+                TranTime = "14:32:57",
                 TranSeqNum = "745",
                 ForwardTranFlag = "0",
                 POAInd = "0",
@@ -62,16 +184,18 @@ public static class CreditAddRqFactory
             {
                 AcctKeys = new AcctKeys
                 {
-                    AcctId = acctId,
-                    AcctType = acctType
+                    AcctId = "000068000004269605",
+                    AcctType = "SC"
                 },
-                TransAmt = new Amount(amount),
-                CashInAmt = new Amount(amount),   // always equal to TransAmt
+                TransAmt = new Amount(15.00m),
+                CashInAmt = new Amount(15.00m),
                 CashOutAmt = new Amount(0.00m),
                 ScannedChkAmt = new Amount(0.00m),
                 UnscannedChkAmt = new Amount(0.00m)
             }
         };
+
+        string xml = XmlUtil.ToXml(req);
+        Console.WriteLine(xml);
     }
 }
-
