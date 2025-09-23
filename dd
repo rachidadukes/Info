@@ -1,1 +1,77 @@
 
+
+class Program
+{
+    static void Main()
+    {
+        // Pass in your test values
+        var req = CreditAddRqFactory.Create(
+            tranCode: "1001",
+            acctId: "000068000004269605",
+            acctType: "SC",
+            amount: 15.00m
+        );
+
+        string xml = XmlUtil.ToXml(req);
+        Console.WriteLine(xml);
+    }
+}
+
+
+
+
+=========================
+
+public static class CreditAddRqFactory
+{
+    /// <summary>
+    /// Creates a CreditAddRq object with key test values.
+    /// </summary>
+    public static CreditAddRq Create(
+        string tranCode,
+        string acctId,
+        string acctType,
+        decimal amount)
+    {
+        return new CreditAddRq
+        {
+            MsgRqHdr = new MsgRqHdr
+            {
+                RqUID = Guid.NewGuid().ToString(),
+                EnvironmentName = "NFCU",
+                TranCode = tranCode,
+                BranchId = "D3",
+                PCName = "LTCC483A3490BE4",
+                TranCodeQual = "0000",
+                CashBoxId = "1",
+                EmployeeId = "15308",
+                PostingDt = "2022-02-18",
+                CalendarDt = DateTime.Now.ToString("yyyy-MM-dd"),
+                TranTime = DateTime.Now.ToString("HH:mm:ss"),
+                TranSeqNum = "745",
+                ForwardTranFlag = "0",
+                POAInd = "0",
+                MultiTranFlag = "1",
+                ConductorId = new ConductorId
+                {
+                    IdType = "C",
+                    IdNum = "123456"
+                }
+            },
+            CreditInfo = new CreditInfo
+            {
+                AcctKeys = new AcctKeys
+                {
+                    AcctId = acctId,
+                    AcctType = acctType
+                },
+                TransAmt = new Amount(amount),
+                CashInAmt = new Amount(amount),   // always equal to TransAmt
+                CashOutAmt = new Amount(0.00m),
+                ScannedChkAmt = new Amount(0.00m),
+                UnscannedChkAmt = new Amount(0.00m)
+            }
+        };
+    }
+}
+
