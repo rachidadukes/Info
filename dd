@@ -1,1 +1,29 @@
+I am calling client.PostAsync(...).Result and ReadAsStringAsync().Result.
+this blocks the thread, which can lead to deadlocks or poor scalability.
+it is better using Await with Async methods instead of forcing a synchronous result.
 
+example (This keeps the code non-blocking and avoids issues with thread starvation in production.):
+Dim resp As HttpResponseMessage = Await client.PostAsync(endpointurl, content)
+Dim response As String = Await resp.Content.ReadAsStringAsync()
+
+If Not resp.IsSuccessStatusCode Then
+    Throw New HttpRequestException($"[{ROUTINE}] Error {CInt(resp.StatusCode)}: {response}")
+End If
+
+=======================================
+Replace your .Result calls with a single Task.Run block:
+========================================
+
+Using content As New StringContent(xml, Encoding.UTF8, "application/xml")
+    Dim body As String = Task.Run(Async Function()
+                                      Dim resp = Await http.PostAsync(endpointUrl, content).ConfigureAwait(False)
+                                      Dim txt  = Await resp.Content.ReadAsStringAsync().ConfigureAwait(False)
+                                      If Not resp.IsSuccessStatusCode Then
+                                          Throw New HttpRequestException($"[{ROUTINE}] Error {CInt(resp.StatusCode)}: {txt}")
+                                      End If
+                                      Return txt
+                                  End Function).GetAwaiter().GetResult()
+
+    response = body
+End Using
+=========================
