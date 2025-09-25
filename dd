@@ -1,1 +1,15 @@
+Using content As New StringContent(xml, Encoding.UTF8, "application/xml")
+    Dim body As String = Task.Run(Async Function()
+                                      Dim resp As HttpResponseMessage = Await http.PostAsync(endpointurl, content).ConfigureAwait(False)
+                                      Dim txt As String = Await resp.Content.ReadAsStringAsync().ConfigureAwait(False)
+
+                                      If Not resp.IsSuccessStatusCode Then
+                                          Throw New HttpRequestException($"[{ROUTINE}] Error {CInt(resp.StatusCode)}: {txt}")
+                                      End If
+
+                                      Return txt
+                                  End Function).GetAwaiter().GetResult()
+
+    response = body
+End Using
 
