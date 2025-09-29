@@ -1,43 +1,4 @@
+SAMPLE
 
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-  <soap:Body>
-    <deposit xmlns="http://schemas.navyfederal.org/2010/04/NFBranchExService">
-      <oRq>
-        <CreditAddRq>
-          <MsgRqHdr xmlns="http://schemas.navyfederal.org/2010/04/NFBranchExService">
-            <RqUID>373c9780-9673-4055-9b9d-1764d2e648ea</RqUID>
-            <EnvironmentName>NFCU</EnvironmentName>
-            <TranCode>4000</TranCode>
-            <BranchId>D3</BranchId>
-            <PCName>LTC0483A490BE4</PCName>
-            <TranCodeQual>00000</TranCodeQual>
-            <CashBoxId>1</CashBoxId>
-            <EmployeeId>15308</EmployeeId>
-            <PostingDt>2022-02-18</PostingDt>
-            <CalendarDt>2025-09-26</CalendarDt>
-            <TranTime>20:57:36</TranTime>
-            <TranSeqNum>756</TranSeqNum>
-            <ForwardTranFlag>0</ForwardTranFlag>
-            <POAInd>0</POAInd>
-            <MultiTranFlag>1</MultiTranFlag>
-            <ConductorId>
-              <IdType>C</IdType>
-              <IdNum>123456</IdNum>
-            </ConductorId>
-          </MsgRqHdr>
 
-          <!-- NOTE: using PmtAddRq instead of CreditInfo -->
-          <PmtAddRq xmlns="http://schemas.navyfederal.org/2010/04/NFBranchExService">
-            <AcctKeys>
-              <AcctId>0000068000004269605</AcctId>
-              <AcctType>SC</AcctType>
-            </AcctKeys>
-            <TransAmt><Amt>7.00</Amt></TransAmt>
-            <CashInAmt><Amt>7.00</Amt></CashInAmt>
-            <CashOutAmt><Amt>0.00</Amt></CashOutAmt>
-          </PmtAddRq>
-        </CreditAddRq>
-      </oRq>
-    </deposit>
-  </soap:Body>
-</soap:Envelope>
+
