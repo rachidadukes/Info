@@ -1,4 +1,128 @@
 SAMPLE
 
+===========================
+
+
+
+
+
+        private void SendToConverterEndpoint(ref string xml, ref string response)
+        {
+            var trace = new StringBuilder();
+            // read from HostSettings instead of ConfigurationManager.AppSettings
+            var settings = HostRoutingConfig.GetHostSettings();
+            string? endpointUrl;
+            string? traceCfg;
+
+            try
+            {
+                endpointUrl = settings["MessageConverterURL"];
+                traceCfg = settings["HostMsgLogTrace"];
+
+                if (!string.IsNullOrEmpty(traceCfg))
+                    trace.Append(traceCfg);
+
+                if (trace.Length == 0)
+                    trace.Append(Constants.Trace.None);
+
+                // use endpointUrl as before
+                if (string.IsNullOrEmpty(endpointUrl))
+                    throw new InvalidOperationException("MessageConverterURL not configured in appsettings.json.");
+
+                ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+
+                // ------------------------------------------------------------
+                // TEMPORARY TRANSCODE OVERRIDE FOR TESTING
+                // (remove this block once the environment stabilizes)
+               
+                    var x = XDocument.Parse(xml);
+                    var tc = x.Descendants("TranCode").FirstOrDefault();
+                    if (tc != null)
+                    {
+                        // force to 1001 for testing; change to 1002 if needed
+                        tc.Value = "1001";
+                        xml = x.ToString(SaveOptions.DisableFormatting);
+                    }
+                // ------------------------------------------------------------
+                // Modern TLS 1.2 enforcement
+                var handler = new SocketsHttpHandler
+                {
+                    SslOptions = new SslClientAuthenticationOptions
+                    {
+                        EnabledSslProtocols = SslProtocols.Tls12
+                    }
+                };
+
+                using var client = new HttpClient(handler)
+                {
+                    Timeout = TimeSpan.FromSeconds(30)
+                };
+
+                using var content = new StringContent(xml, Encoding.UTF8, "application/xml");
+
+                var resp = client.PostAsync(endpointUrl, content).GetAwaiter().GetResult();
+                response = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+
+                if (!resp.IsSuccessStatusCode)
+                {
+                    throw new HttpRequestException(
+                        $"[SendToConverterEndpoint] Error {(int)resp.StatusCode}: {response}");
+                }
+            }
+            catch (HttpRequestException httpEx)
+            {
+                // HTTP protocol-level errors
+                response = $"HTTP error contacting endpoint: {httpEx.Message}";
+                if (httpEx.InnerException != null)
+                {
+                    response += Environment.NewLine + $"Inner: {httpEx.InnerException.Message}";
+                }
+                // TODO: log with your logger
+                Console.Error.WriteLine(response);
+                throw; // rethrow to propagate if needed
+            }
+            catch (AuthenticationException authEx)
+            {
+                // SSL/TLS handshake issues
+                response = $"SSL/TLS authentication failed: {authEx.Message}";
+                if (authEx.InnerException != null)
+                {
+                    response += Environment.NewLine + $"Inner: {authEx.InnerException.Message}";
+                }
+                // TODO: log with your logger
+                Console.Error.WriteLine(response);
+                throw;
+            }
+            catch (TaskCanceledException tcex)
+            {
+                // Timeout scenario
+                response = "The request timed out while waiting for a response from the server.";
+                // TODO: log with your logger
+                Console.Error.WriteLine(response);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // General fallback for all other exceptions
+                var sb = new StringBuilder();
+                sb.AppendLine("Unexpected error in SendToConverterEndpoint:");
+                sb.AppendLine($"Message: {ex.Message}");
+                sb.AppendLine($"Type: {ex.GetType()}");
+                sb.AppendLine($"StackTrace: {ex.StackTrace}");
+
+                if (ex.InnerException != null)
+                {
+                    sb.AppendLine("--- Inner Exception ---");
+                    sb.AppendLine($"Message: {ex.InnerException.Message}");
+                    sb.AppendLine($"Type: {ex.InnerException.GetType()}");
+                    sb.AppendLine($"StackTrace: {ex.InnerException.StackTrace}");
+                }
+
+                response = sb.ToString();               
+                Console.Error.WriteLine(response);
+                throw; // rethrow if you want the caller to handle
+            }
+        }
+      
 
 
