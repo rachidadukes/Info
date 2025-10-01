@@ -3,3 +3,45 @@ SAMPLE
 ===========================
 
 
+<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope 
+    xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" 
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <soap:Body>
+    <CreditAddRq xmlns="http://schemas.navyfederal.org/2010/04/NFBranchExService">
+      <MsgRqHdr>
+        <RqUID>373c9780-9673-4055-9b9d-176d42e648ea</RqUID>
+        <EnvironmentName>NFCU</EnvironmentName>
+        <TranCode>40000</TranCode>
+        <BranchId>D3</BranchId>
+        <PCName>LTC0483AI490BE4</PCName>
+        ...
+      </MsgRqHdr>
+      <CreditInfo>
+        <AcctKeys>
+          <AcctId>00000680000004269605</AcctId>
+          <AcctType>SC</AcctType>
+        </AcctKeys>
+        <TransAmt><Amt>7.00</Amt></TransAmt>
+        <CashInAmt><Amt>7.00</Amt></CashInAmt>
+        ...
+      </CreditInfo>
+    </CreditAddRq>
+  </soap:Body>
+</soap:Envelope>
+
+======================================
+
+using var client = new HttpClient();
+var request = new HttpRequestMessage(HttpMethod.Post, "https://yourhost/NFBranchExService.asmx");
+request.Content = new StringContent(BuildLegacyRequest(), Encoding.UTF8, "text/xml");
+
+// must match the WSDL exactly
+request.Headers.Add("SOAPAction", "http://schemas.navyfederal.org/2010/04/NFBranchExService/deposit");
+
+var response = await client.SendAsync(request);
+string responseXml = await response.Content.ReadAsStringAsync();
+
+
+
