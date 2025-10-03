@@ -2,4 +2,60 @@ SAMPLE
 
 ===========================
 
+private async Task<string> SendAndReceive(string sSendMessage)
+{
+    string sRecvMessage = string.Empty;
+
+    try
+    {
+        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+
+        // Load endpoint from appsettings
+        var settings = HostRoutingConfig.GetHostSettings();
+        string endpointUrl = settings["HostURL"];
+
+        // Deserialize request XML -> CreditAddRq object
+        CreditAddRq oRq;
+        var reqSerializer = new XmlSerializer(typeof(CreditAddRq));
+        using (var txtReader = new StringReader(EnsureNamespaces(sSendMessage)))
+        using (var xmlReader = XmlReader.Create(txtReader))
+        {
+            oRq = (CreditAddRq)reqSerializer.Deserialize(xmlReader);
+        }
+
+        // Build binding & endpoint
+        var binding = new BasicHttpBinding(BasicHttpSecurityMode.Transport)
+        {
+            MaxReceivedMessageSize = 1024 * 1024
+        };
+        var address = new EndpointAddress(endpointUrl);
+
+        // Call the WCF proxy
+        using (var client = new FinancialPostingWsClient(binding, address))
+        {
+            var responseMsg = await client.depositAsync(oRq);
+
+            // Serialize the response back to XML string
+            var respSerializer = new XmlSerializer(typeof(DepositResponseMessage));
+            using (var sw = new StringWriter())
+            {
+                respSerializer.Serialize(sw, responseMsg);
+                sRecvMessage = sw.ToString();
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        // Log or inspect error
+        Console.WriteLine($"[ERROR] SendAndReceive failed: {ex.Message}");
+        Console.WriteLine(ex.StackTrace);
+
+        // Optionally return a "safe" message instead of crashing
+        sRecvMessage = $"<Error>{ex.Message}</Error>";
+    }
+
+    return sRecvMessage;
+}
+
+
 
