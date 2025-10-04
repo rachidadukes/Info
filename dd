@@ -1,4 +1,27 @@
 SAMPLE
+============================
+
+StringReader txtReader = null;
+XmlReader xmlReader = null;
+
+try
+{
+    // Create readers
+    txtReader = new StringReader(EnsureNamespaces(sSendMessage));
+    xmlReader = XmlReader.Create(txtReader);
+
+    // Deserialize XML into object
+    oRq = (CreditAddRq)reqSerializer.Deserialize(xmlReader);
+}
+finally
+{
+    // Explicitly dispose of readers to release resources
+    if (xmlReader != null)
+        xmlReader.Dispose();
+
+    if (txtReader != null)
+        txtReader.Dispose();
+}
 
 ===========================
 
