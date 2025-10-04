@@ -1,7 +1,4 @@
 SAMPLE
 ============================
 
- var binding = new BasicHttpBinding(BasicHttpSecurityMode.Transport);
- binding.MaxReceivedMessageSize = 1024 * 1024;
- binding.Security.Mode = BasicHttpSecurityMode.Transport;
- binding.Security.Transport.ClientCredentialType = HttpClientCredentialType.None;
+ggggggggggggggggggggggg
