@@ -1,4 +1,124 @@
 SAMPLE
 ============================
 
-ggggggggggggggggggggggg
+private async Task<string> SendAndReceive(string sSendMessage)
+{
+    string sRecvMessage = string.Empty;
+
+    StringReader txtReader = null;
+    XmlReader xmlReader = null;
+    FinancialPostingWsClient client = null;
+
+    try
+    {
+        // TLS quirks
+        System.Net.ServicePointManager.Expect100Continue = false;
+        System.Net.ServicePointManager.SecurityProtocol = System.Net.SecurityProtocolType.Tls12;
+
+        // Load endpoint
+        var settings = HostRoutingConfig.GetHostSettings();
+        var endpointUrl = settings["HostURL"];
+
+        // --- 1) Deserialize request XML -> CreditAddRq
+        var reqSerializer = new XmlSerializer(typeof(CreditAddRq));
+        txtReader = new StringReader(EnsureNamespaces(sSendMessage));
+        xmlReader = XmlReader.Create(txtReader);
+        var oRq = (CreditAddRq)reqSerializer.Deserialize(xmlReader);
+
+        // --- 2) Build binding & endpoint
+        var binding = new BasicHttpBinding(BasicHttpSecurityMode.Transport);
+        binding.MaxReceivedMessageSize = 1024 * 1024;
+        binding.ReaderQuotas = new System.Xml.XmlDictionaryReaderQuotas
+        {
+            MaxStringContentLength = 1024 * 1024,
+            MaxArrayLength = 1024 * 1024
+        };
+        binding.OpenTimeout = TimeSpan.FromSeconds(30);
+        binding.CloseTimeout = TimeSpan.FromSeconds(30);
+        binding.SendTimeout  = TimeSpan.FromSeconds(60);
+        binding.ReceiveTimeout = TimeSpan.FromSeconds(60);
+
+        // If the IIS site uses Windows/NTLM like many intranet ASMX services:
+        binding.Security.Mode = BasicHttpSecurityMode.Transport;
+        binding.Security.Transport.ClientCredentialType = HttpClientCredentialType.Windows;
+
+        var address = new EndpointAddress(endpointUrl);
+        client = new FinancialPostingWsClient(binding, address);
+        // (Windows auth uses current process identity by default)
+
+        // --- 3) Call the service using the *wrapper* type
+        var request = new DepositRequestMessage { CreditAddRq = oRq };
+        var responseMsg = await client.depositAsync(request);   // returns DepositResponseMessage
+
+        // --- 4) Serialize response wrapper back to XML (or pick inner payload)
+        var respSerializer = new XmlSerializer(typeof(DepositResponseMessage));
+        using (var sw = new StringWriter())
+        {
+            respSerializer.Serialize(sw, responseMsg);
+            sRecvMessage = sw.ToString();
+        }
+
+        return sRecvMessage;
+    }
+    catch (FaultException fe)
+    {
+        // SOAP Fault from server
+        var fault = fe.CreateMessageFault();
+        var code = fe.Code?.ToString() ?? "";
+        var reason = fe.Reason?.ToString() ?? "";
+
+        string detailText = null;
+        if (fault.HasDetail)
+        {
+            try
+            {
+                // You can try to read detail into a string if the server sends one
+                using var sw = new StringWriter();
+                using var xw = XmlWriter.Create(sw);
+                fault.WriteTo(new System.Xml.XmlDictionaryWriter(xw));
+                xw.Flush();
+                detailText = sw.ToString();
+            }
+            catch { /* detail not stringifiable */ }
+        }
+
+        Console.WriteLine($"[SOAP FAULT] Code={code} Reason={reason}");
+        if (!string.IsNullOrEmpty(detailText))
+            Console.WriteLine(detailText);
+
+        return $"<Error>SOAP Fault: {SecurityElement.Escape(reason)}</Error>";
+    }
+    catch (TimeoutException tex)
+    {
+        Console.WriteLine("[TIMEOUT] " + tex);
+        return $"<Error>Timeout contacting service.</Error>";
+    }
+    catch (CommunicationException cex)
+    {
+        Console.WriteLine("[COMM] " + cex);
+        return $"<Error>Communication error contacting service.</Error>";
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[ERROR] SendAndReceive failed: {ex.Message}");
+        Console.WriteLine(ex.StackTrace);
+        return $"<Error>{SecurityElement.Escape(ex.Message)}</Error>";
+    }
+    finally
+    {
+        xmlReader?.Dispose();
+        txtReader?.Dispose();
+
+        // Close client gracefully if created
+        if (client != null)
+        {
+            try
+            {
+                if (client.State == CommunicationState.Opened)
+                    await client.CloseAsync();
+            }
+            catch { client.Abort(); }
+        }
+    }
+}
+
