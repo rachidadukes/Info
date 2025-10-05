@@ -1,2 +1,128 @@
-SAMPLE
-============================
+// needed usings
+using System;
+using System.IO;
+using System.Net;
+using System.Security;
+using System.ServiceModel;
+using System.ServiceModel.Channels;
+using System.Xml;
+using System.Xml.Serialization;
+// using NFCU;  // <- whatever namespace your Connected Service generated
+
+public async Task<string> Sending(string sMsgCategory, string sHostAdapterAssembly, string sSendMsg)
+{
+    return await SendAndReceive(sSendMsg);
+}
+
+private async Task<string> SendAndReceive(string sSendMessage)
+{
+    string sRecvMessage = string.Empty;
+
+    CreditAddRq oRq;
+    StringReader txtReader = null;
+    XmlReader xmlReader = null;
+    FinancialPostingWsClient client = null;
+
+    try
+    {
+        // TLS
+        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+
+        // Endpoint from your config helper
+        var settings = HostRoutingConfig.GetHostSettings();
+        string endpointUrl = settings["HostURL"];
+
+        // 1) XML -> CreditAddRq
+        var reqSerializer = new XmlSerializer(typeof(CreditAddRq));
+        txtReader = new StringReader(EnsureNamespaces(sSendMessage));
+        xmlReader = XmlReader.Create(txtReader);
+        oRq = (CreditAddRq)reqSerializer.Deserialize(xmlReader);
+
+        // 2) WCF binding + address
+        var binding = new BasicHttpBinding(BasicHttpSecurityMode.Transport);
+        binding.MaxReceivedMessageSize = 1024 * 1024;
+        binding.Security.Mode = BasicHttpSecurityMode.Transport;
+        binding.Security.Transport.ClientCredentialType = HttpClientCredentialType.None;
+        binding.OpenTimeout = TimeSpan.FromSeconds(30);
+        binding.SendTimeout = TimeSpan.FromSeconds(60);
+        binding.ReceiveTimeout = TimeSpan.FromSeconds(60);
+
+        var address = new EndpointAddress(endpointUrl);
+
+        // 3) Client and async call (use the CreditAddRq overload)
+        client = new FinancialPostingWsClient(binding, address);
+        var responseMsg = await client.depositAsync(oRq);
+
+        // 4) Response object -> XML
+        var respSerializer = new XmlSerializer(typeof(DepositResponseMessage));
+        using (var sw = new StringWriter())
+        {
+            respSerializer.Serialize(sw, responseMsg);
+            sRecvMessage = sw.ToString();
+        }
+
+        return sRecvMessage;
+    }
+    catch (FaultException fe)                   // SOAP faults from service
+    {
+        var fault = fe.CreateMessageFault();
+        var reason = fe.Reason?.ToString() ?? "Service fault";
+
+        string detailText = null;
+        if (fault?.HasDetail == true)
+        {
+            try { detailText = fault.GetDetail<string>(); } catch { /* detail not a string */ }
+        }
+
+        var msg = string.IsNullOrWhiteSpace(detailText) ? reason : detailText;
+        Console.WriteLine($"[SOAP FAULT] {msg}");
+        return $"<Error>{SecurityElement.Escape(msg)}</Error>";
+    }
+    catch (TimeoutException tex)
+    {
+        Console.WriteLine($"[TIMEOUT] {tex}");
+        return "<Error>Timeout contacting service.</Error>";
+    }
+    catch (CommunicationException cex)
+    {
+        Console.WriteLine($"[COMM] {cex}");
+        return "<Error>Communication error contacting service.</Error>";
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[ERROR] SendAndReceive failed: {ex.Message}");
+        Console.WriteLine(ex.StackTrace);
+        return $"<Error>{SecurityElement.Escape(ex.Message)}</Error>";
+    }
+    finally
+    {
+        // dispose readers explicitly (since we're not using 'using')
+        try { xmlReader?.Dispose(); } catch { }
+        try { txtReader?.Dispose(); } catch { }
+
+        // close/abort client safely
+        if (client != null)
+        {
+            try
+            {
+                if (client.State == CommunicationState.Opened)
+                    await client.CloseAsync();
+                else
+                    client.Abort();
+            }
+            catch
+            {
+                client.Abort();
+            }
+        }
+    }
+}
+
+// If you don't already have this helper, include it:
+private static string EnsureNamespaces(string xml)
+{
+    if (string.IsNullOrEmpty(xml)) return xml;
+    xml = xml.Replace("<MsgRqHdr>", "<MsgRqHdr xmlns=\"http://schemas.navyfederal.org/2010/04/NFBranchExService\">");
+    xml = xml.Replace("<CreditInfo>", "<CreditInfo xmlns=\"http://schemas.navyfederal.org/2010/04/NFBranchExService\">");
+    return xml;
+}
