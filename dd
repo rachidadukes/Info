@@ -1,1 +1,77 @@
+sampleof receive
+
+
+private async Task<string> SendAndReceive(string sSendMessage)
+{
+    string sRecvMessage = string.Empty;
+    CreditAddRq oRq;
+    StringReader txtReader = null;
+    XmlReader xmlReader = null;
+    FinancialPostingWsClient client = null;
+
+    try
+    {
+        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+
+        // Load endpoint
+        var settings = HostRoutingConfig.GetHostSettings();
+        string endpointUrl = settings["HostURL"];
+
+        // Deserialize XML to CreditAddRq
+        var reqSerializer = new XmlSerializer(typeof(CreditAddRq));
+        txtReader = new StringReader(EnsureNamespaces(sSendMessage));
+        xmlReader = XmlReader.Create(txtReader);
+        oRq = (CreditAddRq)reqSerializer.Deserialize(xmlReader);
+
+        // Create binding and endpoint
+        var binding = new BasicHttpBinding(BasicHttpSecurityMode.Transport);
+        binding.MaxReceivedMessageSize = 1024 * 1024;
+        binding.Security.Mode = BasicHttpSecurityMode.Transport;
+        binding.Security.Transport.ClientCredentialType = HttpClientCredentialType.None;
+        var address = new EndpointAddress(endpointUrl);
+
+        // Create WCF client and call async deposit
+        client = new FinancialPostingWsClient(binding, address);
+        var responseMsg = await client.depositAsync(oRq);  // ✅ Use CreditAddRq overload
+
+        // Serialize response to XML
+        var respSerializer = new XmlSerializer(typeof(DepositResponseMessage));
+        using (var sw = new StringWriter())
+        {
+            respSerializer.Serialize(sw, responseMsg);
+            sRecvMessage = sw.ToString();
+        }
+
+        return sRecvMessage;
+    }
+    catch (FaultException fe)
+    {
+        Console.WriteLine($"[SOAP FAULT] {fe.Message}");
+        return $"<Error>{SecurityElement.Escape(fe.Message)}</Error>";
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[ERROR] SendAndReceive failed: {ex.Message}");
+        Console.WriteLine(ex.StackTrace);
+        return $"<Error>{SecurityElement.Escape(ex.Message)}</Error>";
+    }
+    finally
+    {
+        xmlReader?.Dispose();
+        txtReader?.Dispose();
+
+        if (client != null)
+        {
+            try
+            {
+                if (client.State == CommunicationState.Opened)
+                    await client.CloseAsync();
+            }
+            catch
+            {
+                client.Abort();
+            }
+        }
+    }
+}
 
