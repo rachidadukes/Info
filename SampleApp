@@ -1,1 +1,15 @@
+samples
 
+
+
+// normalize the incoming account number once (client side)
+var normAcct = (acct.AccountNumber ?? string.Empty).TrimStart('0');
+if (normAcct.Length == 0) normAcct = "0"; // handle "0000" -> "0"
+
+var allBalances = await dbContext.AccountBalance
+    .Where(e => e.AccessNumber  == AccessNumber
+             && e.Environment   == Environment
+             && (e.AccountNumber ?? "").TrimStart('0') == normAcct
+             && e.AcctType      == acct.AcctType)
+    .OrderByDescending(e => e.DateTimeStamp)
+    .ToListAsync();
