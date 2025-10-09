@@ -1,3 +1,34 @@
 samples
 
 
+
+public async Task SaveAcctCurrentBalanceAndStatus(AcctProfileDTO acct, string AccessNumber, string Environment)
+{
+    using var dbContext = new OpenSQLiteDatabase().OpenDatabase();
+
+    string Normalize(string value)
+    {
+        var norm = (value ?? string.Empty).TrimStart('0');
+        return norm.Length == 0 ? "0" : norm;
+    }
+
+    var normAcct = Normalize(acct.AccountNumber);
+    var normAccessNum = Normalize(AccessNumber);
+
+    var allBalances = dbContext.AccountBalance
+        .Where(e => ((e.AccessNumber ?? "").TrimStart('0') == normAccessNum) &&
+                    (e.Environment == Environment) &&
+                    ((e.AccountNumber ?? "").TrimStart('0') == normAcct) &&
+                    (e.AcctType == acct.AcctType))
+        .OrderByDescending(e => e.DateTimeStamp)
+        .ToList();
+
+    var newestBalance = allBalances.FirstOrDefault();
+
+    if (newestBalance != null)
+    {
+        // your logic for inserting/updating...
+    }
+}
+
+
