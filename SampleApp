@@ -1,2 +1,6 @@
 samples
+SELECT
+  MAX(CASE WHEN "Environment" LIKE '%UNIT%' THEN "DateTimeStamp" END) AS MaxUnitDate,
+  MAX(CASE WHEN "Environment" LIKE '%INTG%' THEN "DateTimeStamp" END) AS MaxIntgDate
+FROM "OriginalLogs";
 
