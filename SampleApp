@@ -1,6 +1,39 @@
 samples
-SELECT
-  MAX(CASE WHEN "Environment" LIKE '%UNIT%' THEN "DateTimeStamp" END) AS MaxUnitDate,
-  MAX(CASE WHEN "Environment" LIKE '%INTG%' THEN "DateTimeStamp" END) AS MaxIntgDate
-FROM "OriginalLogs";
 
+
+using System;
+using System.Xml.Linq;
+
+class Program
+{
+    static void Main()
+    {
+        string xml = @"<CreditAddRq>
+                          <MsgRqHdr xmlns='http://schemas.navyfederal.org/2010/04/NFBranchExService'>
+                            <RqUID>69be352b-b8ab-4cee-b31d-4c3277b3e105</RqUID>
+                          </MsgRqHdr>
+                          <EnvironmentName>NFCU</EnvironmentName>
+                          <TranCode>2001</TranCode>
+                          <BranchId>D3</BranchId>
+                          <PCName>LTCC483A7A4EAE7</PCName>
+                          <TranCodeQual>0000</TranCodeQual>
+                          <CashBoxId>0</CashBoxId>
+                       </CreditAddRq>";
+
+        // Load XML string into XDocument
+        XDocument doc = XDocument.Parse(xml);
+
+        // Extract values (no namespace required here)
+        string tranCode = doc.Descendants("TranCode").FirstOrDefault()?.Value;
+        string tranCodeQual = doc.Descendants("TranCodeQual").FirstOrDefault()?.Value;
+
+        Console.WriteLine($"TranCode: {tranCode}");
+        Console.WriteLine($"TranCodeQual: {tranCodeQual}");
+    }
+}
+
+
+===============================
+
+XNamespace ns = "http://schemas.navyfederal.org/2010/04/NFBranchExService";
+string tranCode = doc.Descendants(ns + "TranCode").FirstOrDefault()?.Value;
