@@ -1,20 +1,2 @@
 samples
 
-
-<ComboBox x:Name="cboEmployees" Width="300" IsEditable="False">
-    <ComboBox.Resources>
-        <Style TargetType="ComboBoxItem">
-            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-        </Style>
-    </ComboBox.Resources>
-
-    <ComboBox.ItemTemplate>
-        <DataTemplate>
-            <DockPanel>
-                <TextBlock Text="{Binding Id}" Width="30" Margin="5,0"/>
-                <TextBlock Text="{Binding Name}" Width="120" Margin="5,0"/>
-                <TextBlock Text="{Binding Department}" Width="100" Margin="5,0"/>
-            </DockPanel>
-        </DataTemplate>
-    </ComboBox.ItemTemplate>
-</ComboBox>
