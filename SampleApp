@@ -1,44 +1,44 @@
 samples
 
-try
+public static string PrettyPrintXml(string xml)
 {
-    var endpointUrl = settings["MessageConverterURL"];
-    if (string.IsNullOrWhiteSpace(endpointUrl))
-        throw new InvalidOperationException("MessageConverterURL not configured.");
+    if (string.IsNullOrWhiteSpace(xml)) return xml;
 
-    // === Load client certificate ===
-    var subjectName = settings["ClientCert:SubjectName"];
-    var storeLoc = Enum.TryParse(settings["ClientCert:StoreLocation"], out StoreLocation sl) ? sl : StoreLocation.LocalMachine;
-    var storeName = Enum.TryParse(settings["ClientCert:StoreName"], out StoreName sn) ? sn : StoreName.My;
-    var cert = CertificateLoader.LoadFromStore(subjectName, storeLoc, storeName);
-
-    // === Create handler with mTLS ===
-    var handler = new SocketsHttpHandler
+    // Handles both fragments and full docs
+    var settings = new XmlWriterSettings
     {
-        SslOptions = new SslClientAuthenticationOptions
-        {
-            EnabledSslProtocols = SslProtocols.Tls12,
-            ClientCertificates = new X509CertificateCollection { cert }
-        }
+        Indent = true,
+        IndentChars = "  ",
+        NewLineChars = Environment.NewLine,
+        NewLineHandling = NewLineHandling.Replace,
+        OmitXmlDeclaration = false
     };
 
-    using var client = new HttpClient(handler)
+    // Try XDocument first (tolerates utf-16/utf-8 etc.)
+    try
     {
-        Timeout = TimeSpan.FromSeconds(30)
-    };
-
-    using var content = new StringContent(xml, Encoding.UTF8, "application/xml");
-    var resp = await client.PostAsync(endpointUrl, content);
-    var body = await resp.Content.ReadAsStringAsync();
-
-    if (!resp.IsSuccessStatusCode)
-    {
-        throw new HttpRequestException($"Error {(int)resp.StatusCode}: {body}");
+        var doc = XDocument.Parse(xml, LoadOptions.PreserveWhitespace | LoadOptions.SetLineInfo);
+        using var sw = new StringWriter();
+        using (var xw = XmlWriter.Create(sw, settings))
+            doc.Save(xw);
+        return sw.ToString();
     }
-
-    Console.WriteLine("✅ Successfully called endpoint with certificate.");
-}
-catch (Exception ex)
-{
-    Console.WriteLine($"❌ Error: {ex.Message}");
+    catch
+    {
+        // Fallback for fragments
+        try
+        {
+            var xd = new XmlDocument();
+            xd.PreserveWhitespace = false;
+            xd.LoadXml(xml);
+            using var sw = new StringWriter();
+            using (var xw = XmlTextWriter.Create(sw, settings))
+                xd.Save(xw);
+            return sw.ToString();
+        }
+        catch
+        {
+            return xml; // show raw if totally invalid
+        }
+    }
 }
