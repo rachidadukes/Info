@@ -1,2 +1,79 @@
 samples
 
+
+
+using System;
+using System.Linq;
+using System.Security.Cryptography.X509Certificates;
+
+namespace CdDepositLegacyConsole.Security
+{
+    public static class CertificateLoader
+    {
+        /// <summary>
+        /// Loads a client certificate from the Windows certificate store by Subject Name (CN).
+        /// Validates that the certificate is not expired and contains a private key.
+        /// </summary>
+        /// <param name="subjectName">The certificate's Subject Name (CN).</param>
+        /// <param name="storeLocation">Certificate store location (default: LocalMachine).</param>
+        /// <param name="storeName">Certificate store name (default: My).</param>
+        /// <returns>A valid X509Certificate2 instance.</returns>
+        public static X509Certificate2 LoadFromStore(
+            string subjectName,
+            StoreLocation storeLocation = StoreLocation.LocalMachine,
+            StoreName storeName = StoreName.My)
+        {
+            if (string.IsNullOrWhiteSpace(subjectName))
+                throw new ArgumentException("Subject name cannot be null or empty.", nameof(subjectName));
+
+            try
+            {
+                using var store = new X509Store(storeName, storeLocation);
+                store.Open(OpenFlags.ReadOnly);
+
+                // 🔹 Find the certificate by subject name (CN)
+                var cert = store.Certificates
+                    .Find(X509FindType.FindBySubjectName, subjectName, validOnly: true)
+                    .Cast<X509Certificate2>()
+                    .Where(UsableNow)
+                    .OrderByDescending(c => c.NotBefore)
+                    .FirstOrDefault();
+
+                if (cert == null)
+                {
+                    throw new InvalidOperationException(
+                        $"Client certificate with subject '{subjectName}' not found or invalid (no private key / expired).");
+                }
+
+                return cert;
+            }
+            catch (CryptographicException cryptoEx)
+            {
+                throw new InvalidOperationException(
+                    $"Error accessing the certificate store ({storeLocation}\\{storeName}): {cryptoEx.Message}", cryptoEx);
+            }
+            catch (UnauthorizedAccessException authEx)
+            {
+                throw new InvalidOperationException(
+                    $"Access denied when opening certificate store ({storeLocation}\\{storeName}). " +
+                    "Make sure the process identity has permission to read the private key.",
+                    authEx);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    $"Unexpected error while loading certificate by subject '{subjectName}': {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// Determines if the certificate is currently valid and has a private key.
+        /// </summary>
+        private static bool UsableNow(X509Certificate2 c) =>
+            c != null &&
+            c.HasPrivateKey &&
+            DateTimeOffset.Now >= c.NotBefore &&
+            DateTimeOffset.Now <= c.NotAfter;
+    }
+}
+
