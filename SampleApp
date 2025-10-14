@@ -1,1 +1,53 @@
 samples
+
+
+
+<RichTextBox x:Name="txtRequest"
+             FontFamily="Consolas"
+             FontSize="14"
+             IsReadOnly="True"
+             VerticalScrollBarVisibility="Auto"
+             HorizontalScrollBarVisibility="Auto"
+             BorderBrush="Gray"
+             BorderThickness="1" />
+
+
+
+===============================
+
+public void DisplayXmlFormatted(string xml)
+{
+    txtRequest.Document.Blocks.Clear();
+    xml = PrettyPrintXml(xml);
+
+    Paragraph paragraph = new Paragraph();
+
+    // Simple color/bold example
+    foreach (var line in xml.Split('\n'))
+    {
+        if (line.Contains("<CreditAddRq"))
+        {
+            paragraph.Inlines.Add(new Run(line + "\n")
+            {
+                Foreground = Brushes.Blue,
+                FontWeight = FontWeights.Bold
+            });
+        }
+        else if (line.TrimStart().StartsWith("</"))
+        {
+            paragraph.Inlines.Add(new Run(line + "\n")
+            {
+                Foreground = Brushes.Red
+            });
+        }
+        else
+        {
+            paragraph.Inlines.Add(new Run(line + "\n")
+            {
+                Foreground = Brushes.Black
+            });
+        }
+    }
+
+    txtRequest.Document.Blocks.Add(paragraph);
+}
