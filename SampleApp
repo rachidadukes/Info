@@ -2,22 +2,33 @@ samples
 
 public static string PrettyPrintXml(string xml)
 {
-    if (string.IsNullOrWhiteSpace(xml)) return xml;
+    if (string.IsNullOrWhiteSpace(xml))
+        return xml;
 
-    // Handles both fragments and full docs
+    // Step 1: Trim whitespace
+    xml = xml.Trim();
+
+    // Step 2: Find where XML actually starts
+    int xmlStart = xml.IndexOf('<');
+    if (xmlStart > 0)
+    {
+        // Strip everything before the first '<'
+        xml = xml.Substring(xmlStart);
+    }
+
+    // Step 3: Apply pretty printing
     var settings = new XmlWriterSettings
     {
         Indent = true,
         IndentChars = "  ",
-        NewLineChars = Environment.NewLine,
+        NewLineChars = System.Environment.NewLine,
         NewLineHandling = NewLineHandling.Replace,
         OmitXmlDeclaration = false
     };
 
-    // Try XDocument first (tolerates utf-16/utf-8 etc.)
     try
     {
-        var doc = XDocument.Parse(xml, LoadOptions.PreserveWhitespace | LoadOptions.SetLineInfo);
+        var doc = XDocument.Parse(xml, LoadOptions.PreserveWhitespace);
         using var sw = new StringWriter();
         using (var xw = XmlWriter.Create(sw, settings))
             doc.Save(xw);
@@ -25,7 +36,6 @@ public static string PrettyPrintXml(string xml)
     }
     catch
     {
-        // Fallback for fragments
         try
         {
             var xd = new XmlDocument();
@@ -38,7 +48,8 @@ public static string PrettyPrintXml(string xml)
         }
         catch
         {
-            return xml; // show raw if totally invalid
+            // If still invalid, just return the cleaned text
+            return xml;
         }
     }
 }
