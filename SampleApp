@@ -1,13 +1,13 @@
 samples
 
-
-
-
-📁 Local Computer → Personal → Certificates
-CN = LTCC483A490BE4.nfcu.net
-
-"ClientCert": {
-  "SubjectName": "LTCC483A490BE4.nfcu.net",
-  "StoreLocation": "LocalMachine",
-  "StoreName": "My"
+catch (HttpRequestException httpEx)
+{
+    Console.WriteLine("HttpRequestException caught:");
+    Console.WriteLine(httpEx.ToString());
+    if (httpEx.InnerException != null)
+    {
+        Console.WriteLine("Inner exception:");
+        Console.WriteLine(httpEx.InnerException.ToString());
+    }
+    throw;
 }
