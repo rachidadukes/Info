@@ -1,22 +1,69 @@
 samples
 
-  void ShowXml(string xml)
+public void DisplayXmlFormatted(string xml, string tranCodeToBold)
 {
+    txtRequest.Document.Blocks.Clear();
     xml = PrettyPrintXml(xml);
 
-    // Build the document
-    var fd = new FlowDocument();
-    // Disable wrapping / allow horizontal scroll:
-    fd.PageWidth = 100000; // any large value works
+    Paragraph paragraph = new Paragraph();
 
-    // Optional: tighter page padding so it looks like a code editor
-    fd.PagePadding = new Thickness(6);
+    foreach (var line in xml.Split('\n'))
+    {
+        Run run = new Run(line + "\n");
 
-    // Add content (you can add Runs with colors/bold as you like)
-    fd.Blocks.Add(new Paragraph(new Run(xml)));
+        if (line.Contains($"<TranCode>{tranCodeToBold}</TranCode>"))
+        {
+            run.FontWeight = FontWeights.Bold;
+            run.Foreground = Brushes.DarkBlue;
+        }
 
-    Rtb.Document = fd;
+        paragraph.Inlines.Add(run);
+    }
 
-    // Ensure caret is at top (helpful when IsReadOnly)
-    Rtb.ScrollToHome();
+    txtRequest.Document.Blocks.Add(paragraph);
+}
+
+
+=================================
+if (line.Contains("<EmployeeId>"))
+    run.Foreground = Brushes.Purple;
+if (line.Contains("<EnvironmentName>"))
+    run.FontWeight = FontWeights.Bold;
+
+
+=============================
+ public void DisplayXmlFormatted(string xml)
+{
+    txtRequest.Document.Blocks.Clear();
+    xml = PrettyPrintXml(xml);
+
+    Paragraph paragraph = new Paragraph();
+
+    foreach (var line in xml.Split('\n'))
+    {
+        Run run = new Run(line + "\n");
+
+        // 👉 Detect the line that contains <TranCode>
+        if (line.Contains("<TranCode>"))
+        {
+            run.FontWeight = FontWeights.Bold;
+            run.Foreground = Brushes.DarkBlue;
+        }
+        else if (line.TrimStart().StartsWith("<") && !line.TrimStart().StartsWith("</"))
+        {
+            run.Foreground = Brushes.DodgerBlue;  // opening tag color
+        }
+        else if (line.TrimStart().StartsWith("</"))
+        {
+            run.Foreground = Brushes.OrangeRed;   // closing tag color
+        }
+        else
+        {
+            run.Foreground = Brushes.Black;       // normal text
+        }
+
+        paragraph.Inlines.Add(run);
+    }
+
+    txtRequest.Document.Blocks.Add(paragraph);
 }
