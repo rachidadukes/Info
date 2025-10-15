@@ -7,3 +7,16 @@ samples
 var subjectName = configuration["HostSettings:ClientCert:SubjectName"];
 var storeLocationStr = configuration["HostSettings:ClientCert:StoreLocation"];
 var storeNameStr = configuration["HostSettings:ClientCert:StoreName"];
+
+// Convert strings → enums (with fallback defaults)
+if (!Enum.TryParse(storeLocationStr, ignoreCase: true, out StoreLocation storeLoc))
+    storeLoc = StoreLocation.LocalMachine;
+
+if (!Enum.TryParse(storeNameStr, ignoreCase: true, out StoreName storeName))
+    storeName = StoreName.My;
+
+// Load certificate
+var cert = CertificateLoader.LoadFromStore(subjectName, storeLoc, storeName);
+if (cert == null)
+    throw new InvalidOperationException($"Certificate '{subjectName}' not found in {storeLoc}\\{storeName}");
+
