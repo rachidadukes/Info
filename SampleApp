@@ -1,14 +1,22 @@
 samples
 
-  <RichTextBox x:Name="Rtb"
-                 Grid.Row="1"
-                 FontFamily="Consolas"
-                 FontSize="14"
-                 IsReadOnly="True"
-                 BorderBrush="Gray"
-                 BorderThickness="1"
-                 Padding="6"
-                 VerticalScrollBarVisibility="Auto"
-                 HorizontalScrollBarVisibility="Auto"
-                 ScrollViewer.CanContentScroll="True" />
+  void ShowXml(string xml)
+{
+    xml = PrettyPrintXml(xml);
 
+    // Build the document
+    var fd = new FlowDocument();
+    // Disable wrapping / allow horizontal scroll:
+    fd.PageWidth = 100000; // any large value works
+
+    // Optional: tighter page padding so it looks like a code editor
+    fd.PagePadding = new Thickness(6);
+
+    // Add content (you can add Runs with colors/bold as you like)
+    fd.Blocks.Add(new Paragraph(new Run(xml)));
+
+    Rtb.Document = fd;
+
+    // Ensure caret is at top (helpful when IsReadOnly)
+    Rtb.ScrollToHome();
+}
