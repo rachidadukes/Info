@@ -1,41 +1,28 @@
 samples
 
-// 1) Try WITHOUT cert
-var bodyNoCert = await CallAsync(endpointUrl, xml, cert: null);
-
-// 2) Try WITH cert (if you still want to validate mTLS)
-var bodyWithCert = await CallAsync(endpointUrl, xml, cert);
-
-===============================
-static HttpClient CreateClientWithOptionalCert(X509Certificate2? cert = null)
+private static X509Certificate2? LoadClientCertificate()
 {
-    var handler = new SocketsHttpHandler
-    {
-        SslOptions = new SslClientAuthenticationOptions
-        {
-            EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
-            // if your CRL/OCSP isn’t reachable in dev, keep this off for now:
-            CertificateRevocationCheckMode = X509RevocationMode.NoCheck
-        }
-    };
+    var configuration = new ConfigurationBuilder()
+        .SetBasePath(AppContext.BaseDirectory)
+        .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+        .Build();
 
-    if (cert != null)
-    {
-        handler.SslOptions.ClientCertificates = new X509CertificateCollection { cert };
-    }
+    var subjectName = configuration["HostSettings:ClientCert:SubjectName"];
+    var storeLocationStr = configuration["HostSettings:ClientCert:StoreLocation"];
+    var storeNameStr = configuration["HostSettings:ClientCert:StoreName"];
 
-    return new HttpClient(handler)
-    {
-        Timeout = TimeSpan.FromSeconds(30)
-    };
-}
+    // Convert string values to enums with safe fallbacks
+    if (!Enum.TryParse(storeLocationStr, ignoreCase: true, out StoreLocation storeLoc))
+        storeLoc = StoreLocation.LocalMachine;
 
-async Task<string> CallAsync(string url, string xml, X509Certificate2? cert)
-{
-    using var client = CreateClientWithOptionalCert(cert);
-    using var content = new StringContent(xml, Encoding.UTF8, "application/xml");
-    var resp = await client.PostAsync(url, content);
-    var body = await resp.Content.ReadAsStringAsync();
-    Console.WriteLine($"Status: {(int)resp.StatusCode} {resp.StatusCode}");
-    return body;
+    if (!Enum.TryParse(storeNameStr, ignoreCase: true, out StoreName storeName))
+        storeName = StoreName.My;
+
+    // Try load cert
+    var cert = CertificateLoader.LoadFromStore(subjectName, storeLoc, storeName);
+
+    if (cert == null)
+        Console.WriteLine($"⚠️ Certificate '{subjectName}' not found in {storeLoc}\\{storeName}");
+
+    return cert;
 }
