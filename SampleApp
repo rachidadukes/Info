@@ -1,69 +1,155 @@
 samples
 
-public void DisplayXmlFormatted(string xml, string tranCodeToBold)
+using System;
+using System.IO;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Documents;
+using System.Windows.Media;
+using System.Xml;
+using System.Xml.Linq;
+
+namespace YourApp.Helpers
 {
-    txtRequest.Document.Blocks.Clear();
-    xml = PrettyPrintXml(xml);
-
-    Paragraph paragraph = new Paragraph();
-
-    foreach (var line in xml.Split('\n'))
+    public static class XmlViewHelper
     {
-        Run run = new Run(line + "\n");
-
-        if (line.Contains($"<TranCode>{tranCodeToBold}</TranCode>"))
+        /// Pretty-prints XML and trims any non-XML prefix (e.g., "Send to Host; len=...").
+        public static string PrettyPrintXml(string xml)
         {
-            run.FontWeight = FontWeights.Bold;
-            run.Foreground = Brushes.DarkBlue;
+            if (string.IsNullOrWhiteSpace(xml)) return xml;
+
+            xml = xml.Trim();
+            int xmlStart = xml.IndexOf('<');
+            if (xmlStart > 0) xml = xml.Substring(xmlStart);
+
+            var settings = new XmlWriterSettings
+            {
+                Indent = true,
+                IndentChars = "  ",
+                NewLineChars = Environment.NewLine,
+                NewLineHandling = NewLineHandling.Replace,
+                OmitXmlDeclaration = false
+            };
+
+            try
+            {
+                var doc = XDocument.Parse(xml, LoadOptions.PreserveWhitespace);
+                using var sw = new StringWriter();
+                using (var xw = XmlWriter.Create(sw, settings)) doc.Save(xw);
+                return sw.ToString();
+            }
+            catch
+            {
+                try
+                {
+                    var xd = new XmlDocument { PreserveWhitespace = false };
+                    xd.LoadXml(xml);
+                    using var sw = new StringWriter();
+                    using (var xw = XmlTextWriter.Create(sw, settings)) xd.Save(xw);
+                    return sw.ToString();
+                }
+                catch
+                {
+                    return xml; // invalid XML – return cleaned text
+                }
+            }
         }
 
-        paragraph.Inlines.Add(run);
+        /// Builds a FlowDocument for plain (non-highlighted) display.
+        public static FlowDocument BuildFlowDocument(string prettyXml, bool noWrap = true)
+        {
+            var fd = new FlowDocument
+            {
+                PagePadding = new Thickness(6),
+                FontFamily = new FontFamily("Consolas"),
+                FontSize = 14
+            };
+
+            if (noWrap) fd.PageWidth = 100000; // large width -> horizontal scrolling
+
+            fd.Blocks.Add(new Paragraph(new Run(prettyXml)));
+            return fd;
+        }
+
+        /// Shows plain pretty XML in a RichTextBox.
+        public static void ShowInRichTextBox(RichTextBox rtb, string xml, bool noWrap = true)
+        {
+            if (rtb == null) return;
+            void Impl()
+            {
+                var pretty = PrettyPrintXml(xml);
+                rtb.Document = BuildFlowDocument(pretty, noWrap);
+                rtb.ScrollToHome();
+            }
+            Dispatch(rtb, Impl);
+        }
+
+        /// Shows pretty XML with simple per-line highlighting rules.
+        /// You can customize the rules below as needed.
+        public static void ShowFormattedInRichTextBox(RichTextBox rtb, string xml, bool noWrap = true)
+        {
+            if (rtb == null) return;
+            void Impl()
+            {
+                var pretty = PrettyPrintXml(xml);
+                var fd = new FlowDocument
+                {
+                    PagePadding = new Thickness(6),
+                    FontFamily = new FontFamily("Consolas"),
+                    FontSize = 14
+                };
+                if (noWrap) fd.PageWidth = 100000;
+
+                var para = new Paragraph();
+
+                foreach (var line in pretty.Split('\n'))
+                {
+                    var trimmed = line.TrimStart();
+                    var run = new Run(line + "\n");
+
+                    // --- simple rules (edit/extend as you like) ---
+                    if (line.Contains("<TranCode>"))
+                    {
+                        run.FontWeight = FontWeights.Bold;
+                        run.Foreground = Brushes.DarkRed;
+                    }
+                    else if (trimmed.StartsWith("</"))
+                    {
+                        run.Foreground = Brushes.OrangeRed;
+                    }
+                    else if (trimmed.StartsWith("<"))
+                    {
+                        run.Foreground = Brushes.DodgerBlue;
+                    }
+                    // ------------------------------------------------
+
+                    para.Inlines.Add(run);
+                }
+
+                fd.Blocks.Clear();
+                fd.Blocks.Add(para);
+                rtb.Document = fd;
+                rtb.ScrollToHome();
+            }
+            Dispatch(rtb, Impl);
+        }
+
+        private static void Dispatch(DependencyObject obj, Action action)
+        {
+            var disp = System.Windows.Threading.Dispatcher.FromDependencyObject(obj) ?? Application.Current?.Dispatcher;
+            if (disp != null && !disp.CheckAccess())
+                disp.Invoke(action);
+            else
+                action();
+        }
     }
-
-    txtRequest.Document.Blocks.Add(paragraph);
 }
+====================================================
 
+using YourApp.Helpers;
 
-=================================
-if (line.Contains("<EmployeeId>"))
-    run.Foreground = Brushes.Purple;
-if (line.Contains("<EnvironmentName>"))
-    run.FontWeight = FontWeights.Bold;
+// Plain:
+XmlViewHelper.ShowInRichTextBox(txtRequest, requestXml);
 
-
-=============================
- public void DisplayXmlFormatted(string xml)
-{
-    txtRequest.Document.Blocks.Clear();
-    xml = PrettyPrintXml(xml);
-
-    Paragraph paragraph = new Paragraph();
-
-    foreach (var line in xml.Split('\n'))
-    {
-        Run run = new Run(line + "\n");
-
-        // 👉 Detect the line that contains <TranCode>
-        if (line.Contains("<TranCode>"))
-        {
-            run.FontWeight = FontWeights.Bold;
-            run.Foreground = Brushes.DarkBlue;
-        }
-        else if (line.TrimStart().StartsWith("<") && !line.TrimStart().StartsWith("</"))
-        {
-            run.Foreground = Brushes.DodgerBlue;  // opening tag color
-        }
-        else if (line.TrimStart().StartsWith("</"))
-        {
-            run.Foreground = Brushes.OrangeRed;   // closing tag color
-        }
-        else
-        {
-            run.Foreground = Brushes.Black;       // normal text
-        }
-
-        paragraph.Inlines.Add(run);
-    }
-
-    txtRequest.Document.Blocks.Add(paragraph);
-}
+// Or: highlighted lines (TranCode bold, tags colored)
+XmlViewHelper.ShowFormattedInRichTextBox(txtRequest, requestXml);
