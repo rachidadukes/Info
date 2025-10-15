@@ -1,17 +1,1 @@
 samples
-
-private static void Dispatch(DependencyObject obj, Action action)
-{
-    if (obj == null)
-    {
-        Application.Current?.Dispatcher.Invoke(action);
-        return;
-    }
-
-    var disp = obj.Dispatcher ?? Application.Current?.Dispatcher;
-
-    if (disp != null && !disp.CheckAccess())
-        disp.Invoke(action);
-    else
-        action();
-}
