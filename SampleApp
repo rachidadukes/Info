@@ -1,28 +1,90 @@
 samples
 
-private static X509Certificate2? LoadClientCertificate()
+using System.Security.Cryptography.X509Certificates;
+using Microsoft.Extensions.Configuration;
+
+public static class CertificateLoader
 {
-    var configuration = new ConfigurationBuilder()
-        .SetBasePath(AppContext.BaseDirectory)
-        .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-        .Build();
+    public static X509Certificate2? GetCertificate()
+    {
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+            .Build();
 
-    var subjectName = configuration["HostSettings:ClientCert:SubjectName"];
-    var storeLocationStr = configuration["HostSettings:ClientCert:StoreLocation"];
-    var storeNameStr = configuration["HostSettings:ClientCert:StoreName"];
+        var subject = configuration["HostSettings:ClientCert:SubjectName"];
+        var storeLocStr = configuration["HostSettings:ClientCert:StoreLocation"];
+        var storeNameStr = configuration["HostSettings:ClientCert:StoreName"];
 
-    // Convert string values to enums with safe fallbacks
-    if (!Enum.TryParse(storeLocationStr, ignoreCase: true, out StoreLocation storeLoc))
-        storeLoc = StoreLocation.LocalMachine;
+        if (!Enum.TryParse(storeLocStr, true, out StoreLocation storeLoc))
+            storeLoc = StoreLocation.LocalMachine;
+        if (!Enum.TryParse(storeNameStr, true, out StoreName storeName))
+            storeName = StoreName.My;
 
-    if (!Enum.TryParse(storeNameStr, ignoreCase: true, out StoreName storeName))
-        storeName = StoreName.My;
+        using var store = new X509Store(storeName, storeLoc);
+        store.Open(OpenFlags.ReadOnly | OpenFlags.OpenExistingOnly);
 
-    // Try load cert
-    var cert = CertificateLoader.LoadFromStore(subjectName, storeLoc, storeName);
+        // Boss-style: find by subject name, valid only, prefer newest, has private key
+        var cert =
+            store.Certificates
+                 .FindValidCertificateBySubjectName(subject);
 
-    if (cert == null)
-        Console.WriteLine($"⚠️ Certificate '{subjectName}' not found in {storeLoc}\\{storeName}");
+        if (cert == null)
+        {
+            // Optional: if you want a silent dev fallback, just return null.
+            throw new InvalidOperationException(
+                $"Client certificate '{subject}' not found in {storeLoc}\\{storeName}.");
+        }
 
-    return cert;
+        return cert;
+    }
 }
+
+==============================
+
+using System.Security.Cryptography.X509Certificates;
+using System.Linq;
+
+namespace EncoreAuth.Extensions
+{
+    public static class X509Certificate2CollectionExtensions
+    {
+        public static X509Certificate2? FindValidCertificateBySubjectName(
+            this X509Certificate2Collection col,
+            string name)
+        {
+            // validOnly = true filters out expired/not-yet-valid by chain
+            var matches = col.Find(X509FindType.FindBySubjectName, name, true);
+
+            return matches
+                .Cast<X509Certificate2>()
+                .Where(c => c.HasPrivateKey)
+                .OrderByDescending(c => c.NotBefore) // prefer newest
+                .FirstOrDefault();
+        }
+    }
+}
+=====================================
+
+
+ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12; // if they want it explicitly
+
+var handler = new HttpClientHandler();
+var cert = CertificateLoader.GetCertificate();     // subject-name lookup from config
+handler.ClientCertificates.Add(cert);              // boss style attach
+
+using var client = new HttpClient(handler)
+{
+    BaseAddress = new Uri(endpointUrl),
+    Timeout = TimeSpan.FromSeconds(30)
+};
+
+using var content = new StringContent(xml, Encoding.UTF8, "application/xml");
+var resp = await client.PostAsync("", content);    // or PostAsync(endpointUrl, ...) if not using BaseAddress
+var body = await resp.Content.ReadAsStringAsync();
+
+if (!resp.IsSuccessStatusCode)
+    throw new HttpRequestException($"[{nameof(GetResponseFromNewAPI)}] {(int)resp.StatusCode}: {body}");
+
+
+=============================
