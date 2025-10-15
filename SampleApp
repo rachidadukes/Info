@@ -1,112 +1,50 @@
 samples
 
-
 using System;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Configuration;
-using EncoreAuth.Extensions; // for FindValidCertificateBySubjectName
+using EncoreAuth.Extensions; // Make sure this matches your namespace
 
 public static class CertificateLoader
 {
-    // Single public entrypoint your code will call
     public static X509Certificate2? GetCertificate()
     {
+        // Load configuration
         var configuration = new ConfigurationBuilder()
             .SetBasePath(AppContext.BaseDirectory)
             .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
             .Build();
 
+        // Read from appsettings.json
         var subject = configuration["HostSettings:ClientCert:SubjectName"];
         var storeLocStr = configuration["HostSettings:ClientCert:StoreLocation"];
         var storeNameStr = configuration["HostSettings:ClientCert:StoreName"];
-        var thumb = configuration["HostSettings:ClientCert:Thumbprint"]; // optional
 
+        // Convert store location and name safely
         if (!Enum.TryParse(storeLocStr, true, out StoreLocation storeLoc))
             storeLoc = StoreLocation.LocalMachine;
+
         if (!Enum.TryParse(storeNameStr, true, out StoreName storeName))
             storeName = StoreName.My;
 
+        // Open the certificate store
         using var store = new X509Store(storeName, storeLoc);
         store.Open(OpenFlags.ReadOnly | OpenFlags.OpenExistingOnly);
 
-        // 1) Boss style: SubjectName, validOnly=true, newest, HasPrivateKey
-        X509Certificate2? cert = null;
-        if (!string.IsNullOrWhiteSpace(subject))
-        {
-            cert = store.Certificates.FindValidCertificateBySubjectName(subject);
-        }
+        // Find by subject name only (boss style)
+        var cert = store.Certificates.FindValidCertificateBySubjectName(subject);
 
-        // 2) Optional fallback: Thumbprint (also validOnly=true)
-        if (cert == null && !string.IsNullOrWhiteSpace(thumb))
-        {
-            var found = store.Certificates.Find(X509FindType.FindByThumbprint, thumb, true);
-            cert = found.Cast<X509Certificate2>()
-                        .Where(c => c.HasPrivateKey)
-                        .OrderByDescending(c => c.NotBefore)
-                        .FirstOrDefault();
-        }
-
+        // Optional console feedback for debugging
         if (cert == null)
         {
-            Console.WriteLine($"⚠️  Client certificate not found. Subject='{subject}', Thumbprint='{thumb}', Store={storeLoc}\\{storeName}");
+            Console.WriteLine($"⚠️  Certificate '{subject}' not found in {storeLoc}\\{storeName}");
         }
         else
         {
-            Console.WriteLine($"✅ Loaded cert: {cert.Subject} | Thumbprint={cert.Thumbprint} | HasPrivateKey={cert.HasPrivateKey}");
+            Console.WriteLine($"✅ Loaded certificate: {cert.Subject} | HasPrivateKey={cert.HasPrivateKey}");
         }
 
         return cert;
     }
 }
-
-==============================================
-
-
-using System.Linq;
-using System.Security.Cryptography.X509Certificates;
-
-namespace EncoreAuth.Extensions
-{
-    public static class X509Certificate2CollectionExtensions
-    {
-        public static X509Certificate2? FindValidCertificateBySubjectName(
-            this X509Certificate2Collection col, string name)
-        {
-            var matches = col.Find(X509FindType.FindBySubjectName, name, validOnly: true);
-            return matches.Cast<X509Certificate2>()
-                          .Where(c => c.HasPrivateKey)
-                          .OrderByDescending(c => c.NotBefore)   // prefer newest
-                          .FirstOrDefault();
-        }
-    }
-}
-
-=====================================
-
-
-ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-
-var handler = new HttpClientHandler();
-var cert = CertificateLoader.GetCertificate();     // <-- use your existing method
-if (cert != null)
-{
-    handler.ClientCertificates.Add(cert);          // boss style
-}
-
-using var client = new HttpClient(handler)
-{
-    BaseAddress = new Uri(endpointUrl),
-    Timeout = TimeSpan.FromSeconds(30)
-};
-
-using var content = new StringContent(xml, Encoding.UTF8, "application/xml");
-var resp = await client.PostAsync("", content);
-var body = await resp.Content.ReadAsStringAsync();
-
-if (!resp.IsSuccessStatusCode)
-    throw new HttpRequestException($"[GetResponseFromNewAPI] {(int)resp.StatusCode}: {body}");
-
-Console.WriteLine("✅ Successfully called endpoint.");
-return body;
-
