@@ -1,1 +1,7 @@
 samples
+
+
+var clientCert = configuration.GetSection("HostSettings:ClientCert")
+                              .Get<ClientCertConfig>();
+var subjectName = clientCert?.SubjectName;
+
