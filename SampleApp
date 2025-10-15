@@ -3,20 +3,11 @@ samples
 
 
 
-Step 1 — Confirm where the cert actually lives
+📁 Local Computer → Personal → Certificates
+CN = LTCC483A490BE4.nfcu.net
 
-You must open both stores and check manually.
-
-Press Win + R → certlm.msc → (LocalMachine store)
-
-Go to Personal → Certificates
-
-Look for a certificate whose Subject contains "LTB4U" or similar.
-
-If you don’t see it there:
-
-Press Win + R → certmgr.msc → (CurrentUser store)
-
-Check Personal → Certificates again.
-
-👉 Whichever location shows the cert is the one you must set in your config.
+"ClientCert": {
+  "SubjectName": "LTCC483A490BE4.nfcu.net",
+  "StoreLocation": "LocalMachine",
+  "StoreName": "My"
+}
