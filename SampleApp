@@ -1,13 +1,41 @@
 samples
 
-catch (HttpRequestException httpEx)
+// 1) Try WITHOUT cert
+var bodyNoCert = await CallAsync(endpointUrl, xml, cert: null);
+
+// 2) Try WITH cert (if you still want to validate mTLS)
+var bodyWithCert = await CallAsync(endpointUrl, xml, cert);
+
+===============================
+static HttpClient CreateClientWithOptionalCert(X509Certificate2? cert = null)
 {
-    Console.WriteLine("HttpRequestException caught:");
-    Console.WriteLine(httpEx.ToString());
-    if (httpEx.InnerException != null)
+    var handler = new SocketsHttpHandler
     {
-        Console.WriteLine("Inner exception:");
-        Console.WriteLine(httpEx.InnerException.ToString());
+        SslOptions = new SslClientAuthenticationOptions
+        {
+            EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+            // if your CRL/OCSP isn’t reachable in dev, keep this off for now:
+            CertificateRevocationCheckMode = X509RevocationMode.NoCheck
+        }
+    };
+
+    if (cert != null)
+    {
+        handler.SslOptions.ClientCertificates = new X509CertificateCollection { cert };
     }
-    throw;
+
+    return new HttpClient(handler)
+    {
+        Timeout = TimeSpan.FromSeconds(30)
+    };
+}
+
+async Task<string> CallAsync(string url, string xml, X509Certificate2? cert)
+{
+    using var client = CreateClientWithOptionalCert(cert);
+    using var content = new StringContent(xml, Encoding.UTF8, "application/xml");
+    var resp = await client.PostAsync(url, content);
+    var body = await resp.Content.ReadAsStringAsync();
+    Console.WriteLine($"Status: {(int)resp.StatusCode} {resp.StatusCode}");
+    return body;
 }
