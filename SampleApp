@@ -1,7 +1,9 @@
 samples
 
 
-var configuration = new ConfigurationBuilder()
-    .SetBasePath(AppContext.BaseDirectory)
-    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-    .Build();
+
+
+// Read nested keys directly
+var subjectName = configuration["HostSettings:ClientCert:SubjectName"];
+var storeLocationStr = configuration["HostSettings:ClientCert:StoreLocation"];
+var storeNameStr = configuration["HostSettings:ClientCert:StoreName"];
