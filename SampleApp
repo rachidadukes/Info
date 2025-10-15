@@ -3,35 +3,20 @@ samples
 
 
 
-// == Load client certificate ==
-var configuration = new ConfigurationBuilder()
-    .SetBasePath(AppContext.BaseDirectory)
-    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-    .Build();
+Step 1 — Confirm where the cert actually lives
 
-// Read nested keys directly
-var subjectName = configuration["HostSettings:ClientCert:SubjectName"];
-var storeLocationStr = configuration["HostSettings:ClientCert:StoreLocation"];
-var storeNameStr = configuration["HostSettings:ClientCert:StoreName"];
+You must open both stores and check manually.
 
-// Convert strings → enums (with fallback defaults)
-if (!Enum.TryParse(storeLocationStr, ignoreCase: true, out StoreLocation storeLoc))
-    storeLoc = StoreLocation.LocalMachine;
+Press Win + R → certlm.msc → (LocalMachine store)
 
-if (!Enum.TryParse(storeNameStr, ignoreCase: true, out StoreName storeName))
-    storeName = StoreName.My;
+Go to Personal → Certificates
 
-// Load certificate
-var cert = CertificateLoader.LoadFromStore(subjectName, storeLoc, storeName);
-if (cert == null)
-    throw new InvalidOperationException($"Certificate '{subjectName}' not found in {storeLoc}\\{storeName}");
+Look for a certificate whose Subject contains "LTB4U" or similar.
 
-// == Create handler with mTLS ==
-var handler = new SocketsHttpHandler
-{
-    SslOptions = new SslClientAuthenticationOptions
-    {
-        EnabledSslProtocols = SslProtocols.Tls12,
-        ClientCertificates = new X509CertificateCollection { cert }
-    }
-};
+If you don’t see it there:
+
+Press Win + R → certmgr.msc → (CurrentUser store)
+
+Check Personal → Certificates again.
+
+👉 Whichever location shows the cert is the one you must set in your config.
