@@ -3,6 +3,12 @@ samples
 
 
 
+// == Load client certificate ==
+var configuration = new ConfigurationBuilder()
+    .SetBasePath(AppContext.BaseDirectory)
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+    .Build();
+
 // Read nested keys directly
 var subjectName = configuration["HostSettings:ClientCert:SubjectName"];
 var storeLocationStr = configuration["HostSettings:ClientCert:StoreLocation"];
@@ -20,3 +26,12 @@ var cert = CertificateLoader.LoadFromStore(subjectName, storeLoc, storeName);
 if (cert == null)
     throw new InvalidOperationException($"Certificate '{subjectName}' not found in {storeLoc}\\{storeName}");
 
+// == Create handler with mTLS ==
+var handler = new SocketsHttpHandler
+{
+    SslOptions = new SslClientAuthenticationOptions
+    {
+        EnabledSslProtocols = SslProtocols.Tls12,
+        ClientCertificates = new X509CertificateCollection { cert }
+    }
+};
