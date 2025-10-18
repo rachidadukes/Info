@@ -1,2 +1,36 @@
 samples
 
+public async Task UpdateLogsAsync(IEnumerable<LogDetailsModel> tempLogs)
+{
+    using var openDb = new OpenSQLiteDatabase();
+    using var db = openDb.OpenDatabase();
+
+    var ids = tempLogs.Select(t => t.LogId).Distinct().ToList();
+
+    // Track only the rows we will edit
+    var existing = await db.LogDetails
+        .Where(x => ids.Contains(x.LogId))
+        .ToDictionaryAsync(x => x.LogId);
+
+    db.ChangeTracker.AutoDetectChangesEnabled = false;
+    try
+    {
+        foreach (var log in tempLogs)
+        {
+            if (log is null || !existing.TryGetValue(log.LogId, out var e)) continue;
+
+            e.AccountNumber = log.AccountNumber;
+            e.AccountType   = log.AccountType;
+            e.AccessNumber  = log.AccessNumber;
+            e.RequestType   = log.RequestType;
+            e.TranCode      = log.TranCode;
+            // set any other columns...
+        }
+
+        await db.SaveChangesAsync();     // <-- ONE save
+    }
+    finally
+    {
+        db.ChangeTracker.AutoDetectChangesEnabled = true;
+    }
+}
