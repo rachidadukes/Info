@@ -1,53 +1,51 @@
 samples
 
 
-public async Task<string> RebuildAccessAcctNumbersAsync(List<LogDetailsModel> allLogs)
+private async Task<string> GetAccountTypes(DbContextSQLite dbContext, List<LogDetailsModel> allLogs)
 {
-    using var openDb = new OpenSQLiteDatabase();
-    using var db = openDb.OpenDatabase();
-
-    // 1) Build the unique list purely in memory
-    var uniqueItems = allLogs
-        .GroupBy(s => new { s.AccountNumber, s.AccountType, s.AccessNumber, s.Environment })
-        .Where(g => !string.IsNullOrEmpty(g.Key.AccountNumber) && !string.IsNullOrEmpty(g.Key.AccessNumber))
-        .Select(g => g.First())
-        .ToList();
-
-    var message = $"{uniqueItems.Count} Access and account number found";
-
-    // 2) Map to destination model once
-    var accessAcctNumbers = uniqueItems.Select(log => new AccessAcctNumbersModel
-    {
-        Environment   = log.Environment,
-        AccessNumber  = log.AccessNumber,
-        AccountNumber = log.AccountNumber,
-        AccountType   = log.AccountType
-    }).ToList();
-
-    // 3) Bulk replace using one transaction
-    using var tx = await db.Database.BeginTransactionAsync();
-
-    // (optional) small perf win for bulk ops
-    db.ChangeTracker.AutoDetectChangesEnabled = false;
     try
     {
-        // Clear table once
-        await db.Database.ExecuteSqlRawAsync("DELETE FROM AccessAcctNumbers");
+        // 1) Unique list in memory
+        var uniqueItems = allLogs
+            .GroupBy(s => new { s.AccountType, s.Environment })
+            .Where(g => !string.IsNullOrEmpty(g.Key.AccountType))
+            .Select(g => g.First())
+            .ToList();
 
-        // Insert all rows at once
-        await db.Set<AccessAcctNumbersModel>().AddRangeAsync(accessAcctNumbers);
-        await db.SaveChangesAsync();
+        var message = $"{uniqueItems.Count} Account Types found";
 
-        await tx.CommitAsync();
+        // 2) Map once
+        var types = uniqueItems.Select(log => new AccountTypesModel
+        {
+            Environment = log.Environment,
+            AccountType = log.AccountType
+        }).ToList();
+
+        // 3) Bulk replace atomically
+        using var tx = await dbContext.Database.BeginTransactionAsync();
+
+        dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
+        try
+        {
+            await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM AccountTypes");   // clear once
+
+            await dbContext.Set<AccountTypesModel>().AddRangeAsync(types);             // insert all
+            await dbContext.SaveChangesAsync();                                        // one save
+
+            await tx.CommitAsync();
+        }
+        finally
+        {
+            dbContext.ChangeTracker.AutoDetectChangesEnabled = true;
+        }
+
+        return message;
     }
-    finally
+    catch (Exception ex)
     {
-        db.ChangeTracker.AutoDetectChangesEnabled = true;
+        Console.WriteLine($"Error while saving changes: {ex.Message}");
+        if (ex.InnerException != null)
+            Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
+        return "";
     }
-
-    return message;
 }
-
-
-
-
