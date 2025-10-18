@@ -1,1 +1,43 @@
+public async Task UpdateLogDetailsAsync(
+    DbContextSQLite dbContext,
+    List<LogDetailsModel> tempLogs,
+    int selectedMonth,
+    int selectedYear)
+{
+    try
+    {
+        // Get all LogIds from incoming logs
+        var ids = tempLogs.Select(l => l.LogId).Distinct().ToList();
+
+        // Fetch only the records to update
+        var logsToUpdate = await dbContext.LogDetails
+            .Where(x => ids.Contains(x.LogId))
+            .ToListAsync();
+
+        foreach (var existing in logsToUpdate)
+        {
+            var newLog = tempLogs.FirstOrDefault(l => l.LogId == existing.LogId);
+            if (newLog == null) continue;
+
+            // Update only the target fields
+            existing.AccountNumber = newLog.AccountNumber;
+            existing.AccountType   = newLog.AccountType;
+            existing.AccessNumber  = newLog.AccessNumber;
+            existing.RequestType   = newLog.RequestType;
+            existing.TranCode      = newLog.TranCode;
+        }
+
+        // Save all changes once
+        await dbContext.SaveChangesAsync();
+
+        // Update import status after saving
+        await UpdateImportStatus(selectedMonth, selectedYear);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Error updating logs: {ex.Message}");
+        if (ex.InnerException != null)
+            Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
+    }
+}
 
