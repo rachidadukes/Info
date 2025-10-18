@@ -1,45 +1,5 @@
 samples
-public async Task<List<RequestResponseModel>> SaveNewRequestResponsesAsync(
-    List<RequestResponseModel> requestResponseList,
-    int selectedMonth,
-    int selectedYear)
-{
-    try
-    {
-        using var openDb = new OpenSQLiteDatabase();
-        using var dbContext = openDb.OpenDatabase();
 
-        // Step 1: Load all existing LogIds from DB once
-        var existingIds = await dbContext.RequestResponse
-            .Select(x => x.LogId)
-            .ToListAsync();
 
-        // Step 2: Filter only new logs that don't exist
-        var newItems = requestResponseList
-            .Where(log => log != null && !existingIds.Contains(log.LogId))
-            .Select(log => new RequestResponseModel
-            {
-                LogId = log.LogId,
-                Request = log.Request,
-                Response = log.Response
-            })
-            .ToList();
 
-        // Step 3: Add all at once
-        if (newItems.Count > 0)
-        {
-            await dbContext.RequestResponse.AddRangeAsync(newItems);
-            await dbContext.SaveChangesAsync();
-        }
 
-        // Step 4: Update status after saving
-        await UpdateImportStatus(selectedMonth, selectedYear);
-
-        return requestResponseList;
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"❌ Error saving request/response data: {ex.Message}");
-        return new List<RequestResponseModel>();
-    }
-}
