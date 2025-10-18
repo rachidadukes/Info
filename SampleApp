@@ -1,37 +1,36 @@
 samples
 
 
-private async Task<string> GetAccountTypes(DbContextSQLite dbContext, List<LogDetailsModel> allLogs)
+
+private async Task<string> GetUsers(DbContextSQLite dbContext, List<LogDetailsModel> allLogs)
 {
     try
     {
-        // 1) Unique list in memory
-        var uniqueItems = allLogs
-            .GroupBy(s => new { s.AccountType, s.Environment })
-            .Where(g => !string.IsNullOrEmpty(g.Key.AccountType))
+        // 1) dedupe in memory
+        var unique = allLogs
+            .Where(x => !string.IsNullOrEmpty(x.UserID))
+            .GroupBy(x => new { x.UserID, x.Environment })
             .Select(g => g.First())
             .ToList();
 
-        var message = $"{uniqueItems.Count} Account Types found";
+        var message = $"{unique.Count} Users found";
 
-        // 2) Map once
-        var types = uniqueItems.Select(log => new AccountTypesModel
+        // 2) map once
+        var users = unique.Select(x => new UsersModel
         {
-            Environment = log.Environment,
-            AccountType = log.AccountType
+            Environment = x.Environment,
+            UserID      = x.UserID
         }).ToList();
 
-        // 3) Bulk replace atomically
+        // 3) atomic bulk replace
         using var tx = await dbContext.Database.BeginTransactionAsync();
 
         dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
         try
         {
-            await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM AccountTypes");   // clear once
-
-            await dbContext.Set<AccountTypesModel>().AddRangeAsync(types);             // insert all
-            await dbContext.SaveChangesAsync();                                        // one save
-
+            await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM UserIDs"); // clear once
+            await dbContext.Set<UsersModel>().AddRangeAsync(users);             // add all
+            await dbContext.SaveChangesAsync();                                 // one save
             await tx.CommitAsync();
         }
         finally
