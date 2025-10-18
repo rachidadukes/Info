@@ -1,36 +1,34 @@
 samples
 
-
-
-private async Task<string> GetUsers(DbContextSQLite dbContext, List<LogDetailsModel> allLogs)
+private async Task<string> GetRequestType(DbContextSQLite dbContext, List<LogDetailsModel> allLogs)
 {
     try
     {
-        // 1) dedupe in memory
-        var unique = allLogs
-            .Where(x => !string.IsNullOrEmpty(x.UserID))
-            .GroupBy(x => new { x.UserID, x.Environment })
+        // 1) group and dedupe in memory
+        var uniqueItems = allLogs
+            .Where(s => !string.IsNullOrEmpty(s.RequestType))
+            .GroupBy(s => new { s.RequestType, s.Environment })
             .Select(g => g.First())
             .ToList();
 
-        var message = $"{unique.Count} Users found";
+        var message = $"{uniqueItems.Count} Request Types found";
 
-        // 2) map once
-        var users = unique.Select(x => new UsersModel
+        // 2) project to entity model
+        var types = uniqueItems.Select(log => new RequestTypesModel
         {
-            Environment = x.Environment,
-            UserID      = x.UserID
+            Environment = log.Environment,
+            RequestType = log.RequestType
         }).ToList();
 
-        // 3) atomic bulk replace
+        // 3) bulk replace atomically
         using var tx = await dbContext.Database.BeginTransactionAsync();
 
         dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
         try
         {
-            await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM UserIDs"); // clear once
-            await dbContext.Set<UsersModel>().AddRangeAsync(users);             // add all
-            await dbContext.SaveChangesAsync();                                 // one save
+            await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM RequestTypes");   // clear table once
+            await dbContext.Set<RequestTypesModel>().AddRangeAsync(types);              // insert all
+            await dbContext.SaveChangesAsync();                                         // one save
             await tx.CommitAsync();
         }
         finally
@@ -42,7 +40,7 @@ private async Task<string> GetUsers(DbContextSQLite dbContext, List<LogDetailsMo
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Error while saving changes: {ex.Message}");
+        Console.WriteLine($"❌ Error while saving changes: {ex.Message}");
         if (ex.InnerException != null)
             Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
         return "";
