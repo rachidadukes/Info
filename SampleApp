@@ -1,5 +1,53 @@
 samples
 
 
+public async Task<string> RebuildAccessAcctNumbersAsync(List<LogDetailsModel> allLogs)
+{
+    using var openDb = new OpenSQLiteDatabase();
+    using var db = openDb.OpenDatabase();
+
+    // 1) Build the unique list purely in memory
+    var uniqueItems = allLogs
+        .GroupBy(s => new { s.AccountNumber, s.AccountType, s.AccessNumber, s.Environment })
+        .Where(g => !string.IsNullOrEmpty(g.Key.AccountNumber) && !string.IsNullOrEmpty(g.Key.AccessNumber))
+        .Select(g => g.First())
+        .ToList();
+
+    var message = $"{uniqueItems.Count} Access and account number found";
+
+    // 2) Map to destination model once
+    var accessAcctNumbers = uniqueItems.Select(log => new AccessAcctNumbersModel
+    {
+        Environment   = log.Environment,
+        AccessNumber  = log.AccessNumber,
+        AccountNumber = log.AccountNumber,
+        AccountType   = log.AccountType
+    }).ToList();
+
+    // 3) Bulk replace using one transaction
+    using var tx = await db.Database.BeginTransactionAsync();
+
+    // (optional) small perf win for bulk ops
+    db.ChangeTracker.AutoDetectChangesEnabled = false;
+    try
+    {
+        // Clear table once
+        await db.Database.ExecuteSqlRawAsync("DELETE FROM AccessAcctNumbers");
+
+        // Insert all rows at once
+        await db.Set<AccessAcctNumbersModel>().AddRangeAsync(accessAcctNumbers);
+        await db.SaveChangesAsync();
+
+        await tx.CommitAsync();
+    }
+    finally
+    {
+        db.ChangeTracker.AutoDetectChangesEnabled = true;
+    }
+
+    return message;
+}
+
+
 
 
