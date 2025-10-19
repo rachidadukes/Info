@@ -1,52 +1,41 @@
 
+sample
 
-===============================
-public partial class MainWindow : Window
+
+===================
+
+
+private void LoadMonthYearData()
 {
-    public class MonthYearItem
+    var items = new List<MonthYearItem>();
+
+    DateTime now = DateTime.Now;
+    int startYear = 2020;
+    int endYear = now.Year;
+
+    // Fill list only up to current month/year
+    for (int year = endYear; year >= startYear; year--)
     {
-        public int Month { get; set; }
-        public int Year  { get; set; }
-        public string DisplayText => $"{new DateTime(Year, Month, 1):MMM} . {Year}";
-    }
-
-    public MainWindow()
-    {
-        InitializeComponent();
-        LoadMonthYearData();
-    }
-
-    private void LoadMonthYearData()
-    {
-        var items = new List<MonthYearItem>();
-
-        int startYear = 2020;               // pick your earliest year
-        int endYear   = DateTime.Now.Year;  // up to current year
-
-        for (int y = startYear; y <= endYear; y++)
-            for (int m = 1; m <= 12; m++)
-                items.Add(new MonthYearItem { Year = y, Month = m });
-
-        // Newest first: current year/month at top
-        var sorted = items.OrderByDescending(i => i.Year)
-                          .ThenByDescending(i => i.Month)
-                          .ToList();
-
-        MonthYearComboBox.ItemsSource = sorted;
-
-        // Preselect current month/year
-        var current = sorted.FirstOrDefault(i => i.Year == DateTime.Now.Year &&
-                                                 i.Month == DateTime.Now.Month);
-        MonthYearComboBox.SelectedItem = current;
-    }
-
-    private void MonthYearComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (MonthYearComboBox.SelectedItem is MonthYearItem sel)
+        for (int month = 12; month >= 1; month--)
         {
-            int year  = sel.Year;
-            int month = sel.Month;
-            // use year/month here (e.g., LoadLogs(year, month))
+            // stop once we pass the current month/year
+            if (year == endYear && month > now.Month)
+                continue;
+
+            items.Add(new MonthYearItem
+            {
+                Year = year,
+                Month = month,
+                // Example: "Oct . 2025"
+                DisplayText = $"{new DateTime(year, month, 1):MMM} . {year}"
+            });
         }
     }
+
+    // ✅ Now items[0] = current month/year
+    MonthYearComboBox.ItemsSource = items;
+
+    // ✅ Preselect current month/year
+    var current = items.FirstOrDefault(i => i.Year == now.Year && i.Month == now.Month);
+    MonthYearComboBox.SelectedItem = current;
 }
