@@ -1,62 +1,71 @@
-private void MonthYearPicker_Loaded(object sender, RoutedEventArgs e)
+
+
+===============================
+<ComboBox x:Name="MonthYearComboBox"
+          Width="150"
+          SelectionChanged="MonthYearComboBox_SelectionChanged"
+          Margin="5">
+    <ComboBox.ItemTemplate>
+        <DataTemplate>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="{Binding MonthName}" Width="80"/>
+                <TextBlock Text="{Binding Year}" Width="60" HorizontalAlignment="Right"/>
+            </StackPanel>
+        </DataTemplate>
+    </ComboBox.ItemTemplate>
+</ComboBox>
+===============================
+
+public partial class MainWindow : Window
 {
-    if (sender is DatePicker datePicker)
+    public class MonthYearItem
     {
-        // When the dropdown opens, force calendar to year mode
-        datePicker.CalendarOpened += (s, ev) =>
+        public string MonthName { get; set; }
+        public int Month { get; set; }
+        public int Year { get; set; }
+        public string DisplayText => $"{MonthName} {Year}";
+    }
+
+    public MainWindow()
+    {
+        InitializeComponent();
+        LoadMonthYearData();
+    }
+
+    private void LoadMonthYearData()
+    {
+        var items = new List<MonthYearItem>();
+        int startYear = 2020;
+        int endYear = 2030;
+
+        for (int year = startYear; year <= endYear; year++)
         {
-            if (datePicker.Template.FindName("PART_Calendar", datePicker) is Calendar calendar)
+            for (int month = 1; month <= 12; month++)
             {
-                calendar.DisplayMode = CalendarMode.Year;
-                calendar.DisplayModeChanged += Calendar_DisplayModeChanged;
+                items.Add(new MonthYearItem
+                {
+                    Month = month,
+                    Year = year,
+                    MonthName = new DateTime(year, month, 1).ToString("MMM")
+                });
             }
-        };
-    }
-}
-
-private void Calendar_DisplayModeChanged(object sender, CalendarModeChangedEventArgs e)
-{
-    var calendar = sender as Calendar;
-    if (calendar.DisplayMode == CalendarMode.Month)
-    {
-        // Select first day of that month
-        calendar.DisplayMode = CalendarMode.Year;
-        calendar.SelectedDate = new DateTime(calendar.DisplayDate.Year, calendar.DisplayDate.Month, 1);
-        if (calendar.TemplatedParent is DatePicker picker)
-        {
-            picker.IsDropDownOpen = false;
         }
+
+        MonthYearComboBox.ItemsSource = items.OrderByDescending(i => i.Year)
+                                             .ThenByDescending(i => i.Month)
+                                             .ToList();
     }
-}
-=======================
-private void MonthYearPicker_SelectedDateChanged(object sender, SelectionChangedEventArgs e)
-{
-    if (MonthYearPicker.SelectedDate.HasValue)
+
+    private void MonthYearComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        DateTime selected = MonthYearPicker.SelectedDate.Value;
-        int year = selected.Year;
-        int month = selected.Month;
+        if (MonthYearComboBox.SelectedItem is MonthYearItem selected)
+        {
+            int selectedYear = selected.Year;
+            int selectedMonth = selected.Month;
 
-        MessageBox.Show($"Year: {year}, Month: {month}");
-    }
-}
-
-
-=============================================================
-
-
-private void MonthYearPicker_SelectedDateChanged(object? sender, SelectionChangedEventArgs e)
-{
-    if (MonthYearPicker.SelectedDate.HasValue)
-    {
-        DateTime selected = MonthYearPicker.SelectedDate.Value;
-        int year = selected.Year;
-        int month = selected.Month;
-
-        MessageBox.Show($"Year: {year}, Month: {month}");
-    }
-    else
-    {
-        MessageBox.Show("No date selected.");
+            MessageBox.Show($"Selected: {selected.MonthName} {selected.Year}");
+            // Example: call your filtering method here
+            // LoadLogs(selectedYear, selectedMonth);
+        }
     }
 }
