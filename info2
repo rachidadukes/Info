@@ -1,11 +1,46 @@
-<DatePicker x:Name="MonthYearPicker"
-            Width="150"
-            Loaded="MonthYearPicker_Loaded"
-            DisplayDateStart="2000-01-01"
-            DisplayDateEnd="2030-12-31"
-            SelectedDateChanged="MonthYearPicker_SelectedDateChanged"
-            SelectedDateFormat="Custom"
-            CustomFormat="MMM yyyy" />
+private void MonthYearPicker_Loaded(object sender, RoutedEventArgs e)
+{
+    if (sender is DatePicker datePicker)
+    {
+        // When the dropdown opens, force calendar to year mode
+        datePicker.CalendarOpened += (s, ev) =>
+        {
+            if (datePicker.Template.FindName("PART_Calendar", datePicker) is Calendar calendar)
+            {
+                calendar.DisplayMode = CalendarMode.Year;
+                calendar.DisplayModeChanged += Calendar_DisplayModeChanged;
+            }
+        };
+    }
+}
+
+private void Calendar_DisplayModeChanged(object sender, CalendarModeChangedEventArgs e)
+{
+    var calendar = sender as Calendar;
+    if (calendar.DisplayMode == CalendarMode.Month)
+    {
+        // Select first day of that month
+        calendar.DisplayMode = CalendarMode.Year;
+        calendar.SelectedDate = new DateTime(calendar.DisplayDate.Year, calendar.DisplayDate.Month, 1);
+        if (calendar.TemplatedParent is DatePicker picker)
+        {
+            picker.IsDropDownOpen = false;
+        }
+    }
+}
+=======================
+private void MonthYearPicker_SelectedDateChanged(object sender, SelectionChangedEventArgs e)
+{
+    if (MonthYearPicker.SelectedDate.HasValue)
+    {
+        DateTime selected = MonthYearPicker.SelectedDate.Value;
+        int year = selected.Year;
+        int month = selected.Month;
+
+        MessageBox.Show($"Year: {year}, Month: {month}");
+    }
+}
+
 
 =============================================================
 
