@@ -1,43 +1,27 @@
-public async Task UpdateLogDetailsAsync(
-    DbContextSQLite dbContext,
-    List<LogDetailsModel> tempLogs,
-    int selectedMonth,
-    int selectedYear)
+<DatePicker x:Name="MonthYearPicker"
+            Width="150"
+            Loaded="MonthYearPicker_Loaded"
+            DisplayDateStart="2000-01-01"
+            DisplayDateEnd="2030-12-31"
+            SelectedDateChanged="MonthYearPicker_SelectedDateChanged"
+            SelectedDateFormat="Custom"
+            CustomFormat="MMM yyyy" />
+
+=============================================================
+
+
+private void MonthYearPicker_SelectedDateChanged(object? sender, SelectionChangedEventArgs e)
 {
-    try
+    if (MonthYearPicker.SelectedDate.HasValue)
     {
-        // Get all LogIds from incoming logs
-        var ids = tempLogs.Select(l => l.LogId).Distinct().ToList();
+        DateTime selected = MonthYearPicker.SelectedDate.Value;
+        int year = selected.Year;
+        int month = selected.Month;
 
-        // Fetch only the records to update
-        var logsToUpdate = await dbContext.LogDetails
-            .Where(x => ids.Contains(x.LogId))
-            .ToListAsync();
-
-        foreach (var existing in logsToUpdate)
-        {
-            var newLog = tempLogs.FirstOrDefault(l => l.LogId == existing.LogId);
-            if (newLog == null) continue;
-
-            // Update only the target fields
-            existing.AccountNumber = newLog.AccountNumber;
-            existing.AccountType   = newLog.AccountType;
-            existing.AccessNumber  = newLog.AccessNumber;
-            existing.RequestType   = newLog.RequestType;
-            existing.TranCode      = newLog.TranCode;
-        }
-
-        // Save all changes once
-        await dbContext.SaveChangesAsync();
-
-        // Update import status after saving
-        await UpdateImportStatus(selectedMonth, selectedYear);
+        MessageBox.Show($"Year: {year}, Month: {month}");
     }
-    catch (Exception ex)
+    else
     {
-        Console.WriteLine($"❌ Error updating logs: {ex.Message}");
-        if (ex.InnerException != null)
-            Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
+        MessageBox.Show("No date selected.");
     }
 }
-
