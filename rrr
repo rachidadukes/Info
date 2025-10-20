@@ -1,14 +1,1 @@
-// 4) Ask user to enter the amount
-AnsiConsole.Markup("[yellow]Enter the amount:[/] ");
-string transAmt = Console.ReadLine()?.Trim() ?? string.Empty;
-userInput.TransAmt = transAmt;
-
-// 👇 Move the cursor one line up and clear that line (make the prompt disappear)
-int currentLine = Console.CursorTop;
-Console.SetCursorPosition(0, currentLine - 1);
-Console.Write(new string(' ', Console.WindowWidth));
-Console.SetCursorPosition(0, currentLine - 1);
-
-// (Optional) You can leave a small gap after clearing
-AnsiConsole.WriteLine();
 
