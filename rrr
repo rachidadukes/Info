@@ -1,1 +1,99 @@
 
+
+
+
+using Spectre.Console;
+
+public static class ConsoleDisplayHelper
+{
+    // Store all transactions completed in this session
+    private static readonly List<(DateTime When, UserInputModel Input, string WhichService)> _history = new();
+
+    public static void PrintStickySummary(UserInputModel u)
+    {
+        if (u == null)
+            return;
+
+        AnsiConsole.Write(new Rule("[green]Selections[/]").RuleStyle("grey"));
+        AnsiConsole.MarkupLine($"[yellow]Environment:[/] {u.Environment}");
+        AnsiConsole.MarkupLine($"[yellow]Account Type:[/] {u.AccountType}");
+        AnsiConsole.MarkupLine($"[yellow]Account Number:[/] {u.AccountNumber}");
+        AnsiConsole.MarkupLine($"[yellow]Transaction:[/] {u.TranName} (Code: {u.TranCode})");
+        AnsiConsole.MarkupLine($"[yellow]Amount:[/] {u.TransAmt}");
+        AnsiConsole.Write(new Rule().RuleStyle("grey"));
+    }
+
+    public static void AddToHistory(UserInputModel u, string whichService)
+    {
+        if (u == null)
+            return;
+
+        _history.Add((DateTime.Now, u, whichService));
+    }
+
+    public static void RenderHistory()
+    {
+        if (_history.Count == 0)
+            return;
+
+        var table = new Table().Border(TableBorder.Rounded);
+        table.AddColumn("When");
+        table.AddColumn("Service");
+        table.AddColumn("Env");
+        table.AddColumn("Tran");
+        table.AddColumn("Acct#");
+        table.AddColumn("Amt");
+
+        foreach (var h in _history)
+        {
+            table.AddRow(
+                h.When.ToString("yyyy-MM-dd HH:mm:ss"),
+                h.WhichService,
+                h.Input.Environment,
+                $"{h.Input.TranName} ({h.Input.TranCode})",
+                h.Input.AccountNumber,
+                h.Input.TransAmt
+            );
+        }
+
+        AnsiConsole.Write(new Rule("[grey]Run History[/]").RuleStyle("grey"));
+        AnsiConsole.Write(table);
+    }
+}
+
+===============================
+
+private static async Task RunInteractiveLoopAsync()
+{
+    while (true)
+    {
+        var whichService = CurrentOrNewService() ? "New Service" : "Current Service";
+        AnsiConsole.MarkupLine($"[blue]Calling {whichService}[/]");
+
+        var userInput = await CollectUserInput();
+        if (userInput is null)
+        {
+            if (!AnsiConsole.Confirm("Try again?")) break;
+            continue;
+        }
+
+        // ✅ Call helper instead of inline summary code
+        ConsoleDisplayHelper.PrintStickySummary(userInput);
+
+        var xmlRequest = await GenerateXmlRequest(userInput);
+        var transaction = new ProcessTransaction();
+        var xmlResponse = await transaction.SendToHost(xmlRequest);
+
+        var saver = new SaveRequestResponse();
+        saver.SaveNewRequestResponse(userInput, whichService, xmlRequest, xmlResponse);
+
+        // ✅ Record and show history using helper
+        ConsoleDisplayHelper.AddToHistory(userInput, whichService);
+        ConsoleDisplayHelper.RenderHistory();
+
+        if (!AnsiConsole.Confirm("Do you want to process another transaction?"))
+            break;
+
+        AnsiConsole.Write(new Rule("[green]Next Transaction[/]").RuleStyle("grey"));
+    }
+}
