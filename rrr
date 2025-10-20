@@ -1,18 +1,16 @@
 
 
-
-
 using Spectre.Console;
+using System.Xml;
+using System.Text;
 
 public static class ConsoleDisplayHelper
 {
-    // Store all transactions completed in this session
     private static readonly List<(DateTime When, UserInputModel Input, string WhichService)> _history = new();
 
     public static void PrintStickySummary(UserInputModel u)
     {
-        if (u == null)
-            return;
+        if (u == null) return;
 
         AnsiConsole.Write(new Rule("[green]Selections[/]").RuleStyle("grey"));
         AnsiConsole.MarkupLine($"[yellow]Environment:[/] {u.Environment}");
@@ -25,16 +23,13 @@ public static class ConsoleDisplayHelper
 
     public static void AddToHistory(UserInputModel u, string whichService)
     {
-        if (u == null)
-            return;
-
+        if (u == null) return;
         _history.Add((DateTime.Now, u, whichService));
     }
 
     public static void RenderHistory()
     {
-        if (_history.Count == 0)
-            return;
+        if (_history.Count == 0) return;
 
         var table = new Table().Border(TableBorder.Rounded);
         table.AddColumn("When");
@@ -59,41 +54,113 @@ public static class ConsoleDisplayHelper
         AnsiConsole.Write(new Rule("[grey]Run History[/]").RuleStyle("grey"));
         AnsiConsole.Write(table);
     }
-}
 
-===============================
+    // ---------- NEW: XML SUMMARY & UTILITIES ----------
 
-private static async Task RunInteractiveLoopAsync()
-{
-    while (true)
+    /// <summary>
+    /// Render compact previews of XML request and response.
+    /// </summary>
+    /// <param name="xmlRequest">Raw XML string for the request.</param>
+    /// <param name="xmlResponse">Raw XML string for the response.</param>
+    /// <param name="previewLines">Max number of lines to show in preview (each).</param>
+    /// <param name="offerExpand">If true, prompt user to show full XML inline.</param>
+    public static void RenderXmlSummary(string xmlRequest, string xmlResponse, int previewLines = 24, bool offerExpand = true)
     {
-        var whichService = CurrentOrNewService() ? "New Service" : "Current Service";
-        AnsiConsole.MarkupLine($"[blue]Calling {whichService}[/]");
+        // REQUEST
+        RenderOneXmlBlock("XML Request", xmlRequest, previewLines, offerExpand);
 
-        var userInput = await CollectUserInput();
-        if (userInput is null)
+        // RESPONSE
+        RenderOneXmlBlock("XML Response", xmlResponse, previewLines, offerExpand);
+    }
+
+    private static void RenderOneXmlBlock(string title, string xml, int previewLines, bool offerExpand)
+    {
+        AnsiConsole.Write(new Rule($"[blue]{title}[/]").RuleStyle("grey"));
+
+        if (string.IsNullOrWhiteSpace(xml))
         {
-            if (!AnsiConsole.Confirm("Try again?")) break;
-            continue;
+            AnsiConsole.MarkupLine("[red]No XML available.[/]");
+            return;
         }
 
-        // ✅ Call helper instead of inline summary code
-        ConsoleDisplayHelper.PrintStickySummary(userInput);
+        // Pretty-print but be resilient if XML is malformed
+        string pretty = TryPrettyXml(xml, indent: 2, out bool wellFormed);
 
-        var xmlRequest = await GenerateXmlRequest(userInput);
-        var transaction = new ProcessTransaction();
-        var xmlResponse = await transaction.SendToHost(xmlRequest);
+        // Show preview first
+        var (preview, truncated) = TakeFirstLines(pretty, previewLines);
 
-        var saver = new SaveRequestResponse();
-        saver.SaveNewRequestResponse(userInput, whichService, xmlRequest, xmlResponse);
+        var panel = new Panel(EscapeMarkup(preview))
+            .Header($"{title} Preview{(truncated ? $" (first {previewLines} lines)" : "")}")
+            .Border(BoxBorder.Rounded);
 
-        // ✅ Record and show history using helper
-        ConsoleDisplayHelper.AddToHistory(userInput, whichService);
-        ConsoleDisplayHelper.RenderHistory();
+        // If malformed, annotate header
+        if (!wellFormed)
+            panel = panel.Header($"{title} Preview (not well-formed; raw shown)");
 
-        if (!AnsiConsole.Confirm("Do you want to process another transaction?"))
-            break;
+        AnsiConsole.Write(panel);
 
-        AnsiConsole.Write(new Rule("[green]Next Transaction[/]").RuleStyle("grey"));
+        if (offerExpand && truncated)
+        {
+            if (AnsiConsole.Confirm($"Show full {title.ToLower()}?"))
+            {
+                var fullPanel = new Panel(EscapeMarkup(pretty))
+                    .Header($"{title} (Full)")
+                    .Border(BoxBorder.Rounded);
+                AnsiConsole.Write(fullPanel);
+            }
+        }
     }
+
+    /// <summary>
+    /// Try to pretty-print XML. Falls back to raw if not well-formed.
+    /// </summary>
+    private static string TryPrettyXml(string xml, int indent, out bool wellFormed)
+    {
+        wellFormed = true;
+        try
+        {
+            var doc = new XmlDocument();
+            doc.PreserveWhitespace = false;
+            doc.LoadXml(xml);
+
+            var sb = new StringBuilder();
+            var settings = new XmlWriterSettings
+            {
+                OmitXmlDeclaration = false,
+                Indent = true,
+                IndentChars = new string(' ', indent),
+                NewLineHandling = NewLineHandling.Entitize
+            };
+            using var writer = XmlWriter.Create(sb, settings);
+            doc.Save(writer);
+            return sb.ToString();
+        }
+        catch
+        {
+            wellFormed = false;
+            // fallback: return raw trimmed text
+            return xml?.Trim() ?? string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Returns first N lines with a flag indicating if truncation occurred.
+    /// </summary>
+    private static (string text, bool truncated) TakeFirstLines(string input, int maxLines)
+    {
+        if (maxLines <= 0 || string.IsNullOrEmpty(input))
+            return (input ?? string.Empty, false);
+
+        var lines = input.Replace("\r\n", "\n").Split('\n');
+        if (lines.Length <= maxLines)
+            return (string.Join('\n', lines), false);
+
+        var head = string.Join('\n', lines[..maxLines]);
+        return ($"{head}\n... (truncated; {lines.Length - maxLines} more lines)", true);
+    }
+
+    /// <summary>
+    /// Escapes Spectre markup so XML renders verbatim inside Panel.
+    /// </summary>
+    private static string EscapeMarkup(string s) => Markup.Escape(s ?? string.Empty);
 }
