@@ -1,6 +1,8 @@
 // 4) Ask user to enter the amount
-string TransAmt = AnsiConsole.Ask<string>("[yellow]Enter the amount:[/]");
-userInput.TransAmt = TransAmt.ToString();
+AnsiConsole.Markup("[yellow]Enter the amount: [/]");
+string transAmt = Console.ReadLine()?.Trim() ?? string.Empty;
+userInput.TransAmt = transAmt;
 
+// 👇 Print it back permanently once (same line)
 AnsiConsole.MarkupLine($"[blue]Enter the amount:[/] [bold yellow]{userInput.TransAmt}[/]");
 AnsiConsole.WriteLine();
