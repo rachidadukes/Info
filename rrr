@@ -1,20 +1,44 @@
+using System;
+using System.Linq;
+using System.Security.Cryptography.X509Certificates;
+using System.Net.Http;
 
-// -----------------------------------------------------------------------------
-// TEMPORARY TRANSCODE OVERRIDE FOR TESTING
-// (remove this block once the environment stabilizes)
-try
+public class ApiXmlClient
 {
-    XDocument x = XDocument.Parse(xml);
-    XElement tc = x.Descendants("TranCode").FirstOrDefault();
-    if (tc != null)
+    public async Task<string> GetResponseFromNewAPI(string xml)
     {
-        // force to 1001 for testing; change to 1002 if needed
-        tc.Value = "1001";
-        xml = x.ToString(SaveOptions.DisableFormatting);
+        // ... get endpointUrl
+
+        // wherever you currently load the cert:
+        X509Certificate2 cert = CertificateLoader.GetCertificateBySubjectName("<<subject>>");
+
+        // <-- log it here
+        DumpCert(cert);
+
+        // then build handler/client
+        var handler = new HttpClientHandler
+        {
+            ClientCertificateOptions = ClientCertificateOption.Manual
+        };
+        handler.ClientCertificates.Add(cert);
+
+        using var client = new HttpClient(handler) { BaseAddress = new Uri(endpointUrl) };
+        // ...
+    }
+
+    // place the helper INSIDE the class
+    private static void DumpCert(X509Certificate2 cert)
+    {
+        Console.WriteLine("Picked cert:");
+        Console.WriteLine($"  Subject   : {cert.Subject}");
+        Console.WriteLine($"  Issuer    : {cert.Issuer}");
+        Console.WriteLine($"  NotBefore : {cert.NotBefore:u}");
+        Console.WriteLine($"  NotAfter  : {cert.NotAfter:u}");
+
+        var ekus = cert.Extensions
+            .OfType<X509EnhancedKeyUsageExtension>()
+            .SelectMany(e => e.EnhancedKeyUsages.Cast<Oid>())
+            .Select(o => o.Value);
+        Console.WriteLine("  EKUs      : " + string.Join(", ", ekus));
     }
 }
-catch (Exception parseEx)
-{
-    // if XML parsing fails, continue without override
-}
-// -----------------------------------------------------------------------------
