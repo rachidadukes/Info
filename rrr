@@ -1,78 +1,27 @@
-  var xml = "<test>hello</test>";
-    var url = "https://your-nonprod-service-url/";
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <appSettings>
+    <!-- Host Routing -->
+    <add key="RoutingFlag" value="true" />
+    <add key="HostTranCodes" value="1806,1807,1810,1906,1907,1910,2906,2907,2910,3101,3102,3103,3105,3106" />
 
-    var result = HttpTestHelpers.GetResponseFromNewAPI(url, xml).GetAwaiter().GetResult();
-    Console.WriteLine(result);
-}
+    <!-- Host Settings -->
+    <add key="HostURL" value="https://unit-dpa-01-plto.nfcutest.net:5501/NFBranchExService/FinancialHost.asmx" />
+    <add key="HostMemberSearchURL" value="https://unit-dpa-01-plto.nfcutest.net:5502/NEBranchExService/MemberSearch.asmx" />
+    <add key="HostAcctInquiryURL" value="https://unit-dpa-01-plto.nfcutest.net:5503/NEBranchExService/AccountInquiry.asmx" />
+    <add key="HostCashBoxURL" value="https://unit-dpa-01-plto.nfcutest.net:5504/NEBranchExService/CashBox.asmx" />
+    <add key="MessageConverterURL" value="https://swcdcvenceaej01.nfcu.net/EncoreCore/api/MessageConverter" />
 
+    <!-- Client Certificate -->
+    <add key="ClientCert.SubjectName" value="LTCC483A490BE4.nfcu.net" />
+    <add key="ClientCert.StoreLocation" value="LocalMachine" />
+    <add key="ClientCert.StoreName" value="My" />
+  </appSettings>
 
-
-=================================
-using System;
-using System.Net;
-using System.Net.Http;
-using System.Net.Security;
-using System.Security.Cryptography.X509Certificates;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-
-public static class HttpTestHelpers
-{
-    // Non-production client that ignores all SSL validation
-    public static HttpClient CreateTestHttpClient(string baseAddress, TimeSpan? timeout = null)
-    {
-        var handler = new HttpClientHandler
-        {
-            // .NET Framework 4.7 way — bypass all cert checks
-            ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
-        };
-
-        var client = new HttpClient(handler)
-        {
-            BaseAddress = new Uri(baseAddress),
-            Timeout = timeout ?? TimeSpan.FromSeconds(30)
-        };
-
-        return client;
-    }
-
-    public static async Task<string> GetResponseFromNewAPI(string endpointUrl, string xml)
-    {
-        // Enforce TLS 1.2 for compatibility
-        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-
-        string body = "";
-
-        try
-        {
-            using (var client = CreateTestHttpClient(endpointUrl))
-            using (var content = new StringContent(xml ?? string.Empty, Encoding.UTF8, "application/xml"))
-            {
-                Console.WriteLine($"POST {client.BaseAddress}");
-                var resp = await client.PostAsync("", content);
-
-                body = await resp.Content.ReadAsStringAsync(); // no token overload in .NET 4.7
-
-                Console.WriteLine($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}");
-
-                if (!resp.IsSuccessStatusCode)
-                    throw new HttpRequestException($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}\n{body}");
-            }
-        }
-        catch (TaskCanceledException tex)
-        {
-            Console.WriteLine($"Timeout: {tex.Message}");
-        }
-        catch (HttpRequestException hrex)
-        {
-            Console.WriteLine($"HTTP Request Error: {hrex.Message}");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"General Error: {ex.Message}");
-        }
-
-        return body;
-    }
-}
+  <!-- Optional: enforce TLS 1.2 -->
+  <system.net>
+    <settings>
+      <servicePointManager expect100Continue="true" checkCertificateRevocationList="true" />
+    </settings>
+  </system.net>
+</configuration>
