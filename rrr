@@ -1,3 +1,86 @@
+string xml = "<yourXml/>";
+string url = "https://your-test-host/api/endpoint";
+var response = await HttpTestHelpers.GetResponseFromNewAPI(url, xml);
+Console.WriteLine(response);
+
+
+
+
+=================================
+using System;
+using System.Net;
+using System.Net.Http;
+using System.Security.Cryptography.X509Certificates;
+using System.Net.Security;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+
+public static class HttpTestHelpers
+{
+    /// <summary>
+    /// NON-PROD: create an HttpClient that accepts any server certificate.
+    /// Use only for testing against self-signed/untrusted certs.
+    /// </summary>
+    public static HttpClient CreateTestHttpClient(string baseAddress, TimeSpan? timeout = null)
+    {
+        // If you prefer logging the chain info, replace the DangerousAcceptAny... line
+        // with a custom callback that prints chain. For quick testing use the one-liner:
+        var handler = new HttpClientHandler
+        {
+            // WARNING: bypasses ALL certificate validation. Do NOT use in production.
+            ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator,
+            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+            AllowAutoRedirect = false
+        };
+
+        var client = new HttpClient(handler)
+        {
+            BaseAddress = new Uri(baseAddress, UriKind.Absolute),
+            Timeout = timeout ?? TimeSpan.FromSeconds(30)
+        };
+
+        return client;
+    }
+
+    /// <summary>
+    /// Example: posts the XML to the service and returns the response body as string.
+    /// Uses the test client when running against non-production endpoints.
+    /// </summary>
+    public static async Task<string> GetResponseFromNewAPI(string endpointUrl, string xml, CancellationToken? cancellationToken = null)
+    {
+        // Optional: ensure TLS version if needed
+        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken ?? CancellationToken.None);
+        cts.CancelAfter(TimeSpan.FromSeconds(30)); // safety timeout
+
+        // Create test client (non-prod)
+        using var client = CreateTestHttpClient(endpointUrl, TimeSpan.FromSeconds(30));
+
+        // If you prefer to post to a different path than the BaseAddress, call PostAsync(fullUrl,...)
+        using var content = new StringContent(xml ?? string.Empty, Encoding.UTF8, "application/xml");
+
+        try
+        {
+            Console.WriteLine($"POST {client.BaseAddress}");
+            var resp = await client.PostAsync("", content, cts.Token).ConfigureAwait(false);
+
+            var body = await resp.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
+            Console.WriteLine($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}");
+
+            if (!resp.IsSuccessStatusCode)
+                throw new HttpRequestException($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}\n{body}");
+
+            return body;
+        }
+        catch (TaskCanceledException tex) when (!cts.Token.IsCancellationRequested)
+        {
+            // Timeout
+            throw new TimeoutException($"Request to {endpointUrl} timed out.", tex);
+        }
+    }
+}
 
 
 
