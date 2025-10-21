@@ -1,8 +1,9 @@
-string xml = "<yourXml/>";
-string url = "https://your-test-host/api/endpoint";
-var response = await HttpTestHelpers.GetResponseFromNewAPI(url, xml);
-Console.WriteLine(response);
+  var xml = "<test>hello</test>";
+    var url = "https://your-nonprod-service-url/";
 
+    var result = HttpTestHelpers.GetResponseFromNewAPI(url, xml).GetAwaiter().GetResult();
+    Console.WriteLine(result);
+}
 
 
 
@@ -10,77 +11,68 @@ Console.WriteLine(response);
 using System;
 using System.Net;
 using System.Net.Http;
-using System.Security.Cryptography.X509Certificates;
 using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 public static class HttpTestHelpers
 {
-    /// <summary>
-    /// NON-PROD: create an HttpClient that accepts any server certificate.
-    /// Use only for testing against self-signed/untrusted certs.
-    /// </summary>
+    // Non-production client that ignores all SSL validation
     public static HttpClient CreateTestHttpClient(string baseAddress, TimeSpan? timeout = null)
     {
-        // If you prefer logging the chain info, replace the DangerousAcceptAny... line
-        // with a custom callback that prints chain. For quick testing use the one-liner:
         var handler = new HttpClientHandler
         {
-            // WARNING: bypasses ALL certificate validation. Do NOT use in production.
-            ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator,
-            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
-            AllowAutoRedirect = false
+            // .NET Framework 4.7 way — bypass all cert checks
+            ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
         };
 
         var client = new HttpClient(handler)
         {
-            BaseAddress = new Uri(baseAddress, UriKind.Absolute),
+            BaseAddress = new Uri(baseAddress),
             Timeout = timeout ?? TimeSpan.FromSeconds(30)
         };
 
         return client;
     }
 
-    /// <summary>
-    /// Example: posts the XML to the service and returns the response body as string.
-    /// Uses the test client when running against non-production endpoints.
-    /// </summary>
-    public static async Task<string> GetResponseFromNewAPI(string endpointUrl, string xml, CancellationToken? cancellationToken = null)
+    public static async Task<string> GetResponseFromNewAPI(string endpointUrl, string xml)
     {
-        // Optional: ensure TLS version if needed
+        // Enforce TLS 1.2 for compatibility
         ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
 
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken ?? CancellationToken.None);
-        cts.CancelAfter(TimeSpan.FromSeconds(30)); // safety timeout
-
-        // Create test client (non-prod)
-        using var client = CreateTestHttpClient(endpointUrl, TimeSpan.FromSeconds(30));
-
-        // If you prefer to post to a different path than the BaseAddress, call PostAsync(fullUrl,...)
-        using var content = new StringContent(xml ?? string.Empty, Encoding.UTF8, "application/xml");
+        string body = "";
 
         try
         {
-            Console.WriteLine($"POST {client.BaseAddress}");
-            var resp = await client.PostAsync("", content, cts.Token).ConfigureAwait(false);
+            using (var client = CreateTestHttpClient(endpointUrl))
+            using (var content = new StringContent(xml ?? string.Empty, Encoding.UTF8, "application/xml"))
+            {
+                Console.WriteLine($"POST {client.BaseAddress}");
+                var resp = await client.PostAsync("", content);
 
-            var body = await resp.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
-            Console.WriteLine($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}");
+                body = await resp.Content.ReadAsStringAsync(); // no token overload in .NET 4.7
 
-            if (!resp.IsSuccessStatusCode)
-                throw new HttpRequestException($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}\n{body}");
+                Console.WriteLine($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}");
 
-            return body;
+                if (!resp.IsSuccessStatusCode)
+                    throw new HttpRequestException($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}\n{body}");
+            }
         }
-        catch (TaskCanceledException tex) when (!cts.Token.IsCancellationRequested)
+        catch (TaskCanceledException tex)
         {
-            // Timeout
-            throw new TimeoutException($"Request to {endpointUrl} timed out.", tex);
+            Console.WriteLine($"Timeout: {tex.Message}");
         }
+        catch (HttpRequestException hrex)
+        {
+            Console.WriteLine($"HTTP Request Error: {hrex.Message}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"General Error: {ex.Message}");
+        }
+
+        return body;
     }
 }
-
-
-
