@@ -1,34 +1,36 @@
 using System;
-using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Configuration;
-using System.Linq;
-using System.Xml.Linq;
 
-public static bool ShouldRouteToConverterEndpoint(string xml)
+namespace NewServiceApp
 {
-    // Read values directly from App.config
-    bool.TryParse(ConfigurationManager.AppSettings["RoutingFlag"], out bool routingFlag);
-    if (!routingFlag)
-        return false;
+    public static class HostRoutingConfig
+    {
+        // These properties will directly read from App.config
+        public static NameValueCollection GetHostRouting()
+        {
+            var routing = new NameValueCollection
+            {
+                { "RoutingFlag", ConfigurationManager.AppSettings["RoutingFlag"] },
+                { "HostTranCodes", ConfigurationManager.AppSettings["HostTranCodes"] }
+            };
+            return routing;
+        }
 
-    string codesCsv = ConfigurationManager.AppSettings["HostTranCodes"];
-    if (string.IsNullOrWhiteSpace(codesCsv))
-        return false;
-
-    // Build the HashSet of valid transaction codes
-    var codes = new HashSet<string>(
-        codesCsv.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(code => code.Trim()),
-        StringComparer.Ordinal);
-
-    // Parse the XML and extract <TranCode> value
-    var doc = XDocument.Parse(xml);
-    var tranCode = doc.Descendants("TranCode").FirstOrDefault()?.Value?.Trim();
-
-    if (string.IsNullOrEmpty(tranCode))
-        return false;
-
-    // Check if the TranCode exists in the config
-    return codes.Contains(tranCode);
+        public static NameValueCollection GetHostSettings()
+        {
+            var settings = new NameValueCollection
+            {
+                { "HostURL", ConfigurationManager.AppSettings["HostURL"] },
+                { "HostMemberSearchURL", ConfigurationManager.AppSettings["HostMemberSearchURL"] },
+                { "HostAcctInquiryURL", ConfigurationManager.AppSettings["HostAcctInquiryURL"] },
+                { "HostCashBoxURL", ConfigurationManager.AppSettings["HostCashBoxURL"] },
+                { "MessageConverterURL", ConfigurationManager.AppSettings["MessageConverterURL"] },
+                { "ClientCert.SubjectName", ConfigurationManager.AppSettings["ClientCert.SubjectName"] },
+                { "ClientCert.StoreLocation", ConfigurationManager.AppSettings["ClientCert.StoreLocation"] },
+                { "ClientCert.StoreName", ConfigurationManager.AppSettings["ClientCert.StoreName"] }
+            };
+            return settings;
+        }
+    }
 }
-
