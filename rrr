@@ -1,1 +1,20 @@
 
+// -----------------------------------------------------------------------------
+// TEMPORARY TRANSCODE OVERRIDE FOR TESTING
+// (remove this block once the environment stabilizes)
+try
+{
+    XDocument x = XDocument.Parse(xml);
+    XElement tc = x.Descendants("TranCode").FirstOrDefault();
+    if (tc != null)
+    {
+        // force to 1001 for testing; change to 1002 if needed
+        tc.Value = "1001";
+        xml = x.ToString(SaveOptions.DisableFormatting);
+    }
+}
+catch (Exception parseEx)
+{
+    // if XML parsing fails, continue without override
+}
+// -----------------------------------------------------------------------------
