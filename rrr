@@ -1,1 +1,5 @@
 
+Install-Package Microsoft.Extensions.Configuration -Version 3.1.0
+Install-Package Microsoft.Extensions.Configuration.FileExtensions -Version 3.1.0
+Install-Package Microsoft.Extensions.Configuration.Json -Version 3.1.0
+Install-Package Microsoft.Extensions.Configuration.Binder -Version 3.1.0   # if you bind to POCOs
