@@ -1,34 +1,33 @@
-using System;
-using System.Threading.Tasks;
-
-namespace NewServiceApp
+namespace EncoreAuth.Helpers
 {
-    internal static class Program
+    internal static class EnhancedKeyUsages
     {
-        static int Main(string[] args)
-        {
-            try
-            {
-                MainAsync(args).GetAwaiter().GetResult();
-                return 0;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error Rest Response: {ex.Message}");
-                return 1;
-            }
-        }
-
-        static async Task MainAsync(string[] args)
-        {
-            HostRoutingConfig.Load();
-
-            var transaction = new CdDepositTransaction();
-            var request = RequestBuilder.BuildXmlRequest();
-            var response = await transaction.SendToHost(request);
-
-            Console.WriteLine(response);
-        }
+        public const string ClientAuthentication = "1.3.6.1.5.5.7.3.2";
     }
 }
 
+public static bool IsClientAuthenticationCertificate(X509Certificate2 certificate)
+{
+    foreach (X509Extension extension in certificate.Extensions)
+    {
+        if (extension is X509EnhancedKeyUsageExtension ekuExtension)
+        {
+            foreach (Oid oid in ekuExtension.EnhancedKeyUsages)
+            {
+                if (oid.Value == EnhancedKeyUsages.ClientAuthentication)
+                {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+var certs = col.Find(X509FindType.FindBySubjectName, name, true);
+certificate = certs.Cast<X509Certificate2>()
+    .Where(c => c.HasPrivateKey)
+    .Where(c => DateTime.Now >= c.NotBefore && c.NotBefore <= c.NotAfter)
+    .Where(c => IsClientAuthenticationCertificate(c) == true)
+    .OrderByDescending(c => c.NotBefore)
+    .FirstOrDefault();
