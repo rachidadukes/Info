@@ -1,48 +1,36 @@
-<?xml version="1.0" encoding="utf-8"?>
-<configuration>
+string endpointUrl = ConfigurationManager.AppSettings["MessageConverterURL"];
+string response = string.Empty;
 
-  <!-- ==================== STARTUP / RUNTIME ==================== -->
-  <startup>
-    <supportedRuntime version="v4.0" sku=".NETFramework,Version=v4.7.2" />
-  </startup>
+try
+{
+    Console.WriteLine($"Endpoint URL: {endpointUrl}");
 
-  <runtime>
-    <assemblyBinding xmlns="urn:schemas-microsoft-com:asm.v1">
-      <dependentAssembly>
-        <assemblyIdentity name="System.Runtime.CompilerServices.Unsafe" publicKeyToken="b03f5f7f11d50a3a" culture="neutral" />
-        <bindingRedirect oldVersion="0.0.0.0-6.0.0.0" newVersion="6.0.0.0" />
-      </dependentAssembly>
-      <dependentAssembly>
-        <assemblyIdentity name="System.Memory" publicKeyToken="cc7b13ffcd2ddd51" culture="neutral" />
-        <bindingRedirect oldVersion="0.0.0.0-4.0.1.2" newVersion="4.0.1.2" />
-      </dependentAssembly>
-    </assemblyBinding>
-  </runtime>
+    ServicePointManager.Expect100Continue = true;
+    ServicePointManager.CheckCertificateRevocationList = true;
+    ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
 
-  <!-- ==================== APPLICATION SETTINGS ==================== -->
-  <appSettings>
-    <!-- Host Routing -->
-    <add key="RoutingFlag" value="true" />
-    <add key="HostTranCodes" value="1806,1807,1810,1906,1907,1910,2906,2907,2910,3101,3102,3103,3105,3106" />
+    var handler = new HttpClientHandler
+    {
+        // Non-production only: ignore SSL cert errors
+        ServerCertificateCustomValidationCallback = (msg, cert, chain, errors) => true
+    };
 
-    <!-- Host Settings -->
-    <add key="HostURL" value="https://unit-dpa-01-plto.nfcutest.net:5501/NFBranchExService/FinancialHost.asmx" />
-    <add key="HostMemberSearchURL" value="https://unit-dpa-01-plto.nfcutest.net:5502/NEBranchExService/MemberSearch.asmx" />
-    <add key="HostAcctInquiryURL" value="https://unit-dpa-01-plto.nfcutest.net:5503/NEBranchExService/AccountInquiry.asmx" />
-    <add key="HostCashBoxURL" value="https://unit-dpa-01-plto.nfcutest.net:5504/NEBranchExService/CashBox.asmx" />
-    <add key="MessageConverterURL" value="https://swcdcvenceaej01.nfcu.net/EncoreCore/api/MessageConverter" />
+    using (var client = new HttpClient(handler))
+    {
+        client.BaseAddress = new Uri(endpointUrl);
+        client.Timeout = TimeSpan.FromSeconds(90);
 
-    <!-- Client Certificate -->
-    <add key="ClientCert.SubjectName" value="LTCC483A490BE4.nfcu.net" />
-    <add key="ClientCert.StoreLocation" value="LocalMachine" />
-    <add key="ClientCert.StoreName" value="My" />
-  </appSettings>
+        var content = new StringContent(xml, Encoding.UTF8, "application/xml");
+        Console.WriteLine($"POST {client.BaseAddress}");
 
-  <!-- ==================== NETWORK SETTINGS (OPTIONAL) ==================== -->
-  <system.net>
-    <settings>
-      <servicePointManager expect100Continue="true" checkCertificateRevocationList="true" />
-    </settings>
-  </system.net>
+        var resp = await client.PostAsync("", content).ConfigureAwait(false);
+        response = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
 
-</configuration>
+        if (!resp.IsSuccessStatusCode)
+            throw new HttpRequestException($"HTTP {(int)resp.StatusCode}: {resp.ReasonPhrase}\n{response}");
+    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Error: {ex.Message}");
+}
