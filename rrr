@@ -1,4 +1,20 @@
 
+handler.ServerCertificateCustomValidationCallback = (req, cert, chain, errors) =>
+{
+    Console.WriteLine($"Server cert: {cert.Subject}");
+    Console.WriteLine($"Issuer: {cert.Issuer}");
+    Console.WriteLine($"Errors: {errors}");
+    foreach (var ch in chain.ChainElements)
+        Console.WriteLine($"  Chain: {ch.Certificate.Subject}");
+    return false; // don't skip validation yet
+};
+
+
+
+===================
+ServicePointManager.ServerCertificateValidationCallback += (sender, cert, chain, errors) => true;
+
+=======================================
 
  Client → sends valid certificate 
 my machine doesn’t trust the CA that issued the server certificate
