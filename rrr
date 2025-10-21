@@ -1,1 +1,34 @@
+using System;
+using System.Collections.Generic;
+using System.Configuration;
+using System.Linq;
+using System.Xml.Linq;
+
+public static bool ShouldRouteToConverterEndpoint(string xml)
+{
+    // Read values directly from App.config
+    bool.TryParse(ConfigurationManager.AppSettings["RoutingFlag"], out bool routingFlag);
+    if (!routingFlag)
+        return false;
+
+    string codesCsv = ConfigurationManager.AppSettings["HostTranCodes"];
+    if (string.IsNullOrWhiteSpace(codesCsv))
+        return false;
+
+    // Build the HashSet of valid transaction codes
+    var codes = new HashSet<string>(
+        codesCsv.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(code => code.Trim()),
+        StringComparer.Ordinal);
+
+    // Parse the XML and extract <TranCode> value
+    var doc = XDocument.Parse(xml);
+    var tranCode = doc.Descendants("TranCode").FirstOrDefault()?.Value?.Trim();
+
+    if (string.IsNullOrEmpty(tranCode))
+        return false;
+
+    // Check if the TranCode exists in the config
+    return codes.Contains(tranCode);
+}
 
