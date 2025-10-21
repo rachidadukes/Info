@@ -1,31 +1,3 @@
 
 
 
-
-public async Task<string> GetResponseFromNewAPI(string xml)
-{
-    var settings = HostRoutingConfig.GetHostSettings();
-    var endpointUrl = settings["MessageConverterURL"];
-
-    // Keep TLS12, but bypass server cert validation (TEST ONLY)
-    var handler = new HttpClientHandler
-    {
-        ServerCertificateCustomValidationCallback = (msg, cert, chain, errors) => true
-    };
-
-    using var client = new HttpClient(handler)
-    {
-        BaseAddress = new Uri(endpointUrl),
-        Timeout = TimeSpan.FromSeconds(90)
-    };
-
-    var content = new StringContent(xml, Encoding.UTF8, "application/xml");
-
-    var resp = await client.PostAsync("", content).ConfigureAwait(false);
-    var response = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
-
-    if (!resp.IsSuccessStatusCode)
-        throw new HttpRequestException($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}\n{response}");
-
-    return response;
-}
