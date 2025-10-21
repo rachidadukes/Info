@@ -1,44 +1,16 @@
-using System;
-using System.Linq;
-using System.Security.Cryptography.X509Certificates;
-using System.Net.Http;
 
-public class ApiXmlClient
-{
-    public async Task<string> GetResponseFromNewAPI(string xml)
-    {
-        // ... get endpointUrl
 
-        // wherever you currently load the cert:
-        X509Certificate2 cert = CertificateLoader.GetCertificateBySubjectName("<<subject>>");
+ Client → sends valid certificate 
+my machine doesn’t trust the CA that issued the server certificate
 
-        // <-- log it here
-        DumpCert(cert);
+In short: the TLS handshake fails on the server certificate validation, not your client cert.
 
-        // then build handler/client
-        var handler = new HttpClientHandler
-        {
-            ClientCertificateOptions = ClientCertificateOption.Manual
-        };
-        handler.ClientCertificates.Add(cert);
 
-        using var client = new HttpClient(handler) { BaseAddress = new Uri(endpointUrl) };
-        // ...
-    }
+=======================
+I need Navy Federal Root CA, Machine CA02 I2 chain).
 
-    // place the helper INSIDE the class
-    private static void DumpCert(X509Certificate2 cert)
-    {
-        Console.WriteLine("Picked cert:");
-        Console.WriteLine($"  Subject   : {cert.Subject}");
-        Console.WriteLine($"  Issuer    : {cert.Issuer}");
-        Console.WriteLine($"  NotBefore : {cert.NotBefore:u}");
-        Console.WriteLine($"  NotAfter  : {cert.NotAfter:u}");
+Import those into my Trusted Root Certification Authorities store:
 
-        var ekus = cert.Extensions
-            .OfType<X509EnhancedKeyUsageExtension>()
-            .SelectMany(e => e.EnhancedKeyUsages.Cast<Oid>())
-            .Select(o => o.Value);
-        Console.WriteLine("  EKUs      : " + string.Join(", ", ekus));
-    }
-}
+mmc.exe → Certificates → Computer account → Trusted Root Certification Authorities
+
+Import .cer or .crt files provided.
