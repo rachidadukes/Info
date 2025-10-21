@@ -1,1 +1,66 @@
-Test-NetConnection -ComputerName yourserver.com -Port 443
+
+
+
+
+
+public class ApiXmlClient
+{
+    // your method here
+}
+
+
+================
+using System;
+using System.Net;
+using System.Net.Http;
+using System.Text;
+using System.Threading.Tasks;
+
+public async Task<string> GetResponseFromNewAPI(string xml)
+{
+    // Force TLS1.2 runtime-wide (good on 4.7.2)
+    ServicePointManager.Expect100Continue = true;
+    ServicePointManager.CheckCertificateRevocationList = true;
+    ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+
+    using (var handler = new HttpClientHandler())
+    using (var client = new HttpClient(handler))
+    {
+        client.BaseAddress = new Uri(settings["MessageConverterURL"]);
+        client.Timeout = TimeSpan.FromSeconds(90);
+
+        using (var content = new StringContent(xml, Encoding.UTF8, "application/xml"))
+        {
+            try
+            {
+                Console.WriteLine($"POST {client.BaseAddress}");
+                var resp = await client.PostAsync("", content).ConfigureAwait(false);
+                var body = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+                if (!resp.IsSuccessStatusCode)
+                    throw new HttpRequestException($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}\n{body}");
+
+                return body;
+            }
+            catch (TaskCanceledException tcex)
+            {
+                Console.WriteLine("TaskCanceledException (likely timeout).");
+                if (tcex.InnerException != null) Console.WriteLine("Inner: " + tcex.InnerException);
+                throw;
+            }
+            catch (HttpRequestException hrex)
+            {
+                Console.WriteLine("HttpRequestException:");
+                Console.WriteLine(hrex);
+                if (hrex.InnerException != null) Console.WriteLine("Inner: " + hrex.InnerException);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Unexpected error: " + ex.Message);
+                if (ex.InnerException != null) Console.WriteLine("Inner: " + ex.InnerException.Message);
+                throw;
+            }
+        }
+    }
+}
