@@ -1,32 +1,30 @@
+var cert = CertificateLoader.GetCertificate();
+DumpCert(cert);
 
-handler.ServerCertificateCustomValidationCallback = (req, cert, chain, errors) =>
+// Create handler
+var handler = new HttpClientHandler
 {
-    Console.WriteLine($"Server cert: {cert.Subject}");
-    Console.WriteLine($"Issuer: {cert.Issuer}");
+    ClientCertificateOptions = ClientCertificateOption.Manual,
+    SslProtocols = SslProtocols.Tls12
+};
+
+// 👇 Place the custom validation callback here
+handler.ServerCertificateCustomValidationCallback = (req, cert2, chain, errors) =>
+{
+    Console.WriteLine($"Server cert: {cert2.Subject}");
+    Console.WriteLine($"Issuer: {cert2.Issuer}");
     Console.WriteLine($"Errors: {errors}");
     foreach (var ch in chain.ChainElements)
         Console.WriteLine($"  Chain: {ch.Certificate.Subject}");
-    return false; // don't skip validation yet
+    return false; // do NOT bypass yet — we just want to see details
 };
 
+// Then attach your client certificate
+handler.ClientCertificates.Add(cert);
 
-
-===================
-ServicePointManager.ServerCertificateValidationCallback += (sender, cert, chain, errors) => true;
-
-=======================================
-
- Client → sends valid certificate 
-my machine doesn’t trust the CA that issued the server certificate
-
-In short: the TLS handshake fails on the server certificate validation, not your client cert.
-
-
-=======================
-I need Navy Federal Root CA, Machine CA02 I2 chain).
-
-Import those into my Trusted Root Certification Authorities store:
-
-mmc.exe → Certificates → Computer account → Trusted Root Certification Authorities
-
-Import .cer or .crt files provided.
+// Then create HttpClient
+using var client = new HttpClient(handler)
+{
+    BaseAddress = new Uri(endpointUrl),
+    Timeout = TimeSpan.FromSeconds(90)
+};
