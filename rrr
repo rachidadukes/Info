@@ -1,36 +1,55 @@
 using System;
-using System.Collections.Specialized;
 using System.Configuration;
+using System.Security.Cryptography.X509Certificates;
 
 namespace NewServiceApp
 {
-    public static class HostRoutingConfig
+    public static class CertificateLoader
     {
-        // These properties will directly read from App.config
-        public static NameValueCollection GetHostRouting()
+        public static X509Certificate2 GetCertificate()
         {
-            var routing = new NameValueCollection
-            {
-                { "RoutingFlag", ConfigurationManager.AppSettings["RoutingFlag"] },
-                { "HostTranCodes", ConfigurationManager.AppSettings["HostTranCodes"] }
-            };
-            return routing;
-        }
+            X509Certificate2 cert = null;
 
-        public static NameValueCollection GetHostSettings()
-        {
-            var settings = new NameValueCollection
+            // ---------------------------------------------------------------------
+            // Load configuration (now from App.config instead of appsettings.json)
+            // ---------------------------------------------------------------------
+            string subject = ConfigurationManager.AppSettings["ClientCert.SubjectName"];
+            string storeLocStr = ConfigurationManager.AppSettings["ClientCert.StoreLocation"];
+            string storeNameStr = ConfigurationManager.AppSettings["ClientCert.StoreName"];
+
+            // ---------------------------------------------------------------------
+            // Convert store location and name safely
+            // ---------------------------------------------------------------------
+            if (!Enum.TryParse(storeLocStr, true, out StoreLocation storeLoc))
+                storeLoc = StoreLocation.LocalMachine;
+
+            if (!Enum.TryParse(storeNameStr, true, out StoreName storeName))
+                storeName = StoreName.My;
+
+            // ---------------------------------------------------------------------
+            // Open the certificate store
+            // ---------------------------------------------------------------------
+            using (var store = new X509Store(storeName, storeLoc))
             {
-                { "HostURL", ConfigurationManager.AppSettings["HostURL"] },
-                { "HostMemberSearchURL", ConfigurationManager.AppSettings["HostMemberSearchURL"] },
-                { "HostAcctInquiryURL", ConfigurationManager.AppSettings["HostAcctInquiryURL"] },
-                { "HostCashBoxURL", ConfigurationManager.AppSettings["HostCashBoxURL"] },
-                { "MessageConverterURL", ConfigurationManager.AppSettings["MessageConverterURL"] },
-                { "ClientCert.SubjectName", ConfigurationManager.AppSettings["ClientCert.SubjectName"] },
-                { "ClientCert.StoreLocation", ConfigurationManager.AppSettings["ClientCert.StoreLocation"] },
-                { "ClientCert.StoreName", ConfigurationManager.AppSettings["ClientCert.StoreName"] }
-            };
-            return settings;
+                store.Open(OpenFlags.ReadOnly | OpenFlags.OpenExistingOnly);
+
+                // Find by subject name
+                var certs = store.Certificates.Find(X509FindType.FindBySubjectName, subject, false);
+
+                if (certs.Count == 0)
+                    throw new Exception($"Certificate with subject '{subject}' not found in {storeLoc}\\{storeName}.");
+
+                cert = certs[0];
+            }
+
+            // ---------------------------------------------------------------------
+            // Log the certificate info for verification
+            // ---------------------------------------------------------------------
+            Console.WriteLine($"Using certificate: {cert.Subject}");
+            Console.WriteLine($"HasPrivateKey: {cert.HasPrivateKey}");
+            Console.WriteLine($"Valid From: {cert.NotBefore:u} To: {cert.NotAfter:u}");
+
+            return cert;
         }
     }
 }
