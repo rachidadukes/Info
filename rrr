@@ -1,1 +1,34 @@
+using System;
+using System.Threading.Tasks;
+
+namespace NewServiceApp
+{
+    internal static class Program
+    {
+        static int Main(string[] args)
+        {
+            try
+            {
+                MainAsync(args).GetAwaiter().GetResult();
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error Rest Response: {ex.Message}");
+                return 1;
+            }
+        }
+
+        static async Task MainAsync(string[] args)
+        {
+            HostRoutingConfig.Load();
+
+            var transaction = new CdDepositTransaction();
+            var request = RequestBuilder.BuildXmlRequest();
+            var response = await transaction.SendToHost(request);
+
+            Console.WriteLine(response);
+        }
+    }
+}
 
