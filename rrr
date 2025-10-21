@@ -1,1 +1,2 @@
+Invoke-WebRequest https://swvdcdvencaej01.nfcu.net/EncoreCore/api/MessageConverter/ConvertMessage -UseBasicParsing
 
