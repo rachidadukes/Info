@@ -1,15 +1,1 @@
 
-1. 🔒 The remote service is down or refusing TLS connections
-
-If the API endpoint is temporarily offline, or the SSL/TLS certificate on the server has expired 
-or changed, you’ll get exactly this kind of HttpRequestException.
-=============================
-
-Open a terminal / PowerShell and run:
-
-curl -v https://<your-endpoint>
-
-========================
-or in PowerShell:
-
-Invoke-WebRequest https://<your-endpoint>
