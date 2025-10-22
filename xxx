@@ -1,74 +1,180 @@
 
 
-✅ Step 1. Test reachability from PowerShell
+using Spectre.Console;
+using System.Net.Http;
+using System.Net.Security;
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
 
-Run these in a PowerShell window (not Visual Studio):
+internal class Program
+{
+    private const string ApiUrl = "https://swydcdvencaej01.nfcu.net/EncoreCore/api/MessageConverter/ConvertMessage";
+    private const string ClientCertSubjectName = "LTCC483A490BE4.nfcu.net";
+    private const StoreLocation ClientCertStoreLocation = StoreLocation.LocalMachine;
+    private const StoreName ClientCertStoreName = StoreName.My;
 
-Resolve-DnsName swydcdvencaej01.nfcu.net
-Test-NetConnection swydcdvencaej01.nfcu.net -Port 443
+    private static async Task<int> Main()
+    {
+        AnsiConsole.Clear();
+        AnsiConsole.MarkupLine("[bold cyan]== Certificate & Endpoint Probe ==[/]");
 
+        // 1) Check certificate health
+        var (certStatus, cert, certMsg) = FindClientCertificate(
+            ClientCertSubjectName, ClientCertStoreName, ClientCertStoreLocation);
 
-❌ If either fails → you’re not on your corporate VPN or internal network.
-→ Connect to the VPN first.
+        var certTable = new Table().Border(TableBorder.Rounded);
+        certTable.AddColumn("[bold yellow]Check[/]");
+        certTable.AddColumn("[bold green]Result[/]");
+        certTable.AddRow("Certificate Health", certStatus.ToString());
+        certTable.AddRow("Details", certMsg);
+        AnsiConsole.Write(certTable);
 
-✅ If both succeed → the host is reachable; continue below.
+        if (certStatus == ProbeStatus.Error || cert is null)
+        {
+            AnsiConsole.MarkupLine("[red]❌ Certificate not found or invalid.[/]");
+            return 2;
+        }
 
-✅ Step 2. Check server certificate trust
-curl -vk https://swydcdvencaej01.nfcu.net
+        // 2) XML API call
+        AnsiConsole.MarkupLine("\n[bold cyan]== XML API Call Test ==[/]");
+        var xmlPayload = @"<ConvertMessageRequest>
+  <ClientId>HealthCheck</ClientId>
+  <Payload>Test</Payload>
+</ConvertMessageRequest>";
 
+        var xmlResult = await PostXmlAsync(ApiUrl, xmlPayload, cert);
 
-Look for:
+        var callTable = new Table().Border(TableBorder.Rounded);
+        callTable.AddColumn("[bold yellow]Check[/]");
+        callTable.AddColumn("[bold green]Result[/]");
+        callTable.AddRow("XML Call Result", xmlResult.Status.ToString());
+        callTable.AddRow("Message", xmlResult.Message);
+        AnsiConsole.Write(callTable);
 
-SSL certificate problem: unable to get local issuer certificate → your workstation doesn’t trust the server’s internal CA.
-→ Ask IT for the root and intermediate certificates, then import them to:
+        // 3) Summary section
+        var summary = new Table().Border(TableBorder.Heavy);
+        summary.AddColumn("[bold blue]Summary[/]");
+        summary.AddColumn("[bold white]Value[/]");
+        summary.AddRow("Certificate Subject", cert.Subject);
+        summary.AddRow("Validity", $"{cert.NotBefore:u} - {cert.NotAfter:u}");
+        summary.AddRow("Certificate Health", certStatus.ToString());
+        summary.AddRow("XML API Call", xmlResult.Status.ToString());
+        AnsiConsole.Write(summary);
 
-LocalMachine\Trusted Root Certification Authorities
+        AnsiConsole.MarkupLine("[bold green]✔ Probe complete.[/]");
+        return 0;
+    }
 
-LocalMachine\Intermediate Certification Authorities
+    // ----------------------------------------------------------
+    //  Certificate validation logic
+    // ----------------------------------------------------------
+    private static (ProbeStatus Status, X509Certificate2? Cert, string Message) FindClientCertificate(
+        string subjectOrCn, StoreName storeName, StoreLocation storeLocation)
+    {
+        try
+        {
+            using var store = new X509Store(storeName, storeLocation);
+            store.Open(OpenFlags.ReadOnly | OpenFlags.OpenExistingOnly);
 
-Once imported, your code will succeed.
+            var matches = store.Certificates
+                .Find(X509FindType.FindBySubjectDistinguishedName, subjectOrCn, validOnly: false);
 
-✅ Step 3. Verify correct host (SNI)
+            if (matches.Count == 0)
+                matches = store.Certificates
+                    .Find(X509FindType.FindBySubjectName, subjectOrCn, validOnly: false);
 
-Your client certificate CN is:
+            if (matches.Count == 0)
+                return (ProbeStatus.Error, null, $"Not found in {storeLocation}/{storeName} by subject '{subjectOrCn}'.");
 
-CN=LTCC483A490BE4.nfcu.net
+            X509Certificate2? best = null;
+            foreach (var c in matches)
+            {
+                if (!c.HasPrivateKey) continue;
+                if (best == null || c.NotBefore > best.NotBefore) best = c;
+            }
+            best ??= matches[0];
 
+            var validity =
+                best.NotBefore > DateTime.UtcNow ? "NotYetValid" :
+                best.NotAfter < DateTime.UtcNow ? "Expired" : "Valid";
 
-but your URL host is:
+            var hasPk = best.HasPrivateKey ? "Yes" : "No";
+            var status = validity == "Valid" ? ProbeStatus.Success : ProbeStatus.Error;
 
-swydcdvencaej01.nfcu.net
+            return (status, best,
+                $"Thumbprint={best.Thumbprint}\nSubject={best.Subject}\nHasPrivateKey={hasPk}\nValidity={validity}\n" +
+                $"NotBefore={best.NotBefore:u}\nNotAfter={best.NotAfter:u}");
+        }
+        catch (Exception ex)
+        {
+            return (ProbeStatus.Error, null, $"Exception reading store: {ex.Message}");
+        }
+    }
 
+    // ----------------------------------------------------------
+    //  XML POST request logic
+    // ----------------------------------------------------------
+    private static async Task<ProbeResult> PostXmlAsync(string url, string xml, X509Certificate2? clientCertificate)
+    {
+        try
+        {
+            var handler = new HttpClientHandler
+            {
+                SslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+                CheckCertificateRevocationList = true,
+                ServerCertificateCustomValidationCallback = (req, cert, chain, errors) =>
+                {
+                    AnsiConsole.MarkupLine($"[grey][TLS] Errors={errors}[/]");
+                    return errors == SslPolicyErrors.None;
+                }
+            };
 
-If the server only accepts requests via its CN host, try changing:
+            if (clientCertificate != null)
+            {
+                handler.ClientCertificates.Add(clientCertificate);
+                handler.ClientCertificateOptions = ClientCertificateOption.Manual;
+            }
 
-private const string ApiUrl = "https://LTCC483A490BE4.nfcu.net/EncoreCore/api/MessageConverter/ConvertMessage";
+            using var client = new HttpClient(handler);
+            var content = new StringContent(xml, Encoding.UTF8, "application/xml");
+            content.Headers.ContentType.MediaType = "text/xml";
 
+            var req = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
+            var response = await client.SendAsync(req);
+            var body = await response.Content.ReadAsStringAsync();
+            if (body.Length > 400) body = body[..400] + "...";
 
-Then re-run the probe.
+            return new ProbeResult(
+                response.IsSuccessStatusCode ? ProbeStatus.Success : ProbeStatus.HttpError,
+                $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}; Body={body}");
+        }
+        catch (HttpRequestException hre)
+        {
+            return new ProbeResult(ProbeStatus.NetworkError, $"HttpRequestException: {hre.Message}");
+        }
+        catch (AuthenticationException ae)
+        {
+            return new ProbeResult(ProbeStatus.HandshakeFailed, $"TLS Handshake failed: {ae.Message}");
+        }
+        catch (Exception ex)
+        {
+            return new ProbeResult(ProbeStatus.Error, ex.Message);
+        }
+    }
 
-✅ Step 4. Confirm TLS version
+    // ----------------------------------------------------------
+    //  Helper types
+    // ----------------------------------------------------------
+    private record ProbeResult(ProbeStatus Status, string Message);
 
-The code already enforces SslProtocols.Tls12.
-If your network enforces TLS 1.3 only, add it:
-
-SslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
-
-✅ Step 5. (Optional) Print TLS handshake details
-
-Add inside your ServerCertificateCustomValidationCallback:
-
-Console.WriteLine($"[TLS] ServerCert: {cert?.Subject}");
-Console.WriteLine($"[TLS] Errors: {errors}");
-
-
-Run again — if you see RemoteCertificateChainErrors, it’s definitely trust-chain.
-
-🚀 Summary
-Root Cause	Fix
-🔒 Not on VPN	Connect to internal network
-🧾 Internal CA not trusted	Import CA chain to LocalMachine Root/CA
-🌐 Wrong host/SNI	Use URL https://LTCC483A490BE4.nfcu.net/...
-⚙️ TLS mismatch	Add Tls13 to SslProtocols
-
-Once you run the curl or Test-NetConnection tests, paste me the output — I’ll tell you exactly which of those four is the culprit and the next single-line fix to make your probe succeed.
+    private enum ProbeStatus
+    {
+        Success,
+        HttpError,
+        Timeout,
+        NetworkError,
+        HandshakeFailed,
+        Error
+    }
+}
