@@ -1,0 +1,81 @@
+private static string Unwrap(Exception ex)
+{
+    var cur = ex;
+    var depth = 0;
+    var sb = new System.Text.StringBuilder();
+    while (cur != null && depth++ < 6)
+    {
+        sb.AppendLine($"{cur.GetType().Name}: {cur.Message}");
+        cur = cur.InnerException;
+    }
+    return sb.ToString();
+}
+
+public static async Task<ProbeResult> TryCall(string url, X509Certificate2? clientCertificate)
+{
+    try
+    {
+        var handler = new HttpClientHandler
+        {
+            // Keep strict, but log details so we see why it fails
+            ServerCertificateCustomValidationCallback = (req, cert, chain, errors) =>
+            {
+                Console.WriteLine($"[TLS] SslPolicyErrors={errors}");
+                if (cert != null)
+                {
+                    Console.WriteLine($"[TLS] ServerCert Subject={cert.Subject}");
+                    Console.WriteLine($"[TLS] ServerCert Issuer={cert.Issuer}");
+                    Console.WriteLine($"[TLS] ServerCert NotBefore={cert.NotBefore:u}, NotAfter={cert.NotAfter:u}");
+                    Console.WriteLine($"[TLS] ServerCert Thumbprint={cert.Thumbprint}");
+                }
+                if (chain != null)
+                {
+                    for (int i = 0; i < chain.ChainElements.Count; i++)
+                    {
+                        var e = chain.ChainElements[i].Certificate;
+                        Console.WriteLine($"[TLS] Chain[{i}] Subject={e.Subject}  Issuer={e.Issuer}");
+                    }
+                }
+                return errors == SslPolicyErrors.None;
+            }
+        };
+
+        if (clientCertificate != null)
+        {
+            handler.ClientCertificates.Add(clientCertificate);
+            handler.ClientCertificateOptions = ClientCertificateOption.Manual;
+        }
+
+        // Force modern TLS versions (harmless if already supported)
+        System.Net.ServicePointManager.SecurityProtocol =
+            System.Net.SecurityProtocolType.Tls12 | System.Net.SecurityProtocolType.Tls13;
+
+        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(15) };
+
+        // If this endpoint actually expects POST, uncomment:
+        // var resp = await client.PostAsync(url, new StringContent("{}", System.Text.Encoding.UTF8, "application/json"));
+        var resp = await client.GetAsync(url);
+
+        var status = resp.IsSuccessStatusCode ? ProbeStatus.Success : ProbeStatus.HttpError;
+        var body = await resp.Content.ReadAsStringAsync();
+        if (body.Length > 300) body = body[..300] + "...";
+        return new ProbeResult(status, $"HTTP {(int)resp.StatusCode} {resp.StatusCode}; Body={body}");
+    }
+    catch (AuthenticationException ae)
+    {
+        return new ProbeResult(ProbeStatus.HandshakeFailed, Unwrap(ae));
+    }
+    catch (HttpRequestException hre)
+    {
+        // This captures DNS failure, TCP reset, cert issues bubbled up, etc.
+        return new ProbeResult(ProbeStatus.NetworkError, Unwrap(hre));
+    }
+    catch (TaskCanceledException tce)
+    {
+        return new ProbeResult(ProbeStatus.Timeout, Unwrap(tce));
+    }
+    catch (Exception ex)
+    {
+        return new ProbeResult(ProbeStatus.Error, Unwrap(ex));
+    }
+}
