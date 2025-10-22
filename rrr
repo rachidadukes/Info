@@ -1,1 +1,1 @@
-
+This year, I focused on building a small application in .NET 9.0, later upgraded to .NET 10, to replicate the core functionality of our legacy Encore transaction system. The goal was to create a controlled environment to test and validate the new service integration using the updated security certificate. This initiative allowed me to better understand the legacy transaction flow, identify potential issues in the modernization process, and ensure that the new service operated reliably and securely.
