@@ -1,1 +1,14 @@
 
+I’m currently testing a new API URL and certificate, but I’m not sure who is responsible for maintaining or generating these.
+Could someone confirm who owns the API endpoint configuration and SSL certificate management for this service, so I can coordinate testing and report any issues to the right person?
+
+
+
+I’m testing the new API endpoint for Encore Transactions with the new certificate.
+Can someone point me to the engineer or team that owns the API deployment and certificate management for this service?
+
+API URL ownership → usually backend engineer or DevOps (might be listed in Git repo owners or Azure pipeline configs).
+
+Certificate management → often DevOps or security/infrastructure team (check certificate renewal automation or key vault).
+
+Environment setup (e.g., UNIT, INTG) → often handled by the release management or infrastructure team.
