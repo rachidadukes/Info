@@ -1,4 +1,5 @@
 using System;
+using System.Configuration;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -9,85 +10,67 @@ using System.Xml.Linq;
 
 namespace NewServiceApp
 {
-    public class NewService
+    public class ApiXmlClient
     {
         public async Task<string> GetResponseFromNewAPI(string xml)
         {
-            var settings = HostRoutingConfig.GetHostSettings();
-            string endpointUrl;
-            string response = string.Empty;
+            string endpointUrl = ConfigurationManager.AppSettings["MessageConverterURL"];
+            string response = "";
 
             try
             {
-                endpointUrl = settings["MessageConverterURL"];
-                if (string.IsNullOrEmpty(endpointUrl))
-                    throw new InvalidOperationException("MessageConverterURL not configured in appsettings.json.");
-
-                // Enforce TLS 1.2 (4.7 doesn’t default to it)
+                ServicePointManager.Expect100Continue = true;
+                ServicePointManager.CheckCertificateRevocationList = true;
                 ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
 
-                // Load client certificate (your existing CertificateLoader logic)
-                var cert = CertificateLoader.GetCertificate();
-
-                // Create a compatible handler (WebRequestHandler works on .NET 4.7)
-                var handler = new WebRequestHandler();
-
-                if (cert != null)
+                // TEMP TRANSCODE override
+                var x = XDocument.Parse(xml);
+                var tc = x.Descendants("TranCode").FirstOrDefault();
+                if (tc != null)
                 {
-                    handler.ClientCertificates.Add(cert);
-                    Console.WriteLine($"Client certificate added: {cert.Subject}");
+                    tc.Value = "1001";
+                    xml = x.ToString(SaveOptions.DisableFormatting);
                 }
 
-                // ⚠️ Optional: bypass SSL validation for DEV only
-                handler.ServerCertificateValidationCallback =
-                    (sender, serverCert, chain, errors) =>
-                    {
-                        Console.WriteLine($"Bypassing SSL validation for: {serverCert?.Subject}");
-                        return true; // *** DEV/TEST ONLY ***
-                    };
+                var cert = CertificateLoader.GetCertificate();
+                DumpCert(cert);
 
-                // Prepare HttpClient
+                var handler = new WebRequestHandler();
+                if (cert != null)
+                    handler.ClientCertificates.Add(cert);
+
+                // DEV only: bypass SSL validation
+                handler.ServerCertificateValidationCallback = (sender, cert2, chain, errors) =>
+                {
+                    Console.WriteLine($"Bypassing SSL validation for: {cert2?.Subject}");
+                    return true;
+                };
+
                 using (var client = new HttpClient(handler))
                 {
                     client.BaseAddress = new Uri(endpointUrl);
                     client.Timeout = TimeSpan.FromSeconds(30);
 
-                    // TEMPORARY TRANSCODE OVERRIDE (for testing)
-                    var x = XDocument.Parse(xml);
-                    var tc = x.Descendants("TranCode").FirstOrDefault();
-                    if (tc != null)
-                    {
-                        // Force TranCode to 1001 for testing
-                        tc.Value = "1001";
-                        xml = x.ToString(SaveOptions.DisableFormatting);
-                    }
-
-                    var content = new StringContent(xml ?? string.Empty, System.Text.Encoding.UTF8, "application/xml");
-                    Console.WriteLine($"POST {client.BaseAddress}");
-
-                    var resp = await client.PostAsync("", content).ConfigureAwait(false);
-                    response = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    var content = new StringContent(xml, System.Text.Encoding.UTF8, "application/xml");
+                    var resp = await client.PostAsync("", content);
+                    response = await resp.Content.ReadAsStringAsync();
 
                     Console.WriteLine($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}");
-
-                    if (!resp.IsSuccessStatusCode)
-                        throw new HttpRequestException($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}\n{response}");
                 }
-            }
-            catch (TaskCanceledException tex)
-            {
-                Console.WriteLine($"Timeout: {tex.Message}");
-            }
-            catch (HttpRequestException hrex)
-            {
-                Console.WriteLine($"HTTP Request Error: {hrex.Message}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"General Error: {ex.Message}");
+                Console.WriteLine($"Error: {ex.Message}");
             }
 
             return response;
+        }
+
+        private void DumpCert(X509Certificate2 cert)
+        {
+            if (cert == null) return;
+            Console.WriteLine($"Cert: {cert.Subject}");
+            Console.WriteLine($"HasPK={cert.HasPrivateKey}  Valid={cert.NotBefore:u}..{cert.NotAfter:u}");
         }
     }
 }
