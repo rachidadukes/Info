@@ -1,9 +1,5 @@
-2025 Self-Evaluation
+I’m excited to continue contributing next year as part of the Encore modernization initiative, 
+helping drive further innovation and modernization across the platform.
 
-This year, I focused on building and modernizing small applications in .NET 9.0, later upgraded to .NET 10, to replicate and improve the core functionality of our legacy Encore transaction system. The primary goal was to create a controlled testing environment (Unit and INTG) to validate new service integrations using an updated security certificate.
 
-This initiative deepened my understanding of the legacy transaction flow, helped identify potential issues in the API modernization process, and ensured that the new service operated reliably and securely. To improve visibility and speed up delivery, I also developed an application to monitor certificate usage and status, which helped the team complete validation and testing more efficiently before the project deadline.
-
-In addition, I updated and optimized the Multi-Tran Adjust Transactions Over $3K functionality and cleaned up legacy Encore code by removing unnecessary commented blocks. I also actively supported risk reduction efforts by eliminating outdated integrations and removing Lotus Notes dependencies, improving maintainability and reducing long-term technical debt.
-
-Overall, my contributions this year supported the modernization and stability of the Encore system. These efforts improved service reliability, enhanced system security, and prepared the platform for smoother future transitions to modern .NET environments.
+particularly in implementing and testing the new APIs in the Unit and INTG environments to help drive further innovation and modernization across the platform.
