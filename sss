@@ -1,24 +1,20 @@
-using System;
-using System.Net;
-using System.Net.Http;
-using System.Net.Security;
-using System.Security.Cryptography.X509Certificates;
-
-internal sealed class CertificateBypassScope : IDisposable
+public static HttpClient CreateTestHttpClient(string baseAddress, TimeSpan? timeout = null)
 {
-    private readonly RemoteCertificateValidationCallback _previous;
-
-    private CertificateBypassScope(RemoteCertificateValidationCallback previous) => _previous = previous;
-
-    public static CertificateBypassScope AllowAll()
+    var handler = new HttpClientHandler(); // no per-handler cert callback on 4.7
+    var client = new HttpClient(handler)
     {
-        // Use at your own risk; dev/test only.
-        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-        var prev = ServicePointManager.ServerCertificateValidationCallback;
-        ServicePointManager.ServerCertificateValidationCallback = (sender, cert, chain, errors) => true;
-        return new CertificateBypassScope(prev);
-    }
+        BaseAddress = new Uri(baseAddress),
+        Timeout = timeout ?? TimeSpan.FromSeconds(30)
+    };
+    return client;
+}
 
-    public void Dispose()
-        => ServicePointManager.ServerCertificateValidationCallback = _previous;
+// Call site (DEV/TEST ONLY)
+using (CertificateBypassScope.AllowAll())
+{
+    using (var client = CreateTestHttpClient("https://example.test/"))
+    {
+        var resp = client.GetAsync("ping").Result;
+        // ...
+    }
 }
