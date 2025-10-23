@@ -4,41 +4,21 @@ using System.Net.Http;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 
-...
-
-// Force TLS 1.2 on 4.7 (defaults aren’t as strict as 4.7.2+)
-ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-
-// If you need custom server cert inspection, wire a temporary global callback.
-// IMPORTANT: restore the previous callback so you don’t affect other requests.
-RemoteCertificateValidationCallback previous = ServicePointManager.ServerCertificateValidationCallback;
-
-RemoteCertificateValidationCallback custom = (sender, cert, chain, errors) =>
+internal sealed class CertificateBypassScope : IDisposable
 {
-    // Your diagnostics / checks here:
-    Console.WriteLine($"Server cert: {cert?.Subject}");
-    Console.WriteLine($"Issuer     : {cert?.Issuer}");
-    Console.WriteLine($"Errors     : {errors}");
+    private readonly RemoteCertificateValidationCallback _previous;
 
-    foreach (var ch in chain?.ChainElements ?? Array.Empty<X509ChainElement>())
-        Console.WriteLine($"  chain: {ch.Certificate.Subject}");
+    private CertificateBypassScope(RemoteCertificateValidationCallback previous) => _previous = previous;
 
-    // TODO: return true only if you actually want to accept the cert
-    return false; // keep it strict while debugging
-};
-
-ServicePointManager.ServerCertificateValidationCallback = custom;
-
-try
-{
-    using (var handler = new HttpClientHandler()) // no SslProtocols / per-handler callback on 4.7
-    using (var http = new HttpClient(handler))
+    public static CertificateBypassScope AllowAll()
     {
-        // ... send your request(s)
+        // Use at your own risk; dev/test only.
+        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+        var prev = ServicePointManager.ServerCertificateValidationCallback;
+        ServicePointManager.ServerCertificateValidationCallback = (sender, cert, chain, errors) => true;
+        return new CertificateBypassScope(prev);
     }
-}
-finally
-{
-    // restore the previous global validation callback
-    ServicePointManager.ServerCertificateValidationCallback = previous;
+
+    public void Dispose()
+        => ServicePointManager.ServerCertificateValidationCallback = _previous;
 }
