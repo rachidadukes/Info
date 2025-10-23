@@ -1,53 +1,93 @@
 using System;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Security;
-using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading.Tasks;
+using System.Xml.Linq;
 
-public static class HttpTestHelpers
+namespace NewServiceApp
 {
-    public static HttpClient CreateTestHttpClient(
-        string baseAddress,
-        X509Certificate2 clientCert = null,
-        TimeSpan? timeout = null,
-        bool bypassServerValidation = false)
+    public class NewService
     {
-        // 4.7: enforce TLS 1.2 via ServicePointManager
-        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-
-        var handler = new WebRequestHandler();
-
-        if (clientCert != null)
-            handler.ClientCertificates.Add(clientCert); // <-- works on 4.7 via WebRequestHandler
-
-        if (bypassServerValidation)
-            handler.ServerCertificateValidationCallback =
-                (sender, cert, chain, errors) => true; // DEV/TEST ONLY
-
-        var client = new HttpClient(handler)
+        public async Task<string> GetResponseFromNewAPI(string xml)
         {
-            BaseAddress = new Uri(baseAddress),
-            Timeout = timeout ?? TimeSpan.FromSeconds(30)
-        };
-        return client;
-    }
+            var settings = HostRoutingConfig.GetHostSettings();
+            string endpointUrl;
+            string response = string.Empty;
 
-    public static async System.Threading.Tasks.Task<string> PostXmlAsync(
-        string endpointUrl, string xml, X509Certificate2 clientCert = null, bool bypassServerValidation = false)
-    {
-        var content = new StringContent(xml ?? string.Empty, System.Text.Encoding.UTF8, "application/xml");
+            try
+            {
+                endpointUrl = settings["MessageConverterURL"];
+                if (string.IsNullOrEmpty(endpointUrl))
+                    throw new InvalidOperationException("MessageConverterURL not configured in appsettings.json.");
 
-        using (var http = CreateTestHttpClient(endpointUrl, clientCert, bypassServerValidation: bypassServerValidation))
-        {
-            var resp = await http.PostAsync("", content).ConfigureAwait(false);
-            var body = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+                // Enforce TLS 1.2 (4.7 doesn’t default to it)
+                ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
 
-            Console.WriteLine($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}");
-            if (!resp.IsSuccessStatusCode)
-                throw new HttpRequestException($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}\n{body}");
+                // Load client certificate (your existing CertificateLoader logic)
+                var cert = CertificateLoader.GetCertificate();
 
-            return body;
+                // Create a compatible handler (WebRequestHandler works on .NET 4.7)
+                var handler = new WebRequestHandler();
+
+                if (cert != null)
+                {
+                    handler.ClientCertificates.Add(cert);
+                    Console.WriteLine($"Client certificate added: {cert.Subject}");
+                }
+
+                // ⚠️ Optional: bypass SSL validation for DEV only
+                handler.ServerCertificateValidationCallback =
+                    (sender, serverCert, chain, errors) =>
+                    {
+                        Console.WriteLine($"Bypassing SSL validation for: {serverCert?.Subject}");
+                        return true; // *** DEV/TEST ONLY ***
+                    };
+
+                // Prepare HttpClient
+                using (var client = new HttpClient(handler))
+                {
+                    client.BaseAddress = new Uri(endpointUrl);
+                    client.Timeout = TimeSpan.FromSeconds(30);
+
+                    // TEMPORARY TRANSCODE OVERRIDE (for testing)
+                    var x = XDocument.Parse(xml);
+                    var tc = x.Descendants("TranCode").FirstOrDefault();
+                    if (tc != null)
+                    {
+                        // Force TranCode to 1001 for testing
+                        tc.Value = "1001";
+                        xml = x.ToString(SaveOptions.DisableFormatting);
+                    }
+
+                    var content = new StringContent(xml ?? string.Empty, System.Text.Encoding.UTF8, "application/xml");
+                    Console.WriteLine($"POST {client.BaseAddress}");
+
+                    var resp = await client.PostAsync("", content).ConfigureAwait(false);
+                    response = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+                    Console.WriteLine($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}");
+
+                    if (!resp.IsSuccessStatusCode)
+                        throw new HttpRequestException($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}\n{response}");
+                }
+            }
+            catch (TaskCanceledException tex)
+            {
+                Console.WriteLine($"Timeout: {tex.Message}");
+            }
+            catch (HttpRequestException hrex)
+            {
+                Console.WriteLine($"HTTP Request Error: {hrex.Message}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"General Error: {ex.Message}");
+            }
+
+            return response;
         }
     }
 }
