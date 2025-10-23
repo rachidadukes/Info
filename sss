@@ -1,20 +1,53 @@
-public static HttpClient CreateTestHttpClient(string baseAddress, TimeSpan? timeout = null)
-{
-    var handler = new HttpClientHandler(); // no per-handler cert callback on 4.7
-    var client = new HttpClient(handler)
-    {
-        BaseAddress = new Uri(baseAddress),
-        Timeout = timeout ?? TimeSpan.FromSeconds(30)
-    };
-    return client;
-}
+using System;
+using System.Net;
+using System.Net.Http;
+using System.Net.Security;
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 
-// Call site (DEV/TEST ONLY)
-using (CertificateBypassScope.AllowAll())
+public static class HttpTestHelpers
 {
-    using (var client = CreateTestHttpClient("https://example.test/"))
+    public static HttpClient CreateTestHttpClient(
+        string baseAddress,
+        X509Certificate2 clientCert = null,
+        TimeSpan? timeout = null,
+        bool bypassServerValidation = false)
     {
-        var resp = client.GetAsync("ping").Result;
-        // ...
+        // 4.7: enforce TLS 1.2 via ServicePointManager
+        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+
+        var handler = new WebRequestHandler();
+
+        if (clientCert != null)
+            handler.ClientCertificates.Add(clientCert); // <-- works on 4.7 via WebRequestHandler
+
+        if (bypassServerValidation)
+            handler.ServerCertificateValidationCallback =
+                (sender, cert, chain, errors) => true; // DEV/TEST ONLY
+
+        var client = new HttpClient(handler)
+        {
+            BaseAddress = new Uri(baseAddress),
+            Timeout = timeout ?? TimeSpan.FromSeconds(30)
+        };
+        return client;
+    }
+
+    public static async System.Threading.Tasks.Task<string> PostXmlAsync(
+        string endpointUrl, string xml, X509Certificate2 clientCert = null, bool bypassServerValidation = false)
+    {
+        var content = new StringContent(xml ?? string.Empty, System.Text.Encoding.UTF8, "application/xml");
+
+        using (var http = CreateTestHttpClient(endpointUrl, clientCert, bypassServerValidation: bypassServerValidation))
+        {
+            var resp = await http.PostAsync("", content).ConfigureAwait(false);
+            var body = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+            Console.WriteLine($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}");
+            if (!resp.IsSuccessStatusCode)
+                throw new HttpRequestException($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}\n{body}");
+
+            return body;
+        }
     }
 }
