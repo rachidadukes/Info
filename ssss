@@ -1,5 +1,66 @@
-using var log = ProbeLogger.Start("cert_probe");
+using System;
+using System.Net.Http;
+using System.Net.Security;
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Threading.Tasks;
 
-log.LogCertificate(cert);
-log.LogXmlResult("NetworkError", "SSL connection failed");
-log.LogException(new Exception("Test error"), "FindClientCertificate");
+namespace CertHealthCheckApp.Probing
+{
+    public static class XmlProbe
+    {
+        public static async Task<ProbeResult> PostXmlAsync(string url, string xml, X509Certificate2? clientCertificate)
+        {
+            try
+            {
+                var handler = new HttpClientHandler
+                {
+                    SslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+                    CheckCertificateRevocationList = true,
+                    ServerCertificateCustomValidationCallback = (req, cert, chain, errors) =>
+                    {
+                        AnsiConsole.MarkupLine($"[grey][TLS] Errors={errors}[/]");
+                        return errors == SslPolicyErrors.None;
+                    }
+                };
+
+                if (clientCertificate != null)
+                {
+                    handler.ClientCertificates.Add(clientCertificate);
+                    handler.ClientCertificateOptions = ClientCertificateOption.Manual;
+                }
+
+                using var client = new HttpClient(handler);
+                var content = new StringContent(xml, Encoding.UTF8, "application/xml");
+                var req = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
+
+                var response = await client.SendAsync(req);
+                var body = await response.Content.ReadAsStringAsync();
+
+                // ✅ Log to file
+                ProbeLogger.Current?.LogXmlResult(response.StatusCode.ToString(), body);
+
+                return new ProbeResult(
+                    response.IsSuccessStatusCode ? ProbeStatus.Success : ProbeStatus.HttpError,
+                    response.StatusCode.ToString(),
+                    body);
+            }
+            catch (HttpRequestException hre)
+            {
+                ProbeLogger.Current?.LogException(hre, "HttpRequestException");
+                return new ProbeResult(ProbeStatus.NetworkError, "HttpRequestException", hre.Message);
+            }
+            catch (AuthenticationException ae)
+            {
+                ProbeLogger.Current?.LogException(ae, "AuthenticationException");
+                return new ProbeResult(ProbeStatus.HandshakeError, "TLS Handshake failed", ae.Message);
+            }
+            catch (Exception ex)
+            {
+                ProbeLogger.Current?.LogException(ex, "General Exception");
+                return new ProbeResult(ProbeStatus.Error, "General Exception", ex.Message);
+            }
+        }
+    }
+}
