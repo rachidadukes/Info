@@ -1,1 +1,66 @@
 
+public static bool FindClientCertificate(
+    string subjectOrCn,
+    StoreName storeName,
+    StoreLocation storeLocation)
+{
+    X509Certificate2? cert = null;
+    string message = string.Empty;
+
+    try
+    {
+        using var store = new X509Store(storeName, storeLocation);
+        store.Open(OpenFlags.ReadOnly | OpenFlags.OpenExistingOnly);
+
+        // Try by full subject DN first, then by CN
+        var matches = store.Certificates.Find(X509FindType.FindBySubjectDistinguishedName, subjectOrCn, validOnly: false);
+        if (matches.Count == 0)
+            matches = store.Certificates.Find(X509FindType.FindBySubjectName, subjectOrCn, validOnly: false);
+
+        if (matches.Count == 0)
+        {
+            message = $"No certificate found with subject/CN '{subjectOrCn}' in {storeLocation}\\{storeName}.";
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine(message);
+            Console.ResetColor();
+            return false;
+        }
+
+        // Prefer cert with private key and newest NotBefore
+        X509Certificate2? best = null;
+        foreach (var c in matches)
+        {
+            if (!c.HasPrivateKey) continue;
+            if (best == null || c.NotBefore > best.NotBefore)
+                best = c;
+        }
+
+        cert = best ?? matches[0];
+
+        var validity =
+            cert.NotBefore > DateTime.UtcNow ? "NotYetValid" :
+            cert.NotAfter < DateTime.UtcNow ? "Expired" : "Valid";
+
+        message = $"Thumbprint={cert.Thumbprint}; Subject={cert.Subject}; " +
+                  $"HasPrivateKey={cert.HasPrivateKey}; Validity={validity}; " +
+                  $"NotBefore={cert.NotBefore:u}; NotAfter={cert.NotAfter:u}";
+
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine("✅ Certificate Health Check: Success");
+        Console.WriteLine(message);
+        Console.ResetColor();
+
+        return true;
+    }
+    catch (Exception ex)
+    {
+        message = $"Exception while reading {storeLocation}\\{storeName}: {ex.Message}";
+        Console.ForegroundColor = ConsoleColor.Yellow;
+        Console.WriteLine("⚠️  Certificate check failed:");
+        Console.WriteLine(message);
+        Console.ResetColor();
+
+        cert = null;
+        return false;
+    }
+}
