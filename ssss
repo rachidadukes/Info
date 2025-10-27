@@ -1,62 +1,9 @@
-
-using Spectre.Console;
-using System.Security.Cryptography.X509Certificates;
-
-public static class Ui
+catch (Exception ex)
 {
-    public static void RenderCertHealthBox(X509Certificate2 cert, string title = "Certificate Health Check • Success")
-    {
-        // Build a nice 2-column table
-        var table = new Table().Border(TableBorder.Rounded);
-        table.AddColumn("[grey]Field[/]");
-        table.AddColumn("[grey]Value[/]");
+    var panel = new Panel($"[white]{ex.Message}[/]")
+        .Header("[bold red]❌ Certificate Health Check • Failed[/]")
+        .Border(BoxBorder.Rounded);
+    AnsiConsole.Write(panel);
 
-        string validity =
-            cert.NotBefore > DateTime.UtcNow ? "[yellow]NotYetValid[/]" :
-            cert.NotAfter  < DateTime.UtcNow ? "[red]Expired[/]"     :
-                                                "[green]Valid[/]";
-
-        table.AddRow("Thumbprint", $"[white]{cert.Thumbprint}[/]");
-        table.AddRow("Subject",    $"[white]{cert.Subject}[/]");
-        table.AddRow("HasPrivateKey", cert.HasPrivateKey ? "[green]True[/]" : "[red]False[/]");
-        table.AddRow("Validity",   validity);
-        table.AddRow("NotBefore",  $"[white]{cert.NotBefore:u}[/]");
-        table.AddRow("NotAfter",   $"[white]{cert.NotAfter:u}[/]");
-
-        // Wrap the table in a panel with a header to match your other sections
-        var panel = new Panel(table)
-            .Header($"[bold green]✅ {title}[/]")
-            .Border(BoxBorder.Rounded)
-            .Padding(0, 0, 0, 0);
-
-        AnsiConsole.Write(panel);
-    }
-
-    public static void RenderCertHealthError(string message, string title = "Certificate Health Check • Error")
-    {
-        var panel = new Panel($"[white]{message}[/]")
-            .Header($"[bold red]❌ {title}[/]")
-            .Border(BoxBorder.Rounded)
-            .Padding(0, 0, 0, 0);
-        AnsiConsole.Write(panel);
-    }
+    return null;
 }
-
-
-======================================
-
-
-var cert = CertProbe.FindClientCertificate(
-    ClientCertSubjectName,
-    ClientCertStoreName,
-    ClientCertStoreLocation);
-
-if (cert is null)
-{
-    Ui.RenderCertHealthError($"No certificate found with subject/CN '{ClientCertSubjectName}' in {ClientCertStoreLocation}\\{ClientCertStoreName}.");
-    return 2;
-}
-
-// Pretty box like your other sections:
-Ui.RenderCertHealthBox(cert);
-
