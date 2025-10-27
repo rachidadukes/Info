@@ -1,28 +1,72 @@
-public static ProbeLogger Start(string baseName = "probe")
+using System;
+using System.IO;
+using System.Text;
+
+namespace CertHealthCheckApp.Probing
 {
-    // ✅ Define fixed log directory
-    var logDir = @"C:\Temp\CertProbeLogs";
-    Directory.CreateDirectory(logDir); // auto-create folder if missing
-
-    // ✅ Build unique filename with timestamp
-    var logPath = Path.Combine(logDir, $"{baseName}_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log");
-
-    // ✅ Create and assign logger
-    var logger = new ProbeLogger(baseName, logPath);
-    Current = logger;
-
-    // ✅ Show info on console for clarity
-    AnsiConsole.MarkupLine($"[grey]Log file created: {logPath}[/]");
-
-    // ✅ (optional) Auto-open in Notepad after app ends
-    AppDomain.CurrentDomain.ProcessExit += (_, __) =>
+    public class ProbeLogger
     {
-        try
-        {
-            System.Diagnostics.Process.Start("notepad.exe", logPath);
-        }
-        catch { /* ignore if Notepad unavailable */ }
-    };
+        public static ProbeLogger? Current { get; private set; }
 
-    return logger;
+        public string LogPath { get; }
+
+        private readonly StreamWriter _writer;
+
+        private ProbeLogger(string baseName)
+        {
+            // ✅ Ensure log directory exists
+            var logDir = @"C:\Temp\CertProbeLogs";
+            Directory.CreateDirectory(logDir);
+
+            // ✅ Unique file per run
+            LogPath = Path.Combine(logDir, $"{baseName}_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log");
+
+            _writer = new StreamWriter(LogPath, append: false, Encoding.UTF8) { AutoFlush = true };
+
+            Console.WriteLine($"# Probe session started: {DateTime.Now:u}");
+        }
+
+        public static ProbeLogger Start(string baseName = "probe")
+        {
+            var logger = new ProbeLogger(baseName);
+            Current = logger;
+
+            Console.WriteLine($"[grey]Log file created at: {logger.LogPath}[/]");
+            return logger;
+        }
+
+        public void LogCertificate(System.Security.Cryptography.X509Certificates.X509Certificate2 cert)
+        {
+            WriteLine("=== Certificate Info ===");
+            WriteLine($"Subject      : {cert.Subject}");
+            WriteLine($"Thumbprint   : {cert.Thumbprint}");
+            WriteLine($"HasPrivateKey: {cert.HasPrivateKey}");
+            WriteLine($"NotBefore    : {cert.NotBefore:u}");
+            WriteLine($"NotAfter     : {cert.NotAfter:u}");
+            WriteLine("========================");
+        }
+
+        public void LogXmlResult(string status, string message)
+        {
+            WriteLine("=== XML API Result ===");
+            WriteLine($"Status : {status}");
+            WriteLine($"Message: {message}");
+            WriteLine("=======================");
+        }
+
+        public void LogException(Exception ex, string context)
+        {
+            WriteLine("=== Exception ===");
+            WriteLine($"Context : {context}");
+            WriteLine($"Type    : {ex.GetType().Name}");
+            WriteLine($"Message : {ex.Message}");
+            WriteLine("==================");
+        }
+
+        public void WriteLine(string message)
+        {
+            Console.WriteLine(message);
+            _writer.WriteLine(message);
+        }
+    }
 }
