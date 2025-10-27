@@ -1,1 +1,26 @@
 
+catch (AuthenticationException ae)
+{
+    Console.ForegroundColor = ConsoleColor.Red;
+    Console.WriteLine("❌ AuthenticationException:");
+    DumpException(ae);
+    Console.ResetColor();
+    return new ProbeResult(ProbeStatus.HandshakeFailed, ae.Message);
+}
+catch (HttpRequestException hre)
+{
+    Console.ForegroundColor = ConsoleColor.Yellow;
+    Console.WriteLine("⚠️ HttpRequestException:");
+    DumpException(hre);
+    Console.ResetColor();
+    return new ProbeResult(ProbeStatus.NetworkError, hre.Message);
+}
+
+static void DumpException(Exception ex, string indent = "")
+{
+    Console.WriteLine($"{indent}{ex.GetType().Name}: {ex.Message}");
+    if (ex.InnerException != null)
+    {
+        DumpException(ex.InnerException, indent + "  ");
+    }
+}
