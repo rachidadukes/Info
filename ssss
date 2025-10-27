@@ -1,9 +1,128 @@
-catch (Exception ex)
-{
-    var panel = new Panel($"[white]{ex.Message}[/]")
-        .Header("[bold red]❌ Certificate Health Check • Failed[/]")
-        .Border(BoxBorder.Rounded);
-    AnsiConsole.Write(panel);
+using System;
+using System.IO;
+using System.Text;
+using System.Security.Cryptography.X509Certificates;
 
-    return null;
+namespace CertHealthCheckApp.Probing
+{
+    /// <summary>
+    /// Tees Console.Out and Console.Error into a timestamped log file.
+    /// Also provides helpers to log certificate and call results.
+    /// Usage:
+    ///   using var log = ProbeLogger.Start("cert_probe");
+    ///   Console.WriteLine("hello"); // goes to console + file
+    ///   ProbeLogger.Current?.LogCertificate(cert);
+    /// </summary>
+    public sealed class ProbeLogger : IDisposable
+    {
+        public static ProbeLogger? Current { get; private set; }
+
+        public string LogPath { get; }
+        private readonly StreamWriter _writer;
+        private readonly TextWriter _origOut;
+        private readonly TextWriter _origErr;
+        private readonly MultiTextWriter _teeOut;
+        private readonly MultiTextWriter _teeErr;
+        private bool _disposed;
+
+        private ProbeLogger(string baseName)
+        {
+            var ts = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+            var dir = Path.Combine(AppContext.BaseDirectory, "logs");
+            Directory.CreateDirectory(dir);
+            LogPath = Path.Combine(dir, $"{baseName}_{ts}.log");
+
+            _writer = new StreamWriter(LogPath, append: false, Encoding.UTF8) { AutoFlush = true };
+
+            _origOut = Console.Out;
+            _origErr = Console.Error;
+
+            _teeOut = new MultiTextWriter(_origOut, _writer);
+            _teeErr = new MultiTextWriter(_origErr, _writer);
+
+            Console.SetOut(_teeOut);
+            Console.SetError(_teeErr);
+
+            // Small header
+            Console.WriteLine($"# Probe session started: {DateTime.Now:u}");
+        }
+
+        public static ProbeLogger Start(string baseName = "probe")
+        {
+            var logger = new ProbeLogger(baseName);
+            Current = logger;
+            return logger;
+        }
+
+        public void LogHeader(string title)
+        {
+            Console.WriteLine();
+            Console.WriteLine(new string('─', 60));
+            Console.WriteLine(title);
+            Console.WriteLine(new string('─', 60));
+        }
+
+        public void LogKv(string key, string value) =>
+            Console.WriteLine($"{key}: {value}");
+
+        public void LogCertificate(X509Certificate2 cert)
+        {
+            LogHeader("Certificate");
+            LogKv("Thumbprint", cert.Thumbprint ?? "");
+            LogKv("Subject", cert.Subject);
+            LogKv("HasPrivateKey", cert.HasPrivateKey.ToString());
+            LogKv("NotBefore", cert.NotBefore.ToUniversalTime().ToString("u"));
+            LogKv("NotAfter", cert.NotAfter.ToUniversalTime().ToString("u"));
+        }
+
+        public void LogXmlResult(string status, string message)
+        {
+            LogHeader("XML Call Result");
+            LogKv("Status", status);
+            if (!string.IsNullOrWhiteSpace(message))
+            {
+                Console.WriteLine("Message:");
+                Console.WriteLine(message);
+            }
+        }
+
+        public void LogException(Exception ex, string context = "")
+        {
+            LogHeader(string.IsNullOrWhiteSpace(context) ? "Exception" : $"Exception • {context}");
+            Console.WriteLine(ex.ToString());
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+
+            try
+            {
+                Console.WriteLine($"# Probe session ended: {DateTime.Now:u}");
+                Console.WriteLine($"# Log saved → {LogPath}");
+            }
+            catch { /* ignore */ }
+
+            Console.SetOut(_origOut);
+            Console.SetError(_origErr);
+
+            _writer.Flush();
+            _writer.Dispose();
+
+            if (ReferenceEquals(Current, this))
+                Current = null;
+        }
+
+        private sealed class MultiTextWriter : TextWriter
+        {
+            private readonly TextWriter _a, _b;
+            public MultiTextWriter(TextWriter a, TextWriter b) { _a = a; _b = b; }
+            public override Encoding Encoding => _a.Encoding;
+            public override void Write(char value) { _a.Write(value); _b.Write(value); }
+            public override void Write(string? value) { _a.Write(value); _b.Write(value); }
+            public override void WriteLine(string? value) { _a.WriteLine(value); _b.WriteLine(value); }
+            public override void Flush() { _a.Flush(); _b.Flush(); }
+        }
+    }
 }
