@@ -1,128 +1,65 @@
-using System;
-using System.IO;
-using System.Text;
-using System.Security.Cryptography.X509Certificates;
-
-namespace CertHealthCheckApp.Probing
+// XML POST request logic
+public static async Task<ProbeResult> PostXmlAsync(string url, string xml, X509Certificate2? clientCertificate)
 {
-    /// <summary>
-    /// Tees Console.Out and Console.Error into a timestamped log file.
-    /// Also provides helpers to log certificate and call results.
-    /// Usage:
-    ///   using var log = ProbeLogger.Start("cert_probe");
-    ///   Console.WriteLine("hello"); // goes to console + file
-    ///   ProbeLogger.Current?.LogCertificate(cert);
-    /// </summary>
-    public sealed class ProbeLogger : IDisposable
+    try
     {
-        public static ProbeLogger? Current { get; private set; }
-
-        public string LogPath { get; }
-        private readonly StreamWriter _writer;
-        private readonly TextWriter _origOut;
-        private readonly TextWriter _origErr;
-        private readonly MultiTextWriter _teeOut;
-        private readonly MultiTextWriter _teeErr;
-        private bool _disposed;
-
-        private ProbeLogger(string baseName)
+        var handler = new HttpClientHandler
         {
-            var ts = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-            var dir = Path.Combine(AppContext.BaseDirectory, "logs");
-            Directory.CreateDirectory(dir);
-            LogPath = Path.Combine(dir, $"{baseName}_{ts}.log");
-
-            _writer = new StreamWriter(LogPath, append: false, Encoding.UTF8) { AutoFlush = true };
-
-            _origOut = Console.Out;
-            _origErr = Console.Error;
-
-            _teeOut = new MultiTextWriter(_origOut, _writer);
-            _teeErr = new MultiTextWriter(_origErr, _writer);
-
-            Console.SetOut(_teeOut);
-            Console.SetError(_teeErr);
-
-            // Small header
-            Console.WriteLine($"# Probe session started: {DateTime.Now:u}");
-        }
-
-        public static ProbeLogger Start(string baseName = "probe")
-        {
-            var logger = new ProbeLogger(baseName);
-            Current = logger;
-            return logger;
-        }
-
-        public void LogHeader(string title)
-        {
-            Console.WriteLine();
-            Console.WriteLine(new string('─', 60));
-            Console.WriteLine(title);
-            Console.WriteLine(new string('─', 60));
-        }
-
-        public void LogKv(string key, string value) =>
-            Console.WriteLine($"{key}: {value}");
-
-        public void LogCertificate(X509Certificate2 cert)
-        {
-            LogHeader("Certificate");
-            LogKv("Thumbprint", cert.Thumbprint ?? "");
-            LogKv("Subject", cert.Subject);
-            LogKv("HasPrivateKey", cert.HasPrivateKey.ToString());
-            LogKv("NotBefore", cert.NotBefore.ToUniversalTime().ToString("u"));
-            LogKv("NotAfter", cert.NotAfter.ToUniversalTime().ToString("u"));
-        }
-
-        public void LogXmlResult(string status, string message)
-        {
-            LogHeader("XML Call Result");
-            LogKv("Status", status);
-            if (!string.IsNullOrWhiteSpace(message))
+            SslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+            CheckCertificateRevocationList = true,
+            ServerCertificateCustomValidationCallback = (req, cert, chain, errors) =>
             {
-                Console.WriteLine("Message:");
-                Console.WriteLine(message);
+                AnsiConsole.MarkupLine($"[grey][TLS] Errors={errors}[/]");
+                return errors == SslPolicyErrors.None;
             }
-        }
+        };
 
-        public void LogException(Exception ex, string context = "")
+        // Attach client certificate if available
+        if (clientCertificate != null)
         {
-            LogHeader(string.IsNullOrWhiteSpace(context) ? "Exception" : $"Exception • {context}");
-            Console.WriteLine(ex.ToString());
+            handler.ClientCertificates.Add(clientCertificate);
+            handler.ClientCertificateOptions = ClientCertificateOption.Manual;
         }
 
-        public void Dispose()
+        using var client = new HttpClient(handler);
+        var content = new StringContent(xml, Encoding.UTF8, "application/xml");
+
+        var req = new HttpRequestMessage(HttpMethod.Post, url)
         {
-            if (_disposed) return;
-            _disposed = true;
+            Content = content
+        };
 
-            try
-            {
-                Console.WriteLine($"# Probe session ended: {DateTime.Now:u}");
-                Console.WriteLine($"# Log saved → {LogPath}");
-            }
-            catch { /* ignore */ }
+        // === Send request ===
+        var response = await client.SendAsync(req);
+        var body = await response.Content.ReadAsStringAsync();
 
-            Console.SetOut(_origOut);
-            Console.SetError(_origErr);
+        if (body.Length > 400)
+            body = body[..400] + "...";
 
-            _writer.Flush();
-            _writer.Dispose();
+        var status = response.IsSuccessStatusCode
+            ? ProbeStatus.Success
+            : ProbeStatus.HttpError;
 
-            if (ReferenceEquals(Current, this))
-                Current = null;
-        }
+        var message = $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}\nBody={body}";
 
-        private sealed class MultiTextWriter : TextWriter
-        {
-            private readonly TextWriter _a, _b;
-            public MultiTextWriter(TextWriter a, TextWriter b) { _a = a; _b = b; }
-            public override Encoding Encoding => _a.Encoding;
-            public override void Write(char value) { _a.Write(value); _b.Write(value); }
-            public override void Write(string? value) { _a.Write(value); _b.Write(value); }
-            public override void WriteLine(string? value) { _a.WriteLine(value); _b.WriteLine(value); }
-            public override void Flush() { _a.Flush(); _b.Flush(); }
-        }
+        // ✅ Log the XML call result to file
+        ProbeLogger.Current?.LogXmlResult(status.ToString(), message);
+
+        return new ProbeResult(status, message);
+    }
+    catch (HttpRequestException hre)
+    {
+        ProbeLogger.Current?.LogException(hre, "PostXmlAsync");
+        return new ProbeResult(ProbeStatus.NetworkError, $"HttpRequestException: {hre.Message}");
+    }
+    catch (AuthenticationException ae)
+    {
+        ProbeLogger.Current?.LogException(ae, "TLS Handshake");
+        return new ProbeResult(ProbeStatus.HandshakeFailed, $"TLS Handshake failed: {ae.Message}");
+    }
+    catch (Exception ex)
+    {
+        ProbeLogger.Current?.LogException(ex, "PostXmlAsync");
+        return new ProbeResult(ProbeStatus.Error, $"Unexpected error: {ex.Message}");
     }
 }
