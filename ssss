@@ -1,9 +1,33 @@
-if (cert is X509Certificate2 c2)
+
+if (chain?.ChainStatus?.Length > 0)
 {
-    var san = c2.Extensions["2.5.29.17"];
-    if (san is not null)
+    Console.WriteLine("[TLS] Chain Status:");
+    foreach (var s in chain.ChainStatus)
+        Console.WriteLine($"    {s.Status}: {s.StatusInformation?.Trim()}");
+}
+
+
+
+=======================
+static IEnumerable<string> GetDnsSans(X509Certificate2 c)
+{
+    var ext = c.Extensions["2.5.29.17"];
+    if (ext is null) yield break;
+
+    var formatted = new AsnEncodedData(ext.Oid, ext.RawData).Format(true);
+    foreach (var line in formatted.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
     {
-        Console.WriteLine("[TLS] ServerCert SANs:");
-        Console.WriteLine("    " + san.Format(true).Trim());
+        var trimmed = line.Trim();
+        if (trimmed.StartsWith("DNS Name=", StringComparison.OrdinalIgnoreCase))
+            yield return trimmed.Substring("DNS Name=".Length).Trim();
     }
 }
+
+// in your callback, inside the cert2 block:
+var host = new Uri(url).Host;                           // capture url outside and close over, or pass in
+var sanDns = GetDnsSans(cert2).ToList();
+Console.WriteLine("[TLS] ServerCert SANs:");
+foreach (var d in sanDns) Console.WriteLine("    " + d);
+
+bool hostMatchesSan = sanDns.Contains(host, StringComparer.OrdinalIgnoreCase);
+Console.WriteLine($"[TLS] Hostname match: {(hostMatchesSan ? "YES" : "NO")} (host={host})");
