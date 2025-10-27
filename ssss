@@ -1,1 +1,24 @@
+// 1) Check certificate health
+AnsiConsole.MarkupLine("[bold cyan]== Certificate & Endpoint Probe ==[/]");
+
+// Run the probe
+bool certFound = CertProbe.FindClientCertificate(
+    ClientCertSubjectName,
+    ClientCertStoreName,
+    ClientCertStoreLocation);
+
+// Build the results table
+var certTable = new Table().Border(TableBorder.Rounded);
+certTable.AddColumn("[bold yellow]Check[/]");
+certTable.AddColumn("[bold green]Result[/]");
+
+certTable.AddRow("Certificate Health", certFound ? "Success" : "Error");
+AnsiConsole.Write(certTable);
+
+// If the cert is missing or invalid
+if (!certFound)
+{
+    AnsiConsole.MarkupLine("[red]❌ Certificate not found or invalid.[/]");
+    return 2;
+}
 
