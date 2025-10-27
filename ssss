@@ -1,39 +1,50 @@
-public static X509Certificate2? FindClientCertificate(
-    string subjectOrCn,
-    StoreName storeName,
-    StoreLocation storeLocation)
+// 1) Check certificate health
+AnsiConsole.MarkupLine("[bold cyan]== Certificate & Endpoint Probe ==[/]");
+
+var cert = CertProbe.FindClientCertificate(
+    ClientCertSubjectName,
+    ClientCertStoreName,
+    ClientCertStoreLocation);
+
+var certFound = cert != null;
+
+var certTable = new Table().Border(TableBorder.Rounded);
+certTable.AddColumn("[bold yellow]Check[/]");
+certTable.AddColumn("[bold green]Result[/]");
+certTable.AddRow("Certificate Health", certFound ? "Success" : "Error");
+AnsiConsole.Write(certTable);
+
+if (!certFound)
 {
-    try
-    {
-        using var store = new X509Store(storeName, storeLocation);
-        store.Open(OpenFlags.ReadOnly | OpenFlags.OpenExistingOnly);
-
-        var matches = store.Certificates.Find(X509FindType.FindBySubjectDistinguishedName, subjectOrCn, validOnly: false);
-        if (matches.Count == 0)
-            matches = store.Certificates.Find(X509FindType.FindBySubjectName, subjectOrCn, validOnly: false);
-
-        if (matches.Count == 0)
-        {
-            Console.WriteLine($"❌ No certificate found with subject/CN '{subjectOrCn}' in {storeLocation}\\{storeName}.");
-            return null;
-        }
-
-        X509Certificate2? best = null;
-        foreach (var c in matches)
-        {
-            if (!c.HasPrivateKey) continue;
-            if (best == null || c.NotBefore > best.NotBefore)
-                best = c;
-        }
-
-        var cert = best ?? matches[0];
-        Console.WriteLine($"✅ Found certificate: {cert.Subject}");
-        Console.WriteLine($"   Valid: {cert.NotBefore:u} - {cert.NotAfter:u}");
-        return cert;
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"⚠️ Error reading {storeLocation}\\{storeName}: {ex.Message}");
-        return null;
-    }
+    AnsiConsole.MarkupLine("[red]❌ Certificate not found or invalid.[/]");
+    return 2;
 }
+
+// 2) XML API call
+AnsiConsole.MarkupLine("\n[bold cyan]== XML API Call Test ==[/]");
+var xmlPayload = @"<ConvertMessageRequest>
+<ClientId>HealthCheck</ClientId>
+<Payload>Test</Payload>
+</ConvertMessageRequest>";
+
+var xmlResult = await CertProbe.PostXmlAsync(ApiUrl, xmlPayload, cert);
+
+// Display call result
+var callTable = new Table().Border(TableBorder.Rounded);
+callTable.AddColumn("[bold yellow]Check[/]");
+callTable.AddColumn("[bold green]Result[/]");
+callTable.AddRow("XML Call Result", xmlResult.Status.ToString());
+callTable.AddRow("Message", xmlResult.Message);
+AnsiConsole.Write(callTable);
+
+// 3) Summary section
+var summary = new Table().Border(TableBorder.Heavy);
+summary.AddColumn("[bold blue]Summary[/]");
+summary.AddColumn("[bold white]Value[/]");
+summary.AddRow("Certificate Subject", cert.Subject);
+summary.AddRow("Validity", $"{cert.NotBefore:u} - {cert.NotAfter:u}");
+summary.AddRow("XML API Call", xmlResult.Status.ToString());
+AnsiConsole.Write(summary);
+
+AnsiConsole.MarkupLine("[bold green]✅ Probe complete.[/]");
+return 0;
