@@ -1,33 +1,76 @@
+// 🧾 Log setup
+var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+var logFile = Path.Combine(AppContext.BaseDirectory, $"tls_probe_{timestamp}.log");
+var logWriter = new StreamWriter(logFile, append: false) { AutoFlush = true };
 
-if (chain?.ChainStatus?.Length > 0)
+// Redirect Console output to both console and file
+var multiWriter = TextWriter.Synchronized(TextWriter.Synchronized(new MultiTextWriter(Console.Out, logWriter)));
+Console.SetOut(multiWriter);
+
+// Utility for multi-output
+public class MultiTextWriter : TextWriter
 {
-    Console.WriteLine("[TLS] Chain Status:");
-    foreach (var s in chain.ChainStatus)
-        Console.WriteLine($"    {s.Status}: {s.StatusInformation?.Trim()}");
-}
-
-
-
-=======================
-static IEnumerable<string> GetDnsSans(X509Certificate2 c)
-{
-    var ext = c.Extensions["2.5.29.17"];
-    if (ext is null) yield break;
-
-    var formatted = new AsnEncodedData(ext.Oid, ext.RawData).Format(true);
-    foreach (var line in formatted.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+    private readonly TextWriter _first, _second;
+    public MultiTextWriter(TextWriter first, TextWriter second)
     {
-        var trimmed = line.Trim();
-        if (trimmed.StartsWith("DNS Name=", StringComparison.OrdinalIgnoreCase))
-            yield return trimmed.Substring("DNS Name=".Length).Trim();
+        _first = first;
+        _second = second;
+    }
+
+    public override Encoding Encoding => _first.Encoding;
+
+    public override void Write(char value)
+    {
+        _first.Write(value);
+        _second.Write(value);
+    }
+
+    public override void WriteLine(string? value)
+    {
+        _first.WriteLine(value);
+        _second.WriteLine(value);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _first.Dispose();
+            _second.Dispose();
+        }
+        base.Dispose(disposing);
     }
 }
+=============================
 
-// in your callback, inside the cert2 block:
-var host = new Uri(url).Host;                           // capture url outside and close over, or pass in
-var sanDns = GetDnsSans(cert2).ToList();
-Console.WriteLine("[TLS] ServerCert SANs:");
-foreach (var d in sanDns) Console.WriteLine("    " + d);
 
-bool hostMatchesSan = sanDns.Contains(host, StringComparer.OrdinalIgnoreCase);
-Console.WriteLine($"[TLS] Hostname match: {(hostMatchesSan ? "YES" : "NO")} (host={host})");
+finally
+{
+    Console.WriteLine();
+    Console.WriteLine("📁 TLS diagnostic log saved to:");
+    Console.WriteLine($"   {logFile}");
+    Console.WriteLine();
+    Console.WriteLine("👉 Please send this log file to your Certificate Support Team with the request below:");
+    Console.WriteLine();
+    Console.WriteLine("-------------------------------------------------------------");
+    Console.WriteLine("CERTIFICATE SUPPORT REQUEST TEMPLATE");
+    Console.WriteLine("-------------------------------------------------------------");
+    Console.WriteLine(@"Hi Team,
+
+We are testing connectivity to the new REST API endpoint and observed an SSL/TLS handshake failure.
+Attached is the full diagnostic log from our certificate validation probe.
+
+Please confirm the following:
+1. Which client certificate (CN / Issuer) should be used for this endpoint?
+2. Which root and intermediate CAs are required to trust your server certificate?
+3. Whether the endpoint requires mutual TLS (client certificate authentication).
+4. Supported TLS versions and cipher suites for this service.
+5. If IP whitelisting or specific SAN / CN name matching is enforced.
+
+Endpoint tested: [paste the API URL here]
+Log file attached: [tls_probe_YYYY-MM-DD_HH-mm-ss.log]
+
+Thank you,
+[Your Name / Team]");
+    Console.WriteLine("-------------------------------------------------------------");
+}
