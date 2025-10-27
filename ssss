@@ -1,24 +1,39 @@
-// 1) Check certificate health
-AnsiConsole.MarkupLine("[bold cyan]== Certificate & Endpoint Probe ==[/]");
-
-// Run the probe
-bool certFound = CertProbe.FindClientCertificate(
-    ClientCertSubjectName,
-    ClientCertStoreName,
-    ClientCertStoreLocation);
-
-// Build the results table
-var certTable = new Table().Border(TableBorder.Rounded);
-certTable.AddColumn("[bold yellow]Check[/]");
-certTable.AddColumn("[bold green]Result[/]");
-
-certTable.AddRow("Certificate Health", certFound ? "Success" : "Error");
-AnsiConsole.Write(certTable);
-
-// If the cert is missing or invalid
-if (!certFound)
+public static X509Certificate2? FindClientCertificate(
+    string subjectOrCn,
+    StoreName storeName,
+    StoreLocation storeLocation)
 {
-    AnsiConsole.MarkupLine("[red]❌ Certificate not found or invalid.[/]");
-    return 2;
-}
+    try
+    {
+        using var store = new X509Store(storeName, storeLocation);
+        store.Open(OpenFlags.ReadOnly | OpenFlags.OpenExistingOnly);
 
+        var matches = store.Certificates.Find(X509FindType.FindBySubjectDistinguishedName, subjectOrCn, validOnly: false);
+        if (matches.Count == 0)
+            matches = store.Certificates.Find(X509FindType.FindBySubjectName, subjectOrCn, validOnly: false);
+
+        if (matches.Count == 0)
+        {
+            Console.WriteLine($"❌ No certificate found with subject/CN '{subjectOrCn}' in {storeLocation}\\{storeName}.");
+            return null;
+        }
+
+        X509Certificate2? best = null;
+        foreach (var c in matches)
+        {
+            if (!c.HasPrivateKey) continue;
+            if (best == null || c.NotBefore > best.NotBefore)
+                best = c;
+        }
+
+        var cert = best ?? matches[0];
+        Console.WriteLine($"✅ Found certificate: {cert.Subject}");
+        Console.WriteLine($"   Valid: {cert.NotBefore:u} - {cert.NotAfter:u}");
+        return cert;
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"⚠️ Error reading {storeLocation}\\{storeName}: {ex.Message}");
+        return null;
+    }
+}
