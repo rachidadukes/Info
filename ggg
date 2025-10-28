@@ -1,21 +1,206 @@
-private async Task<bool> IsApiHealthyAsync(string baseUrl)
-{
-    try
-    {
-        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-        var handler = new WebRequestHandler();
-        handler.ServerCertificateValidationCallback += (s, cert, chain, errors) => true; // DEV only
+using System;
+using System.Diagnostics;
+using System.Net;
+using System.Net.Http;
+using System.Net.Sockets;
+using System.Net.Security;
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Threading.Tasks;
 
-        using (var client = new HttpClient(handler))
+public sealed class ApiHealthDiag
+{
+    public bool DnsOk { get; set; }
+    public bool TcpOk { get; set; }
+    public bool TlsOk { get; set; }
+    public bool HttpOk { get; set; }
+    public HttpStatusCode? StatusCode { get; set; }
+    public string Reason { get; set; }
+    public string ResponseSample { get; set; }
+    public string CertSummary { get; set; }
+    public SslPolicyErrors? TlsErrors { get; set; }
+    public string PhaseFailed { get; set; }
+    public TimeSpan Elapsed { get; set; }
+
+    public override string ToString()
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"DNS: {(DnsOk ? "OK" : "FAIL")}, TCP: {(TcpOk ? "OK" : "FAIL")}, TLS: {(TlsOk ? "OK" : "FAIL")}, HTTP: {(HttpOk ? "OK" : "FAIL")}");
+        if (StatusCode.HasValue) sb.AppendLine($"HTTP {(int)StatusCode.Value} {Reason}");
+        if (!string.IsNullOrWhiteSpace(ResponseSample)) sb.AppendLine($"Body (first 512): {ResponseSample}");
+        if (TlsErrors.HasValue) sb.AppendLine($"TLS Errors: {TlsErrors}");
+        if (!string.IsNullOrWhiteSpace(CertSummary)) sb.AppendLine($"Server Cert: {CertSummary}");
+        if (!string.IsNullOrWhiteSpace(PhaseFailed)) sb.AppendLine($"Failed at: {PhaseFailed}");
+        if (!string.IsNullOrWhiteSpace(Reason)) sb.AppendLine($"Reason: {Reason}");
+        sb.AppendLine($"Elapsed: {Elapsed.TotalMilliseconds:N0} ms");
+        return sb.ToString();
+    }
+}
+
+public static class HealthProbe
+{
+    // Toggle this from config if you want:
+    private static readonly bool IgnoreCertValidation =
+        bool.TryParse(System.Configuration.ConfigurationManager.AppSettings["IgnoreServerCertificateErrors"], out var b) && b;
+
+    public static async Task<ApiHealthDiag> DiagnoseAsync(string url, string healthPath = null)
+    {
+        var diag = new ApiHealthDiag();
+        var sw = Stopwatch.StartNew();
+        try
         {
-            client.Timeout = TimeSpan.FromSeconds(5);
-            var resp = await client.GetAsync(baseUrl);  // or use "/health"
-            return resp.IsSuccessStatusCode;
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+
+            var uri = new Uri(url);
+            var healthUri = new Uri(uri, healthPath ?? "/health"); // fallback to /health
+
+            // 1) DNS
+            try
+            {
+                var _ = Dns.GetHostEntry(uri.Host);
+                diag.DnsOk = true;
+            }
+            catch (Exception ex)
+            {
+                diag.PhaseFailed = "DNS";
+                diag.Reason = ex.Message;
+                return diag;
+            }
+
+            // 2) TCP
+            try
+            {
+                using (var tcp = new TcpClient())
+                {
+                    var ok = tcp.ConnectAsync(uri.Host, uri.Port == -1 ? 443 : uri.Port)
+                                .Wait(TimeSpan.FromSeconds(3));
+                    diag.TcpOk = ok && tcp.Connected;
+                    if (!diag.TcpOk)
+                    {
+                        diag.PhaseFailed = "TCP";
+                        diag.Reason = "Connect timeout/refused.";
+                        return diag;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                diag.PhaseFailed = "TCP";
+                diag.Reason = ex.Message;
+                return diag;
+            }
+
+            // 3) TLS + HTTP
+            var lastTlsErrors = SslPolicyErrors.None;
+            X509Certificate2 serverCert = null;
+
+            var handler = new WebRequestHandler();
+            handler.ServerCertificateValidationCallback += (sender, cert, chain, errors) =>
+            {
+                lastTlsErrors = errors;
+                // Try to capture cert details for logging
+                try { serverCert = new X509Certificate2(cert); } catch { /* ignore */ }
+                return IgnoreCertValidation ? true : errors == SslPolicyErrors.None;
+            };
+
+            using (var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(5) })
+            {
+                HttpResponseMessage resp = null;
+
+                // Prefer HEAD; some servers don’t support it—fallback to GET.
+                var head = new HttpRequestMessage(HttpMethod.Head, healthUri);
+                try
+                {
+                    resp = await client.SendAsync(head);
+                }
+                catch (NotSupportedException) { /* fall back to GET below */ }
+                catch (AuthenticationException aex)
+                {
+                    diag.TlsOk = false;
+                    diag.TlsErrors = lastTlsErrors;
+                    diag.PhaseFailed = "TLS";
+                    diag.Reason = aex.Message;
+                    diag.CertSummary = SummarizeCert(serverCert);
+                    return diag;
+                }
+                catch (HttpRequestException hex) when (hex.InnerException is AuthenticationException)
+                {
+                    diag.TlsOk = false;
+                    diag.TlsErrors = lastTlsErrors;
+                    diag.PhaseFailed = "TLS";
+                    diag.Reason = hex.InnerException.Message;
+                    diag.CertSummary = SummarizeCert(serverCert);
+                    return diag;
+                }
+                catch (TaskCanceledException)
+                {
+                    // Could be TLS stall or HTTP timeout
+                }
+
+                if (resp == null)
+                {
+                    try
+                    {
+                        resp = await client.GetAsync(healthUri);
+                    }
+                    catch (AuthenticationException aex)
+                    {
+                        diag.TlsOk = false;
+                        diag.TlsErrors = lastTlsErrors;
+                        diag.PhaseFailed = "TLS";
+                        diag.Reason = aex.Message;
+                        diag.CertSummary = SummarizeCert(serverCert);
+                        return diag;
+                    }
+                }
+
+                // If we got here, TLS completed
+                diag.TlsOk = true;
+                diag.TlsErrors = lastTlsErrors;
+                diag.CertSummary = SummarizeCert(serverCert);
+
+                if (resp != null)
+                {
+                    diag.StatusCode = resp.StatusCode;
+                    diag.Reason = resp.ReasonPhrase;
+                    diag.HttpOk = resp.IsSuccessStatusCode;
+
+                    // Read a small sample to avoid big downloads
+                    var body = await resp.Content.ReadAsStringAsync();
+                    diag.ResponseSample = body?.Length > 512 ? body.Substring(0, 512) : body;
+
+                    if (!diag.HttpOk)
+                        diag.PhaseFailed = "HTTP";
+                }
+                else
+                {
+                    diag.PhaseFailed = "HTTP";
+                    diag.Reason = "No response (timeout).";
+                }
+            }
+
+            return diag;
+        }
+        catch (Exception ex)
+        {
+            diag.PhaseFailed = "Unhandled";
+            diag.Reason = ex.Message;
+            return diag;
+        }
+        finally
+        {
+            sw.Stop();
+            diag.Elapsed = sw.Elapsed;
         }
     }
-    catch (Exception ex)
+
+    private static string SummarizeCert(X509Certificate2 cert)
     {
-        Console.WriteLine($"Health check failed: {ex.Message}");
-        return false;
+        if (cert == null) return null;
+        return $"CN={cert.GetNameInfo(X509NameType.SimpleName, false)}, " +
+               $"Issuer={cert.Issuer}, " +
+               $"NotBefore={cert.NotBefore:u}, NotAfter={cert.NotAfter:u}, " +
+               $"Thumbprint={cert.Thumbprint}";
     }
 }
