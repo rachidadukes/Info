@@ -1,0 +1,39 @@
+public async Task<string> GetResponseFromNewAPI(string xml)
+{
+    string endpointUrl = ConfigurationManager.AppSettings["MessageConverterURL"];
+    string response = string.Empty;
+
+    try
+    {
+        // Ensure TLS 1.2
+        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+
+        // Allow any server certificate (DEV ONLY)
+        var handler = new WebRequestHandler();
+        handler.ServerCertificateValidationCallback += (sender, cert, chain, errors) => true;
+
+        using (var client = new HttpClient(handler))
+        {
+            client.Timeout = TimeSpan.FromSeconds(30);
+
+            using (var content = new StringContent(xml, Encoding.UTF8, "application/xml"))
+            {
+                var resp = await client.PostAsync(endpointUrl, content);
+                Console.WriteLine($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}");
+
+                resp.EnsureSuccessStatusCode();
+                response = await resp.Content.ReadAsStringAsync();
+            }
+        }
+    }
+    catch (TaskCanceledException tex)
+    {
+        Console.WriteLine($"Request timed out: {tex.Message}");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error: {ex.Message}");
+    }
+
+    return response;
+}
