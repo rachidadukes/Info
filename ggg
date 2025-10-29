@@ -1,153 +1,79 @@
-using System;
-using System.Diagnostics;
-using System.Net;
+using Spectre.Console;
 using System.Net.Http;
-using System.Net.Security;
-using System.Net.Sockets;
 using System.Security.Authentication;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace RestServiceApp;
 
-public static class HealthProbe
+public class ApiXmlClient
 {
-    // Toggle from config/ENV if you like
-    private static readonly bool IgnoreCertValidation =
-        bool.TryParse(Environment.GetEnvironmentVariable("IGNORE_SERVER_CERT_ERRORS"), out var b) && b;
-
-    public static async Task<ApiHealthDiag> DiagnoseAsync(string url, string? healthPath = null)
+    public async Task<string> GetResponseFromNewAPI(string xml)
     {
-        var diag = new ApiHealthDiag();
-        var sw = Stopwatch.StartNew();
+        string response = string.Empty;
+
+        // 1️⃣ Get endpoint from config or your routing helper
+        var settings = HostRoutingConfig.GetHostSettings();
+        var endpointUrl = settings["MessageConverterURL"];
+
+        if (string.IsNullOrEmpty(endpointUrl))
+            throw new InvalidOperationException("MessageConverterURL not configured in appsettings.json.");
+
+        // 2️⃣ Run health check first
+        var diag = await HealthProbe.DiagnoseAsync(endpointUrl, "/health");
+        HealthReporter.Render(diag);
+
+        if (!diag.HttpOk)
+        {
+            AnsiConsole.MarkupLine("[red bold]❌ API Health Check failed. Aborting request.[/]");
+            return string.Empty;
+        }
+
+        AnsiConsole.MarkupLine("[green bold]✅ API is reachable. Proceeding with XML request...[/]");
 
         try
         {
-            var uri = new Uri(url);
-            var healthUri = new Uri(uri, healthPath ?? "/health");
+            // 3️⃣ Read your dev flag
+            bool.TryParse(settings["IgnoreServerCertificateErrors"], out bool ignoreCert);
 
-            // 1) DNS
-            try
-            {
-                _ = Dns.GetHostEntry(uri.Host);
-                diag.DnsOk = true;
-            }
-            catch (Exception ex)
-            {
-                diag.PhaseFailed = "DNS";
-                diag.Reason = ex.Message;
-                return diag;
-            }
-
-            // 2) TCP
-            try
-            {
-                using var tcp = new TcpClient();
-                var ok = tcp.ConnectAsync(uri.Host, uri.Port == -1 ? 443 : uri.Port)
-                            .Wait(TimeSpan.FromSeconds(3));
-                diag.TcpOk = ok && tcp.Connected;
-                if (!diag.TcpOk)
-                {
-                    diag.PhaseFailed = "TCP";
-                    diag.Reason = "Connect timeout/refused.";
-                    return diag;
-                }
-            }
-            catch (Exception ex)
-            {
-                diag.PhaseFailed = "TCP";
-                diag.Reason = ex.Message;
-                return diag;
-            }
-
-            // 3) TLS + HTTP  (HttpClientHandler in .NET 9)
-            var lastTlsErrors = SslPolicyErrors.None;
-            X509Certificate2? serverCert = null;
-
+            // 4️⃣ Configure HTTP handler for .NET 9
             var handler = new HttpClientHandler
             {
                 SslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
-                ServerCertificateCustomValidationCallback = (req, cert, chain, errors) =>
-                {
-                    lastTlsErrors = errors;
-                    try
-                    {
-                        serverCert = cert as X509Certificate2 ?? new X509Certificate2(cert.GetRawCertData());
-                    }
-                    catch { /* ignore */ }
-
-                    return IgnoreCertValidation ? true : errors == SslPolicyErrors.None;
-                }
+                ServerCertificateCustomValidationCallback = ignoreCert
+                    ? HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+                    : (request, cert, chain, errors) => errors == System.Net.Security.SslPolicyErrors.None
             };
 
-            using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(5) };
+            if (ignoreCert)
+                AnsiConsole.MarkupLine("[yellow]⚠️ Ignoring certificate validation (DEV ONLY).[/]");
 
-            HttpResponseMessage? resp = null;
-
-            try
+            using var client = new HttpClient(handler)
             {
-                // Prefer HEAD; fallback to GET if not supported
-                var headReq = new HttpRequestMessage(HttpMethod.Head, healthUri);
-                resp = await client.SendAsync(headReq);
-            }
-            catch
-            {
-                resp = await client.GetAsync(healthUri);
-            }
+                Timeout = TimeSpan.FromSeconds(30)
+            };
 
-            // If we got here, TLS succeeded
-            diag.TlsOk = true;
-            diag.TlsErrors = lastTlsErrors;
-            diag.CertSummary = SummarizeCert(serverCert);
+            // 5️⃣ Build XML content
+            using var content = new StringContent(xml, Encoding.UTF8, "application/xml");
 
-            if (resp != null)
-            {
-                diag.StatusCode = resp.StatusCode;
-                diag.Reason = resp.ReasonPhrase;
-                diag.HttpOk = resp.IsSuccessStatusCode;
+            var resp = await client.PostAsync(endpointUrl, content);
+            response = await resp.Content.ReadAsStringAsync();
 
-                var body = await resp.Content.ReadAsStringAsync();
-                if (!string.IsNullOrWhiteSpace(body))
-                    diag.ResponseSample = body.Length > 512 ? body[..512] : body;
+            AnsiConsole.MarkupLine($"[grey]HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}[/]");
 
-                if (!diag.HttpOk) diag.PhaseFailed = "HTTP";
-            }
-            else
-            {
-                diag.PhaseFailed = "HTTP";
-                diag.Reason = "No response (timeout).";
-            }
+            if (!resp.IsSuccessStatusCode)
+                throw new HttpRequestException($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}");
 
-            return diag;
+            AnsiConsole.MarkupLine("[green]✅ Request completed successfully.[/]");
         }
-        catch (AuthenticationException aex)
+        catch (TaskCanceledException)
         {
-            diag.TlsOk = false;
-            diag.TlsErrors = SslPolicyErrors.RemoteCertificateChainErrors;
-            diag.PhaseFailed = "TLS";
-            diag.Reason = aex.Message;
-            return diag;
+            AnsiConsole.MarkupLine("[red]⏱️ Request timed out (possibly TLS stall).[/]");
         }
         catch (Exception ex)
         {
-            diag.PhaseFailed = "Unhandled";
-            diag.Reason = ex.Message;
-            return diag;
+            AnsiConsole.MarkupLine($"[red]❌ Unexpected error: {ex.Message}[/]");
         }
-        finally
-        {
-            sw.Stop();
-            diag.Elapsed = sw.Elapsed;
-        }
-    }
 
-    private static string? SummarizeCert(X509Certificate2? cert)
-    {
-        if (cert == null) return null;
-        return $"CN={cert.GetNameInfo(X509NameType.SimpleName, false)}, " +
-               $"Issuer={cert.Issuer}, " +
-               $"NotBefore={cert.NotBefore:u}, NotAfter={cert.NotAfter:u}, " +
-               $"Thumbprint={cert.Thumbprint}";
+        return response;
     }
 }
