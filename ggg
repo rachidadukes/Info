@@ -1,28 +1,110 @@
-static async Task Main()
+
+
+
+
+==================================
+
+
+namespace ApiClientLib;
+
+public sealed class ApiClientOptions
 {
-    HostRoutingConfig.Load();
+    // Required: where to POST the XML
+    public string? MessageConverterUrl { get; set; }
 
-    string selectedTask = SelectTask();
-    AnsiConsole.MarkupLine("[green bold]Configuration loaded successfully.[/]");
-
-    await ExecuteSelectedTask(selectedTask);
+    // Optional: dev-only; default false
+    public bool IgnoreServerCertificateErrors { get; set; }
 }
 
-private static async Task ExecuteSelectedTask(string task)
+===============================
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace ApiClientLib;
+
+public interface IApiXmlClient
 {
-    switch (task)
+    Task<string> SendAsync(string xml, CancellationToken ct = default);
+}
+
+===============
+
+using System;
+using System.Net.Http;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Xml.Linq;
+using Microsoft.Extensions.Logging;
+
+namespace ApiClientLib;
+
+public sealed class ApiXmlClient : IApiXmlClient
+{
+    private readonly HttpClient _httpClient;
+    private readonly ApiClientOptions _options;
+    private readonly ILogger<ApiXmlClient>? _logger;
+
+    // Preferred when using DI/HttpClientFactory
+    public ApiXmlClient(HttpClient httpClient, ApiClientOptions options, ILogger<ApiXmlClient>? logger = null)
     {
-        case "Check API Health":
-            await CheckApiHealth();
-            break;
-        case "Check Certificate Health":
-            await CheckCertificateHealth();
-            break;
-        case "Call API":
-            await CallApi();
-            break;
-        default:
-            Console.WriteLine("Invalid selection");
-            break;
+        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+        _logger = logger;
+        ValidateOptions(_options);
+    }
+
+    // Convenience ctor for non-DI apps (e.g., .NET 4.7 console)
+    public ApiXmlClient(ApiClientOptions options, bool configureHandlerForIgnoreCert = true, ILogger<ApiXmlClient>? logger = null)
+    {
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+        _logger = logger;
+        ValidateOptions(_options);
+
+        HttpMessageHandler handler = new HttpClientHandler();
+
+        if (configureHandlerForIgnoreCert && _options.IgnoreServerCertificateErrors && handler is HttpClientHandler h)
+        {
+            h.ServerCertificateCustomValidationCallback = (_, __, ___, ____) => true;
+        }
+
+        _httpClient = new HttpClient(handler, disposeHandler: true);
+    }
+
+    public async Task<string> SendAsync(string xml, CancellationToken ct = default)
+    {
+        if (xml is null) throw new ArgumentNullException(nameof(xml));
+
+        // (Optional) Your temporary transcode tweak – library-ized
+        var xdoc = XDocument.Parse(xml);
+        var tranCode = xdoc.Root?.Descendants("TranCode").FirstOrDefault();
+        if (tranCode is not null)
+        {
+            tranCode.Value = "1001"; // TODO: remove when env stabilizes
+            xml = xdoc.ToString(SaveOptions.DisableFormatting);
+        }
+
+        var url = _options.MessageConverterUrl!.Trim(); // validated non-null
+
+        _logger?.LogInformation("Sending XML request to {Url}", url);
+
+        using var content = new StringContent(xml, Encoding.UTF8, "application/xml");
+        using var resp = await _httpClient.PostAsync(url, content, ct).ConfigureAwait(false);
+        var payload = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+
+        if (!resp.IsSuccessStatusCode)
+        {
+            _logger?.LogWarning("Non-success status {StatusCode}: {Payload}", (int)resp.StatusCode, payload);
+        }
+
+        return payload;
+    }
+
+    private static void ValidateOptions(ApiClientOptions opts)
+    {
+        if (string.IsNullOrWhiteSpace(opts.MessageConverterUrl))
+            throw new InvalidOperationException("ApiClientOptions.MessageConverterUrl is required.");
     }
 }
