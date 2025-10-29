@@ -1,32 +1,4 @@
-using System;
-using Microsoft.Extensions.Configuration;
+using SharedConfigLib;
 
-namespace SharedConfigLib
-{
-    public static class HostRoutingConfig
-    {
-        /// <summary>
-        /// Reads the MessageConverterURL from appsettings.json -> HostSettings section.
-        /// </summary>
-        public static string GetMessageConverterUrl()
-        {
-            var config = new ConfigurationBuilder()
-                .SetBasePath(AppContext.BaseDirectory)
-                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
-                .AddEnvironmentVariables()
-                .Build();
-
-            var url = config["HostSettings:MessageConverterURL"];
-
-            if (string.IsNullOrWhiteSpace(url))
-                throw new InvalidOperationException("MessageConverterURL is missing or empty in HostSettings section of appsettings.json.");
-
-            return url.Trim();
-        }
-    }
-}
-================
-
-var section = config.GetSection("HostSettings");
-string hostUrl = section["HostURL"];
-string messageConverterUrl = section["MessageConverterURL"];
+string endpointUrl = HostRoutingConfig.GetMessageConverterUrl();
+Console.WriteLine($"Loaded endpoint: {endpointUrl}");
