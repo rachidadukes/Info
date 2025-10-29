@@ -1,28 +1,49 @@
-using ApiClientLib;
+using System;
+using System.Collections.Specialized;
+using Microsoft.Extensions.Configuration;
 
-namespace RestServiceApp
+namespace ApiClientLib;
+
+public static class HostRoutingConfig
 {
-    public class CallApiXmlClient
+    // Reads from appsettings.json (root or a "HostRouting" section) + env vars
+    public static NameValueCollection GetHostSettings()
     {
-        public static async Task<int> CallApi()
+        var builder = new ConfigurationBuilder()
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
+            .AddEnvironmentVariables();
+
+        var config = builder.Build();
+
+        var nvc = new NameValueCollection();
+
+        // Option A: flat keys at root
+        CopyIfPresent(nvc, config, "MessageConverterURL");
+        CopyIfPresent(nvc, config, "IgnoreServerCertificateErrors");
+
+        // Option B: if you keep a section (use either style)
+        var section = config.GetSection("HostRouting");
+        if (section.Exists())
         {
-            var request = RequestBuilder.BuildXmlRequest();
-
-            // Create options for the API client
-            var options = new ApiClientOptions
-            {
-                MessageConverterUrl = "https://your-api-endpoint.com/MessageConverter",
-                IgnoreServerCertificateErrors = true // or false based on your environment
-            };
-
-            // Instantiate the client from your library
-            var client = new ApiXmlClient(options);
-
-            // Send the XML request
-            string response = await client.SendAsync(request);
-
-            Console.WriteLine(response);
-            return 0;
+            CopyIfPresent(nvc, section, "MessageConverterURL");
+            CopyIfPresent(nvc, section, "IgnoreServerCertificateErrors");
         }
+
+        return nvc;
+    }
+
+    private static void CopyIfPresent(NameValueCollection nvc, IConfiguration config, string key)
+    {
+        var value = config[key];
+        if (!string.IsNullOrWhiteSpace(value))
+            nvc[key] = value;
+    }
+
+    private static void CopyIfPresent(NameValueCollection nvc, IConfigurationSection section, string key)
+    {
+        var value = section[key];
+        if (!string.IsNullOrWhiteSpace(value))
+            nvc[key] = value;
     }
 }
