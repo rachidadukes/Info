@@ -1,79 +1,52 @@
-using Spectre.Console;
-using System.Net.Http;
-using System.Security.Authentication;
-using System.Text;
+using System.Collections.Specialized;
+using System.Text.Json;
 
 namespace RestServiceApp;
 
-public class ApiXmlClient
+public static class HostRoutingConfig
 {
-    public async Task<string> GetResponseFromNewAPI(string xml)
+    private static NameValueCollection? _hostRouting;
+    private static NameValueCollection? _hostSettings;
+
+    // 🟩 NEW: Load from appsettings.json
+    public static void Load(string configPath = "appsettings.json")
     {
-        string response = string.Empty;
+        if (!File.Exists(configPath))
+            throw new FileNotFoundException($"Configuration file not found: {configPath}");
 
-        // 1️⃣ Get endpoint from config or your routing helper
-        var settings = HostRoutingConfig.GetHostSettings();
-        var endpointUrl = settings["MessageConverterURL"];
+        var json = File.ReadAllText(configPath);
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
 
-        if (string.IsNullOrEmpty(endpointUrl))
-            throw new InvalidOperationException("MessageConverterURL not configured in appsettings.json.");
+        _hostRouting = new NameValueCollection();
+        _hostSettings = new NameValueCollection();
 
-        // 2️⃣ Run health check first
-        var diag = await HealthProbe.DiagnoseAsync(endpointUrl, "/health");
-        HealthReporter.Render(diag);
-
-        if (!diag.HttpOk)
+        // Parse "hostRouting"
+        if (root.TryGetProperty("hostRouting", out var routing))
         {
-            AnsiConsole.MarkupLine("[red bold]❌ API Health Check failed. Aborting request.[/]");
-            return string.Empty;
+            foreach (var prop in routing.EnumerateObject())
+                _hostRouting[prop.Name] = prop.Value.ToString();
         }
 
-        AnsiConsole.MarkupLine("[green bold]✅ API is reachable. Proceeding with XML request...[/]");
-
-        try
+        // Parse "HostSettings"
+        if (root.TryGetProperty("HostSettings", out var hostSettings))
         {
-            // 3️⃣ Read your dev flag
-            bool.TryParse(settings["IgnoreServerCertificateErrors"], out bool ignoreCert);
-
-            // 4️⃣ Configure HTTP handler for .NET 9
-            var handler = new HttpClientHandler
-            {
-                SslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
-                ServerCertificateCustomValidationCallback = ignoreCert
-                    ? HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
-                    : (request, cert, chain, errors) => errors == System.Net.Security.SslPolicyErrors.None
-            };
-
-            if (ignoreCert)
-                AnsiConsole.MarkupLine("[yellow]⚠️ Ignoring certificate validation (DEV ONLY).[/]");
-
-            using var client = new HttpClient(handler)
-            {
-                Timeout = TimeSpan.FromSeconds(30)
-            };
-
-            // 5️⃣ Build XML content
-            using var content = new StringContent(xml, Encoding.UTF8, "application/xml");
-
-            var resp = await client.PostAsync(endpointUrl, content);
-            response = await resp.Content.ReadAsStringAsync();
-
-            AnsiConsole.MarkupLine($"[grey]HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}[/]");
-
-            if (!resp.IsSuccessStatusCode)
-                throw new HttpRequestException($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}");
-
-            AnsiConsole.MarkupLine("[green]✅ Request completed successfully.[/]");
+            foreach (var prop in hostSettings.EnumerateObject())
+                _hostSettings[prop.Name] = prop.Value.ToString();
         }
-        catch (TaskCanceledException)
-        {
-            AnsiConsole.MarkupLine("[red]⏱️ Request timed out (possibly TLS stall).[/]");
-        }
-        catch (Exception ex)
-        {
-            AnsiConsole.MarkupLine($"[red]❌ Unexpected error: {ex.Message}[/]");
-        }
+    }
 
-        return response;
+    public static NameValueCollection GetHostRouting()
+    {
+        if (_hostRouting == null)
+            throw new InvalidOperationException("HostRouting not loaded. Call Load() first.");
+        return _hostRouting;
+    }
+
+    public static NameValueCollection GetHostSettings()
+    {
+        if (_hostSettings == null)
+            throw new InvalidOperationException("HostSettings not loaded. Call Load() first.");
+        return _hostSettings;
     }
 }
