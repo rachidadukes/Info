@@ -1,52 +1,12 @@
-using System.Collections.Specialized;
-using System.Text.Json;
-
-namespace RestServiceApp;
-
-public static class HostRoutingConfig
-{
-    private static NameValueCollection? _hostRouting;
-    private static NameValueCollection? _hostSettings;
-
-    // 🟩 NEW: Load from appsettings.json
-    public static void Load(string configPath = "appsettings.json")
-    {
-        if (!File.Exists(configPath))
-            throw new FileNotFoundException($"Configuration file not found: {configPath}");
-
-        var json = File.ReadAllText(configPath);
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-
-        _hostRouting = new NameValueCollection();
-        _hostSettings = new NameValueCollection();
-
-        // Parse "hostRouting"
-        if (root.TryGetProperty("hostRouting", out var routing))
-        {
-            foreach (var prop in routing.EnumerateObject())
-                _hostRouting[prop.Name] = prop.Value.ToString();
-        }
-
-        // Parse "HostSettings"
-        if (root.TryGetProperty("HostSettings", out var hostSettings))
-        {
-            foreach (var prop in hostSettings.EnumerateObject())
-                _hostSettings[prop.Name] = prop.Value.ToString();
-        }
-    }
-
-    public static NameValueCollection GetHostRouting()
-    {
-        if (_hostRouting == null)
-            throw new InvalidOperationException("HostRouting not loaded. Call Load() first.");
-        return _hostRouting;
-    }
-
-    public static NameValueCollection GetHostSettings()
-    {
-        if (_hostSettings == null)
-            throw new InvalidOperationException("HostSettings not loaded. Call Load() first.");
-        return _hostSettings;
-    }
-}
+Solution
+│
+├── ApiHealthLib                ← Class Library (.NET 9)
+│   ├── ApiHealth.cs
+│   ├── HealthProbe.cs
+│   ├── HealthReporter.cs  ← uses Spectre.Console
+│   └── ApiHealthDiag.cs
+│
+└── RestServiceApp              ← Console app (.NET 9)
+    ├── Program.cs
+    └── uses ApiHealthLib
+===============================
