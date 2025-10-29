@@ -1,66 +1,98 @@
+using Microsoft.Extensions.Configuration;
+using SharedConfigLib;
 using System;
 using System.Net.Http;
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
-using SharedConfigLib;
+using System.Xml.Linq;
 
 namespace ApiClientLib
 {
-    public sealed class ApiXmlClient
+    public class RestService
     {
-        private readonly HttpClient _http;
         private readonly string _endpointUrl;
 
-        public ApiXmlClient(bool configureHandlerForIgnoreCert = true)
+        public RestService(string endpointUrl)
         {
-            // ✅ Read endpoint URL from appsettings.json
-            string endpointUrl = HostRoutingConfig.GetMessageConverterUrl();
-            Console.WriteLine($"Loaded endpoint: {endpointUrl}");
-
-            // ✅ Read ignore-cert flag (optional)
-            bool ignoreCert = GetIgnoreCertFlag();
-
-            // ✅ Configure HTTP handler
-            var handler = new HttpClientHandler();
-            if (configureHandlerForIgnoreCert && ignoreCert)
-            {
-                handler.ServerCertificateCustomValidationCallback = 
-                    HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
-                Console.WriteLine("⚠️ SSL certificate validation is disabled (DEV mode).");
-            }
-
-            _http = new HttpClient(handler, disposeHandler: true);
-            _endpointUrl = endpointUrl;
+            _endpointUrl = endpointUrl ?? throw new ArgumentNullException(nameof(endpointUrl));
         }
 
-        private static bool GetIgnoreCertFlag()
+        /// <summary>
+        /// Calls the API endpoint using XML content. Can include certificate optionally.
+        /// </summary>
+        public async Task<string> GetResponseFromNewAPIAsync(bool useCertificate = true)
         {
+            string response;
+
             try
             {
-                var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder()
-                    .SetBasePath(AppContext.BaseDirectory)
-                    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
-                    .AddEnvironmentVariables()
-                    .Build();
+                if (string.IsNullOrEmpty(_endpointUrl))
+                    throw new InvalidOperationException("MessageConverterURL not configured in appsettings.json.");
 
-                bool.TryParse(config["HostSettings:IgnoreServerCertificateErrors"], out bool flag);
-                return flag;
+                // ✅ Build the XML request
+                var requestXml = RequestBuilder.BuildXmlRequest();
+
+                // Optional: force TranCode value (for test only)
+                var xmlDoc = XDocument.Parse(requestXml);
+                var tranCode = xmlDoc.Descendants("TranCode").FirstOrDefault();
+                if (tranCode != null)
+                {
+                    tranCode.Value = "1001"; // temporary override for testing
+                    requestXml = xmlDoc.ToString(SaveOptions.DisableFormatting);
+                }
+
+                // ✅ Configure HTTP handler with optional certificate
+                var handler = new HttpClientHandler
+                {
+                    SslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
+                };
+
+                if (useCertificate)
+                {
+                    Console.WriteLine("🔐 Adding client certificate for authentication...");
+                    var cert = CertificateLoader.GetCertificate();
+                    if (cert == null)
+                        throw new InvalidOperationException("Certificate could not be loaded.");
+                    handler.ClientCertificates.Add(cert);
+                }
+                else
+                {
+                    Console.WriteLine("⚙️  Skipping client certificate (useCertificate = false).");
+                }
+
+                using var client = new HttpClient(handler)
+                {
+                    BaseAddress = new Uri(_endpointUrl),
+                    Timeout = TimeSpan.FromSeconds(30)
+                };
+
+                using var content = new StringContent(requestXml, Encoding.UTF8, "application/xml");
+
+                var resp = await client.PostAsync(_endpointUrl, content);
+                response = await resp.Content.ReadAsStringAsync();
+
+                if (!resp.IsSuccessStatusCode)
+                    throw new HttpRequestException($"[{nameof(GetResponseFromNewAPIAsync)}] {(int)resp.StatusCode} {resp.ReasonPhrase}");
+
+                Console.WriteLine("✅ Successfully called endpoint" + (useCertificate ? " with certificate." : " without certificate."));
+                return response;
             }
-            catch
+            catch (HttpRequestException httpEx)
             {
-                // Default to false if not found or invalid
-                return false;
+                Console.WriteLine($"❌ HttpRequestException: {httpEx.Message}");
+                if (httpEx.InnerException != null)
+                    Console.WriteLine($"Inner: {httpEx.InnerException.Message}");
+                throw;
             }
-        }
-
-        public async Task<string> SendAsync(string xml, CancellationToken ct = default)
-        {
-            using var content = new StringContent(xml, Encoding.UTF8, "application/xml");
-            using var resp = await _http.PostAsync(_endpointUrl, content, ct).ConfigureAwait(false);
-
-            resp.EnsureSuccessStatusCode();
-            return await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            catch (AuthenticationException authEx)
+            {
+                Console.WriteLine($"❌ SSL/TLS authentication failed: {authEx.Message}");
+                if (authEx.InnerException != null)
+                    Console.WriteLine($"Inner: {authEx.InnerException.Message}");
+                throw;
+            }
         }
     }
 }
