@@ -1,4 +1,66 @@
+using System;
+using System.Net.Http;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using SharedConfigLib;
 
-string endpointUrl = HostRoutingConfig.GetMessageConverterUrl();
-Console.WriteLine($"Loaded endpoint: {endpointUrl}");
+namespace ApiClientLib
+{
+    public sealed class ApiXmlClient
+    {
+        private readonly HttpClient _http;
+        private readonly string _endpointUrl;
+
+        public ApiXmlClient(bool configureHandlerForIgnoreCert = true)
+        {
+            // ✅ Read endpoint URL from appsettings.json
+            string endpointUrl = HostRoutingConfig.GetMessageConverterUrl();
+            Console.WriteLine($"Loaded endpoint: {endpointUrl}");
+
+            // ✅ Read ignore-cert flag (optional)
+            bool ignoreCert = GetIgnoreCertFlag();
+
+            // ✅ Configure HTTP handler
+            var handler = new HttpClientHandler();
+            if (configureHandlerForIgnoreCert && ignoreCert)
+            {
+                handler.ServerCertificateCustomValidationCallback = 
+                    HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+                Console.WriteLine("⚠️ SSL certificate validation is disabled (DEV mode).");
+            }
+
+            _http = new HttpClient(handler, disposeHandler: true);
+            _endpointUrl = endpointUrl;
+        }
+
+        private static bool GetIgnoreCertFlag()
+        {
+            try
+            {
+                var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder()
+                    .SetBasePath(AppContext.BaseDirectory)
+                    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
+                    .AddEnvironmentVariables()
+                    .Build();
+
+                bool.TryParse(config["HostSettings:IgnoreServerCertificateErrors"], out bool flag);
+                return flag;
+            }
+            catch
+            {
+                // Default to false if not found or invalid
+                return false;
+            }
+        }
+
+        public async Task<string> SendAsync(string xml, CancellationToken ct = default)
+        {
+            using var content = new StringContent(xml, Encoding.UTF8, "application/xml");
+            using var resp = await _http.PostAsync(_endpointUrl, content, ct).ConfigureAwait(false);
+
+            resp.EnsureSuccessStatusCode();
+            return await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        }
+    }
+}
