@@ -1,12 +1,23 @@
-Solution
-│
-├── ApiHealthLib                ← Class Library (.NET 9)
-│   ├── ApiHealth.cs
-│   ├── HealthProbe.cs
-│   ├── HealthReporter.cs  ← uses Spectre.Console
-│   └── ApiHealthDiag.cs
-│
-└── RestServiceApp              ← Console app (.NET 9)
-    ├── Program.cs
-    └── uses ApiHealthLib
+ApiHealthLib/
+├─ ApiHealthLib.csproj
+├─ Abstractions/
+│  ├─ IHealthProbe.cs
+│  ├─ IProbeLogger.cs
+│  └─ ProbeResult.cs
+├─ Common/
+│  ├─ ProbeStatus.cs
+│  ├─ Endpoints.cs              // small helpers for URIs, timeouts, etc.
+│  └─ Extensions.cs             // shared utils if needed
+├─ ApiHealth/                   // ← API endpoint reachability, status, TLS (server) diag
+│  ├─ ApiProbeSettings.cs
+│  ├─ ApiHealthDiag.cs
+│  ├─ ApiHealthProbe.cs
+│  └─ HttpClientFactory.cs      // optional: centralized handler creation
+├─ CertHealth/                  // ← client certificate lookup/validation
+│  ├─ CertificateProbeSettings.cs
+│  ├─ CertHealthProbe.cs
+│  └─ CertFinder.cs
+└─ Orchestration/
+   └─ HealthService.cs          // optional: runs multiple probes, aggregates results
+
 ===============================
