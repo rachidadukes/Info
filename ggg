@@ -1,49 +1,44 @@
-using System;
 using System.Collections.Specialized;
-using Microsoft.Extensions.Configuration;
+using System.Net.Http;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace ApiClientLib;
 
-public static class HostRoutingConfig
+public sealed class ApiXmlClient
 {
-    // Reads from appsettings.json (root or a "HostRouting" section) + env vars
-    public static NameValueCollection GetHostSettings()
+    private readonly HttpClient _http;
+
+    // no DI/factory needed
+    public ApiXmlClient(bool configureHandlerForIgnoreCert = true)
     {
-        var builder = new ConfigurationBuilder()
-            .SetBasePath(AppContext.BaseDirectory)
-            .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
-            .AddEnvironmentVariables();
+        // read settings INSIDE the library
+        NameValueCollection settings = HostRoutingConfig.GetHostSettings()
+            ?? throw new InvalidOperationException("Host settings are missing.");
 
-        var config = builder.Build();
+        var url = settings["MessageConverterURL"]?.Trim()
+            ?? throw new InvalidOperationException("MessageConverterURL is missing in host settings.");
 
-        var nvc = new NameValueCollection();
+        bool.TryParse(settings["IgnoreServerCertificateErrors"], out var ignoreCert);
 
-        // Option A: flat keys at root
-        CopyIfPresent(nvc, config, "MessageConverterURL");
-        CopyIfPresent(nvc, config, "IgnoreServerCertificateErrors");
-
-        // Option B: if you keep a section (use either style)
-        var section = config.GetSection("HostRouting");
-        if (section.Exists())
+        var handler = new HttpClientHandler();
+        if (configureHandlerForIgnoreCert && ignoreCert)
         {
-            CopyIfPresent(nvc, section, "MessageConverterURL");
-            CopyIfPresent(nvc, section, "IgnoreServerCertificateErrors");
+            handler.ServerCertificateCustomValidationCallback = (_, __, ___, ____) => true;
         }
 
-        return nvc;
+        _http = new HttpClient(handler, disposeHandler: true);
+        _endpointUrl = url;
     }
 
-    private static void CopyIfPresent(NameValueCollection nvc, IConfiguration config, string key)
-    {
-        var value = config[key];
-        if (!string.IsNullOrWhiteSpace(value))
-            nvc[key] = value;
-    }
+    private readonly string _endpointUrl;
 
-    private static void CopyIfPresent(NameValueCollection nvc, IConfigurationSection section, string key)
+    public async Task<string> SendAsync(string xml, CancellationToken ct = default)
     {
-        var value = section[key];
-        if (!string.IsNullOrWhiteSpace(value))
-            nvc[key] = value;
+        using var content = new StringContent(xml, Encoding.UTF8, "application/xml");
+        using var resp = await _http.PostAsync(_endpointUrl, content, ct).ConfigureAwait(false);
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
     }
 }
