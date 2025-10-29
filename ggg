@@ -1,98 +1,28 @@
-using Microsoft.Extensions.Configuration;
-using SharedConfigLib;
 using System;
-using System.Net.Http;
-using System.Security.Authentication;
-using System.Security.Cryptography.X509Certificates;
-using System.Text;
 using System.Threading.Tasks;
-using System.Xml.Linq;
+using ApiClientLib;
 
-namespace ApiClientLib
+namespace RestServiceApp
 {
-    public class RestService
+    public class CallRestService
     {
-        private readonly string _endpointUrl;
-
-        public RestService(string endpointUrl)
+        public static async Task<int> CallApi()
         {
-            _endpointUrl = endpointUrl ?? throw new ArgumentNullException(nameof(endpointUrl));
-        }
+            var restService = new RestService("https://api.yourserver.com");
 
-        /// <summary>
-        /// Calls the API endpoint using XML content. Can include certificate optionally.
-        /// </summary>
-        public async Task<string> GetResponseFromNewAPIAsync(bool useCertificate = true)
-        {
-            string response;
+            // ✅ Call WITH certificate
+            var responseWithCert = await restService.GetResponseFromNewAPIAsync(useCertificate: true);
 
-            try
-            {
-                if (string.IsNullOrEmpty(_endpointUrl))
-                    throw new InvalidOperationException("MessageConverterURL not configured in appsettings.json.");
+            // ✅ Call WITHOUT certificate
+            var responseWithoutCert = await restService.GetResponseFromNewAPIAsync(useCertificate: false);
 
-                // ✅ Build the XML request
-                var requestXml = RequestBuilder.BuildXmlRequest();
+            Console.WriteLine("Response (with cert):");
+            Console.WriteLine(responseWithCert);
 
-                // Optional: force TranCode value (for test only)
-                var xmlDoc = XDocument.Parse(requestXml);
-                var tranCode = xmlDoc.Descendants("TranCode").FirstOrDefault();
-                if (tranCode != null)
-                {
-                    tranCode.Value = "1001"; // temporary override for testing
-                    requestXml = xmlDoc.ToString(SaveOptions.DisableFormatting);
-                }
+            Console.WriteLine("\nResponse (without cert):");
+            Console.WriteLine(responseWithoutCert);
 
-                // ✅ Configure HTTP handler with optional certificate
-                var handler = new HttpClientHandler
-                {
-                    SslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
-                };
-
-                if (useCertificate)
-                {
-                    Console.WriteLine("🔐 Adding client certificate for authentication...");
-                    var cert = CertificateLoader.GetCertificate();
-                    if (cert == null)
-                        throw new InvalidOperationException("Certificate could not be loaded.");
-                    handler.ClientCertificates.Add(cert);
-                }
-                else
-                {
-                    Console.WriteLine("⚙️  Skipping client certificate (useCertificate = false).");
-                }
-
-                using var client = new HttpClient(handler)
-                {
-                    BaseAddress = new Uri(_endpointUrl),
-                    Timeout = TimeSpan.FromSeconds(30)
-                };
-
-                using var content = new StringContent(requestXml, Encoding.UTF8, "application/xml");
-
-                var resp = await client.PostAsync(_endpointUrl, content);
-                response = await resp.Content.ReadAsStringAsync();
-
-                if (!resp.IsSuccessStatusCode)
-                    throw new HttpRequestException($"[{nameof(GetResponseFromNewAPIAsync)}] {(int)resp.StatusCode} {resp.ReasonPhrase}");
-
-                Console.WriteLine("✅ Successfully called endpoint" + (useCertificate ? " with certificate." : " without certificate."));
-                return response;
-            }
-            catch (HttpRequestException httpEx)
-            {
-                Console.WriteLine($"❌ HttpRequestException: {httpEx.Message}");
-                if (httpEx.InnerException != null)
-                    Console.WriteLine($"Inner: {httpEx.InnerException.Message}");
-                throw;
-            }
-            catch (AuthenticationException authEx)
-            {
-                Console.WriteLine($"❌ SSL/TLS authentication failed: {authEx.Message}");
-                if (authEx.InnerException != null)
-                    Console.WriteLine($"Inner: {authEx.InnerException.Message}");
-                throw;
-            }
+            return 0;
         }
     }
 }
