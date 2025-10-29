@@ -1,44 +1,12 @@
-using System.Collections.Specialized;
-using System.Net.Http;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
+using ApiClientLib;
 
-namespace ApiClientLib;
-
-public sealed class ApiXmlClient
+public static async Task<int> CallApi()
 {
-    private readonly HttpClient _http;
+    var request = RequestBuilder.BuildXmlRequest();
 
-    // no DI/factory needed
-    public ApiXmlClient(bool configureHandlerForIgnoreCert = true)
-    {
-        // read settings INSIDE the library
-        NameValueCollection settings = HostRoutingConfig.GetHostSettings()
-            ?? throw new InvalidOperationException("Host settings are missing.");
+    var client = new ApiXmlClient();                 // <-- no URL passed
+    var response = await client.SendAsync(request);  // library reads config
 
-        var url = settings["MessageConverterURL"]?.Trim()
-            ?? throw new InvalidOperationException("MessageConverterURL is missing in host settings.");
-
-        bool.TryParse(settings["IgnoreServerCertificateErrors"], out var ignoreCert);
-
-        var handler = new HttpClientHandler();
-        if (configureHandlerForIgnoreCert && ignoreCert)
-        {
-            handler.ServerCertificateCustomValidationCallback = (_, __, ___, ____) => true;
-        }
-
-        _http = new HttpClient(handler, disposeHandler: true);
-        _endpointUrl = url;
-    }
-
-    private readonly string _endpointUrl;
-
-    public async Task<string> SendAsync(string xml, CancellationToken ct = default)
-    {
-        using var content = new StringContent(xml, Encoding.UTF8, "application/xml");
-        using var resp = await _http.PostAsync(_endpointUrl, content, ct).ConfigureAwait(false);
-        resp.EnsureSuccessStatusCode();
-        return await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-    }
+    Console.WriteLine(response);
+    return 0;
 }
