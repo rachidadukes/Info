@@ -1,14 +1,28 @@
 using ApiClientLib;
 
-private static async Task<int> CallApi()
+namespace RestServiceApp
 {
-    var client = new ApiXmlClient(ignoreCertErrors: true);
+    public class CallApiXmlClient
+    {
+        public static async Task<int> CallApi()
+        {
+            var request = RequestBuilder.BuildXmlRequest();
 
-    string endpointUrl = "https://your-api-endpoint.com/MessageConverter";
-    string xml = RequestBuilder.BuildXmlRequest();
+            // Create options for the API client
+            var options = new ApiClientOptions
+            {
+                MessageConverterUrl = "https://your-api-endpoint.com/MessageConverter",
+                IgnoreServerCertificateErrors = true // or false based on your environment
+            };
 
-    string response = await client.PostXmlAsync(endpointUrl, xml);
+            // Instantiate the client from your library
+            var client = new ApiXmlClient(options);
 
-    Console.WriteLine(response);
-    return 0;
+            // Send the XML request
+            string response = await client.SendAsync(request);
+
+            Console.WriteLine(response);
+            return 0;
+        }
+    }
 }
