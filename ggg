@@ -1,12 +1,41 @@
-using ApiClientLib;
+using System;
+using Microsoft.Extensions.Configuration;
 
-public static async Task<int> CallApi()
+namespace SharedConfig
 {
-    var request = RequestBuilder.BuildXmlRequest();
+    /// <summary>
+    /// Centralized reader for appsettings.json. 
+    /// Works from any library because it uses the entry app's base directory.
+    /// </summary>
+    public static class AppSettings
+    {
+        private static IConfigurationRoot? _config;
+        public static IConfigurationRoot Config => _config ??= Build();
 
-    var client = new ApiXmlClient();                 // <-- no URL passed
-    var response = await client.SendAsync(request);  // library reads config
+        private static IConfigurationRoot Build()
+        {
+            // The base path resolves to the startup EXE's folder
+            var basePath = AppContext.BaseDirectory;
 
-    Console.WriteLine(response);
-    return 0;
+            var env = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+                   ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+
+            var builder = new ConfigurationBuilder()
+                .SetBasePath(basePath)
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
+                .AddJsonFile($"appsettings.{env}.json", optional: true, reloadOnChange: false)
+                .AddEnvironmentVariables();
+
+            return builder.Build();
+        }
+
+        public static T GetOptions<T>(string sectionName) where T : new()
+        {
+            var opts = new T();
+            Config.GetSection(sectionName).Bind(opts);
+            return opts;
+        }
+
+        public static string? Get(string key) => Config[key];
+    }
 }
