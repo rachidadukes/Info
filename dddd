@@ -1,0 +1,26 @@
+🟦 Visual Studio
+
+Format Document:
+Ctrl + K, Ctrl + D
+(Press Ctrl+K, then Ctrl+D)
+
+Format Selection:
+Ctrl + K, Ctrl + F
+(Formats only the selected block)
+
+🟩 Visual Studio Code
+
+Format Document:
+Shift + Alt + F
+
+Format Selection:
+Ctrl + K, Ctrl + F
+
+💡 Tip:
+You can also enable auto-format on save in Visual Studio Code:
+
+Go to File → Preferences → Settings
+
+Search for format on save
+
+Check ✅ Editor: Format On Save
