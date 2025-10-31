@@ -1,19 +1,23 @@
-
-// inside your validation callback
 AnsiConsole.MarkupLine("[red bold]Bypassing SSL validation for:[/]");
-var subject = cert2?.SubjectName?.Name ?? cert2?.Subject ?? "(no subject)";
+
+var subject = cert2?.Subject ?? "(no subject)";
 AnsiConsole.MarkupLine($"[green]{Markup.Escape(subject)}[/]");
+
 
 
 =========================================
 
 
 var resp = await client.PostAsync(endpointUrl, content);
-
-var code   = (int)resp.StatusCode;
+var code = (int)resp.StatusCode;
 var reason = resp.ReasonPhrase ?? string.Empty;
-var color  = code is >= 200 and < 300 ? "green"
-           : code is >= 400 and < 500 ? "yellow"
-           : "red";
+
+var color = code switch
+{
+    >= 200 and < 300 => "green",   // success
+    >= 400 and < 500 => "yellow",  // client error
+    >= 500 => "red",               // server error
+    _ => "white"
+};
 
 AnsiConsole.MarkupLine($"[bold {color}]HTTP {code} {Markup.Escape(reason)}[/]");
