@@ -1,224 +1,53 @@
-using System;
-using System.Configuration;
-using System.Diagnostics;
-using System.Net;
-using System.Net.Http;
-using System.Net.Sockets;
-using System.Security.Authentication;
-using System.Security.Cryptography.X509Certificates;
-using System.Threading;
-using System.Threading.Tasks;
 
-namespace RestServiceApp
+private static async Task<bool> TryTcpConnectAsync(Uri uri, ApiHealthDiag diag, CancellationToken ct)
 {
-    public static class HealthProbe
+    try
     {
-        private const int TcpConnectSeconds = 3;
-        private const int HttpTimeoutSeconds = 5;
+        using var tcp = new TcpClient();
+        var port = uri.Port == -1 ? 443 : uri.Port;
 
-        private static readonly bool IgnoreCertValidation =
-            bool.TryParse(ConfigurationManager.AppSettings["IgnoreServerCertificateErrors"], out var b) && b;
+        var ok = await ConnectWithTimeoutAsync(tcp, uri.Host, port, TimeSpan.FromSeconds(TcpConnectSeconds), ct);
+        diag.TcpOk = ok && tcp.Connected;
 
-        public static async Task<ApiHealthDiag> DiagnoseAsync(string url, string healthPath = null, CancellationToken ct = default)
+        if (!diag.TcpOk)
         {
-            var diag = new ApiHealthDiag();
-            var sw = Stopwatch.StartNew();
-
-            try
-            {
-                ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-
-                var uri = new Uri(url);
-                var healthUri = new Uri(uri, healthPath ?? "/health");
-
-                // 1) DNS
-                if (!TryDnsResolve(uri, diag)) return Finalize(sw, diag);
-
-                // 2) TCP
-                if (!await TryTcpConnectAsync(uri, diag, ct).ConfigureAwait(false)) return Finalize(sw, diag);
-
-                // 3) TLS + HTTP
-                using var handler = CreateHandler(out var lastTlsErrors, out var serverCert);
-                using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(HttpTimeoutSeconds) };
-
-                var resp = await TryHeadOrGetAsync(client, healthUri, lastTlsErrors, serverCert, diag, ct).ConfigureAwait(false);
-                if (resp == null) return Finalize(sw, diag);
-
-                // TLS succeeded if we have a response (or we would have exited earlier on AuthenticationException)
-                diag.TlsOk = true;
-                diag.TlsErrors = lastTlsErrors;
-                diag.CertSummary = SummarizeCert(serverCert);
-
-                // 4) HTTP result & sample
-                diag.StatusCode = resp.StatusCode;
-                diag.Reason = resp.ReasonPhrase;
-                diag.HttpOk = resp.IsSuccessStatusCode;
-
-                var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-                diag.ResponseSample = body.Length <= 512 ? body : body.Substring(0, 512);
-
-                if (!diag.HttpOk)
-                    diag.PhaseFailed = "HTTP";
-            }
-            catch (Exception ex)
-            {
-                diag.PhaseFailed = "Unhandled";
-                diag.Reason = ex.Message;
-            }
-            finally
-            {
-                sw.Stop();
-                diag.Elapsed = sw.Elapsed;
-            }
-
-            return diag;
+            diag.PhaseFailed = "TCP";
+            diag.Reason = "Connect timeout/refused.";
+            return false;
         }
 
-        // ---------- Phase helpers ----------
-
-        private static bool TryDnsResolve(Uri uri, ApiHealthDiag diag)
-        {
-            try
-            {
-                _ = Dns.GetHostEntry(uri.Host);
-                diag.DnsOk = true;
-                return true;
-            }
-            catch (Exception ex)
-            {
-                diag.PhaseFailed = "DNS";
-                diag.Reason = ex.Message;
-                return false;
-            }
-        }
-
-        private static async Task<bool> TryTcpConnectAsync(Uri uri, ApiHealthDiag diag, CancellationToken ct)
-        {
-            try
-            {
-                using var tcp = new TcpClient();
-                var port = uri.Port == -1 ? 443 : uri.Port;
-                var ok = await tcp.ConnectAsync(uri.Host, port).WaitAsync(TimeSpan.FromSeconds(TcpConnectSeconds), ct);
-                diag.TcpOk = ok && tcp.Connected;
-
-                if (!diag.TcpOk)
-                {
-                    diag.PhaseFailed = "TCP";
-                    diag.Reason = "Connect timeout/refused.";
-                    return false;
-                }
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                diag.PhaseFailed = "TCP";
-                diag.Reason = ex.Message;
-                return false;
-            }
-        }
-
-        private static HttpClientHandler CreateHandler(out SslPolicyErrors lastTlsErrors, out X509Certificate2 serverCert)
-        {
-            lastTlsErrors = SslPolicyErrors.None;
-            serverCert = null;
-
-            // WebRequestHandler was used before; HttpClientHandler works for modern targets.
-            var handler = new HttpClientHandler();
-
-            handler.ServerCertificateCustomValidationCallback = (sender, cert, chain, errors) =>
-            {
-                lastTlsErrors = errors;
-
-                // Try capture cert details for logging
-                try { serverCert = new X509Certificate2(cert); } catch { /* ignore */ }
-
-                return IgnoreCertValidation || errors == SslPolicyErrors.None;
-            };
-
-            return handler;
-        }
-
-        private static async Task<HttpResponseMessage> TryHeadOrGetAsync(
-            HttpClient client,
-            Uri healthUri,
-            SslPolicyErrors lastTlsErrors,
-            X509Certificate2 serverCert,
-            ApiHealthDiag diag,
-            CancellationToken ct)
-        {
-            HttpResponseMessage resp = null;
-
-            // Prefer HEAD, but some servers don’t support it — fall back to GET.
-            try
-            {
-                using var head = new HttpRequestMessage(HttpMethod.Head, healthUri);
-                resp = await client.SendAsync(head, ct).ConfigureAwait(false);
-            }
-            catch (NotSupportedException)
-            {
-                // fall back below
-            }
-            catch (AuthenticationException aex)
-            {
-                MarkTlsFailure(diag, lastTlsErrors, serverCert, aex.Message);
-                return null;
-            }
-            catch (HttpRequestException hex) when (hex.InnerException is AuthenticationException)
-            {
-                MarkTlsFailure(diag, lastTlsErrors, serverCert, hex.InnerException.Message);
-                return null;
-            }
-            catch (TaskCanceledException)
-            {
-                // Could be TLS stall or HTTP timeout
-            }
-
-            if (resp != null) return resp;
-
-            try
-            {
-                resp = await client.GetAsync(healthUri, ct).ConfigureAwait(false);
-                return resp;
-            }
-            catch (AuthenticationException aex)
-            {
-                MarkTlsFailure(diag, lastTlsErrors, serverCert, aex.Message);
-                return null;
-            }
-            catch (TaskCanceledException)
-            {
-                diag.PhaseFailed = "HTTP";
-                diag.Reason = "No response (timeout)";
-                return null;
-            }
-        }
-
-        private static void MarkTlsFailure(ApiHealthDiag diag, SslPolicyErrors lastTlsErrors, X509Certificate2 serverCert, string message)
-        {
-            diag.TlsOk = false;
-            diag.TlsErrors = lastTlsErrors;
-            diag.PhaseFailed = "TLS";
-            diag.Reason = message;
-            diag.CertSummary = SummarizeCert(serverCert);
-        }
-
-        private static ApiHealthDiag Finalize(Stopwatch sw, ApiHealthDiag diag)
-        {
-            sw.Stop();
-            diag.Elapsed = sw.Elapsed;
-            return diag;
-        }
-
-        // ---------- Utility ----------
-
-        private static string SummarizeCert(X509Certificate2 cert)
-        {
-            if (cert == null) return null;
-            return $"CN={cert.GetNameInfo(X509NameType.SimpleName, false)}, " +
-                   $"Issuer={cert.Issuer}, " +
-                   $"NotBefore={cert.NotBefore:u}, NotAfter={cert.NotAfter:u}, " +
-                   $"Thumbprint={cert.Thumbprint}";
-        }
+        return true;
     }
+    catch (Exception ex)
+    {
+        diag.PhaseFailed = "TCP";
+        diag.Reason = ex.Message;
+        return false;
+    }
+}
+
+// Portable helper: works on .NET Framework/Core/5+/6+/8+/9+
+private static async Task<bool> ConnectWithTimeoutAsync(
+    TcpClient tcp, string host, int port, TimeSpan timeout, CancellationToken ct)
+{
+    using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+    var connectTask = tcp.ConnectAsync(host, port);
+
+#if NET6_0_OR_GREATER
+    // .NET 6+ has WaitAsync(TimeSpan) — no CT overload in 6/7; .NET 8 adds it but this keeps it portable.
+    var completed = await connectTask.WaitAsync(timeout);
+    if (completed) { await connectTask; return true; }
+    return false;
+#else
+    // Framework / older runtimes: emulate WaitAsync with WhenAny
+    var delayTask = Task.Delay(timeout, cts.Token);
+    var winner = await Task.WhenAny(connectTask, delayTask);
+    if (winner == connectTask)
+    {
+        cts.Cancel();            // stop the delay if connect won
+        await connectTask;       // observe exceptions if any
+        return true;
+    }
+    return false;                // timeout
+#endif
 }
