@@ -1,53 +1,33 @@
-
-private static async Task<bool> TryTcpConnectAsync(Uri uri, ApiHealthDiag diag, CancellationToken ct)
+private static HttpClientHandler CreateHandler(
+    out SslPolicyErrors lastTlsErrors,
+    out X509Certificate2 serverCert)
 {
-    try
+    // locals to capture inside lambda
+    SslPolicyErrors localTlsErrors = SslPolicyErrors.None;
+    X509Certificate2 localServerCert = null;
+
+    var handler = new HttpClientHandler();
+
+    handler.ServerCertificateCustomValidationCallback = (sender, cert, chain, errors) =>
     {
-        using var tcp = new TcpClient();
-        var port = uri.Port == -1 ? 443 : uri.Port;
+        localTlsErrors = errors;
 
-        var ok = await ConnectWithTimeoutAsync(tcp, uri.Host, port, TimeSpan.FromSeconds(TcpConnectSeconds), ct);
-        diag.TcpOk = ok && tcp.Connected;
-
-        if (!diag.TcpOk)
+        // Try capture cert details for logging
+        try
         {
-            diag.PhaseFailed = "TCP";
-            diag.Reason = "Connect timeout/refused.";
-            return false;
+            localServerCert = new X509Certificate2(cert);
+        }
+        catch
+        {
+            // ignore
         }
 
-        return true;
-    }
-    catch (Exception ex)
-    {
-        diag.PhaseFailed = "TCP";
-        diag.Reason = ex.Message;
-        return false;
-    }
-}
+        return IgnoreCertValidation || errors == SslPolicyErrors.None;
+    };
 
-// Portable helper: works on .NET Framework/Core/5+/6+/8+/9+
-private static async Task<bool> ConnectWithTimeoutAsync(
-    TcpClient tcp, string host, int port, TimeSpan timeout, CancellationToken ct)
-{
-    using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-    var connectTask = tcp.ConnectAsync(host, port);
+    // assign captured values back to out parameters
+    lastTlsErrors = localTlsErrors;
+    serverCert = localServerCert;
 
-#if NET6_0_OR_GREATER
-    // .NET 6+ has WaitAsync(TimeSpan) — no CT overload in 6/7; .NET 8 adds it but this keeps it portable.
-    var completed = await connectTask.WaitAsync(timeout);
-    if (completed) { await connectTask; return true; }
-    return false;
-#else
-    // Framework / older runtimes: emulate WaitAsync with WhenAny
-    var delayTask = Task.Delay(timeout, cts.Token);
-    var winner = await Task.WhenAny(connectTask, delayTask);
-    if (winner == connectTask)
-    {
-        cts.Cancel();            // stop the delay if connect won
-        await connectTask;       // observe exceptions if any
-        return true;
-    }
-    return false;                // timeout
-#endif
+    return handler;
 }
