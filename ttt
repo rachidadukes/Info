@@ -1,0 +1,63 @@
+using RestServiceApp;
+using Spectre.Console;
+
+internal class Program
+{
+    private static async Task Main()
+    {
+        bool continueRunning = true;
+
+        while (continueRunning)
+        {
+            string selectedTask = SelectTask();
+            await ExecuteSelectedTask(selectedTask);
+
+            // Ask if the user wants to continue
+            continueRunning = AnsiConsole.Confirm("Do you want to continue?");
+        }
+
+        AnsiConsole.MarkupLine("[yellow]Exiting program. Goodbye![/]");
+    }
+
+    private static string SelectTask()
+    {
+        // Task selection
+        var taskChoices = new List<string>
+        {
+            "Check API Health",
+            "Check Certificate Health",
+            "Call API"
+        };
+
+        var selectedTask = AnsiConsole.Prompt(
+            new SelectionPrompt<string>()
+                .Title("Select one task.")
+                .AddChoices(taskChoices)
+        );
+
+        AnsiConsole.MarkupLine($"You selected: [yellow]{selectedTask}[/]");
+        return selectedTask;
+    }
+
+    private static async Task ExecuteSelectedTask(string task)
+    {
+        switch (task)
+        {
+            case "Check API Health":
+                await CheckApi.CheckApiHealth();
+                break;
+
+            case "Check Certificate Health":
+                await CheckCertificate.CheckCertificateHealth();
+                break;
+
+            case "Call API":
+                await CallApiXmlClient.CallApi();
+                break;
+
+            default:
+                Console.WriteLine("Invalid selection");
+                break;
+        }
+    }
+}
