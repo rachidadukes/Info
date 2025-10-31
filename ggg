@@ -5,23 +5,28 @@ private static async Task<bool> DiagnoseTlsAndHttpAsync(
 {
     try
     {
-        // Create handler and client
+        // Create handler and HttpClient
         var handler = CreateHandler(out var lastTlsErrors, out var serverCert);
         using var client = new HttpClient(handler)
         {
             Timeout = TimeSpan.FromSeconds(HttpTimeoutSeconds)
         };
 
-        // Try HEAD or GET
+        // Perform HEAD or GET request
         var resp = await TryHeadOrGetAsync(client, healthUri, lastTlsErrors, serverCert, diag, ct)
             .ConfigureAwait(false);
 
+        // If no response => TLS or HTTP failed
         if (resp == null)
         {
             diag.TlsOk = false;
-            diag.TlsErrors = string.IsNullOrEmpty(lastTlsErrors)
+
+            // Convert enum (SslPolicyErrors) to string
+            string tlsErrorText = lastTlsErrors == System.Net.Security.SslPolicyErrors.None
                 ? "TLS handshake failed or no response."
-                : lastTlsErrors;
+                : lastTlsErrors.ToString();
+
+            diag.TlsErrors = tlsErrorText;
             diag.CertSummary = serverCert == null ? "-" : SummarizeCert(serverCert);
             diag.HttpOk = false;
             diag.Reason = "No response received.";
@@ -29,18 +34,21 @@ private static async Task<bool> DiagnoseTlsAndHttpAsync(
             return false;
         }
 
-        // TLS succeeded if we have a response
+        // TLS succeeded if we got a valid response
         diag.TlsOk = true;
-        diag.TlsErrors = lastTlsErrors;
+        diag.TlsErrors = lastTlsErrors == System.Net.Security.SslPolicyErrors.None
+            ? "None"
+            : lastTlsErrors.ToString();
         diag.CertSummary = SummarizeCert(serverCert);
 
-        // HTTP result & sample
-        diag.StatusCode = (int)resp.StatusCode;
+        // HTTP result
+        diag.StatusCode = ((int)resp.StatusCode).ToString(); // store as string if diag.StatusCode is string
         diag.Reason = resp.ReasonPhrase;
         diag.HttpOk = resp.IsSuccessStatusCode;
 
-        var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-        diag.ResponseSample = body.Length <= 512 ? body : body[..512];
+        // Read response body (first 512 chars max)
+        string body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        diag.ResponseSample = body.Length <= 512 ? body : body.Substring(0, 512);
 
         if (!diag.HttpOk)
         {
@@ -62,10 +70,12 @@ private static async Task<bool> DiagnoseTlsAndHttpAsync(
 
 
 
+====================
 
-=====================
 
-
-// 3) TLS + HTTP
 if (!await DiagnoseTlsAndHttpAsync(healthUri, diag, ct).ConfigureAwait(false))
     return Finalize(sw, diag);
+
+
+
+
