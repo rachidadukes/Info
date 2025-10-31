@@ -1,44 +1,24 @@
-var handler = new WebRequestHandler();
-// ... cert setup omitted for brevity
-
-handler.ServerCertificateValidationCallback = (sender, cert2, chain, errors) =>
-{
-    AnsiConsole.MarkupLine("");
-    AnsiConsole.MarkupLine("[red bold]Bypassing SSL validation for:[/]");
-    var subject = cert2?.Subject ?? "(no subject)";
-    AnsiConsole.MarkupLine($"[green]{Markup.Escape(subject)}[/]");
-    return true;
-};
-
-var client = new HttpClient(handler)
-{
-    BaseAddress = new Uri(endpointUrl),
-    Timeout = TimeSpan.FromSeconds(30)
-};
-
 var content = new StringContent(xml, System.Text.Encoding.UTF8, "application/xml");
-
-// send
 var resp = await client.PostAsync(endpointUrl, content);
 
-// >>> NEW: colored HTTP status line
-var code   = (int)resp.StatusCode;
+// Show HTTP status
+var code = (int)resp.StatusCode;
 var reason = resp.ReasonPhrase ?? string.Empty;
-var color  = code switch
-{
-    >= 200 and < 300 => "green",
-    >= 400 and < 500 => "yellow",
-    >= 500           => "red",
-    _                => "white"
-};
+
+string color;
+if (code >= 200 && code < 300)
+    color = "green";
+else if (code >= 400 && code < 500)
+    color = "yellow";
+else if (code >= 500)
+    color = "red";
+else
+    color = "white";
+
 AnsiConsole.MarkupLine($"[bold {color}]HTTP {code} {Markup.Escape(reason)}[/]");
 
-// read body
+// Read response
 var response = await resp.Content.ReadAsStringAsync();
 
-// optional: show the body section header
 AnsiConsole.MarkupLine("[red bold]Response:[/]");
 AnsiConsole.MarkupLine($"[grey]{Markup.Escape(response)}[/]");
-
-if (!resp.IsSuccessStatusCode)
-    throw new HttpRequestException($"HTTP {code} {reason}\n{response}");
