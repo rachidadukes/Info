@@ -1,0 +1,71 @@
+private static async Task<bool> DiagnoseTlsAndHttpAsync(
+    Uri healthUri,
+    ApiHealthDiag diag,
+    CancellationToken ct)
+{
+    try
+    {
+        // Create handler and client
+        var handler = CreateHandler(out var lastTlsErrors, out var serverCert);
+        using var client = new HttpClient(handler)
+        {
+            Timeout = TimeSpan.FromSeconds(HttpTimeoutSeconds)
+        };
+
+        // Try HEAD or GET
+        var resp = await TryHeadOrGetAsync(client, healthUri, lastTlsErrors, serverCert, diag, ct)
+            .ConfigureAwait(false);
+
+        if (resp == null)
+        {
+            diag.TlsOk = false;
+            diag.TlsErrors = string.IsNullOrEmpty(lastTlsErrors)
+                ? "TLS handshake failed or no response."
+                : lastTlsErrors;
+            diag.CertSummary = serverCert == null ? "-" : SummarizeCert(serverCert);
+            diag.HttpOk = false;
+            diag.Reason = "No response received.";
+            diag.PhaseFailed = "TLS";
+            return false;
+        }
+
+        // TLS succeeded if we have a response
+        diag.TlsOk = true;
+        diag.TlsErrors = lastTlsErrors;
+        diag.CertSummary = SummarizeCert(serverCert);
+
+        // HTTP result & sample
+        diag.StatusCode = (int)resp.StatusCode;
+        diag.Reason = resp.ReasonPhrase;
+        diag.HttpOk = resp.IsSuccessStatusCode;
+
+        var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        diag.ResponseSample = body.Length <= 512 ? body : body[..512];
+
+        if (!diag.HttpOk)
+        {
+            diag.PhaseFailed = "HTTP";
+            return false;
+        }
+
+        return true;
+    }
+    catch (Exception ex)
+    {
+        diag.TlsOk = false;
+        diag.HttpOk = false;
+        diag.PhaseFailed = "TLS/HTTP";
+        diag.Reason = ex.InnerException?.Message ?? ex.Message;
+        return false;
+    }
+}
+
+
+
+
+=====================
+
+
+// 3) TLS + HTTP
+if (!await DiagnoseTlsAndHttpAsync(healthUri, diag, ct).ConfigureAwait(false))
+    return Finalize(sw, diag);
