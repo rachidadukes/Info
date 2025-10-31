@@ -1,20 +1,26 @@
-HttpResponseMessage? resp = null;
-try
+private static SocketsHttpHandler CreateHandler(
+    out SslPolicyErrors lastTlsErrors,
+    out X509Certificate2? serverCert)
 {
-    resp = await TryHeadOrGetAsync(client, healthUri, lastTlsErrors, serverCert, diag)
-        .ConfigureAwait(false);
-}
-catch (HttpRequestException ex)
-{
-    diag.TlsOk = false;
-    diag.HttpOk = false;
-    diag.Reason = $"Request failed: {ex.Message}";
-    return false;
-}
-catch (TaskCanceledException)
-{
-    diag.TlsOk = false;
-    diag.HttpOk = false;
-    diag.Reason = "Request timed out.";
-    return false;
+    lastTlsErrors = SslPolicyErrors.None;
+    serverCert = null;
+
+    var handler = new SocketsHttpHandler
+    {
+        PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+        SslOptions = new SslClientAuthenticationOptions
+        {
+            EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+            // ❗TEMPORARY: accept all certs (ignore validation)
+            RemoteCertificateValidationCallback = (sender, cert, chain, errors) =>
+            {
+                lastTlsErrors = errors;
+                if (cert is X509Certificate2 x509)
+                    serverCert = x509;
+                return true; // always trust
+            }
+        }
+    };
+
+    return handler;
 }
