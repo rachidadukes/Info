@@ -9,35 +9,35 @@ private static HttpClientHandler CreateHandler(
 {
     try
     {
-        // Initialize outs
-        lastTlsErrors = SslPolicyErrors.None;
-        serverCert = null;
+        // Initialize local capture variables
+        SslPolicyErrors localTlsErrors = SslPolicyErrors.None;
+        X509Certificate2? localServerCert = null;
 
         var handler = new HttpClientHandler();
 
-        // 🧩 Optional: enable CRL only on supported platforms
+        // 🧩 Optional: enable CRL on Windows only
         if (OperatingSystem.IsWindows())
             handler.CheckCertificateRevocationList = true;
 
-        // 🔐 Capture TLS details
+        // 🔐 Capture TLS details into local variables
         handler.ServerCertificateCustomValidationCallback = (req, cert, chain, errors) =>
         {
-            lastTlsErrors = errors;
+            localTlsErrors = errors;
 
             if (cert != null)
             {
                 if (cert is X509Certificate2 cert2)
                 {
-                    serverCert = cert2;
+                    localServerCert = cert2;
                 }
                 else
                 {
-                    // No nested try here; let it bubble up if invalid
-                    serverCert = new X509Certificate2(cert);
+                    // no nested try; will throw if invalid
+                    localServerCert = new X509Certificate2(cert);
                 }
             }
 
-            // ⚠️ TEMP: trust all certificates for testing
+            // ⚠️ TEMP: trust all certs for diagnostics
             return true;
         };
 
@@ -45,6 +45,10 @@ private static HttpClientHandler CreateHandler(
         handler.ClientCertificateOptions = ClientCertificateOption.Manual;
         handler.AllowAutoRedirect = true;
         handler.AutomaticDecompression = DecompressionMethods.None;
+
+        // ✅ Assign captured values to out parameters before returning
+        lastTlsErrors = localTlsErrors;
+        serverCert = localServerCert;
 
         return handler;
     }
