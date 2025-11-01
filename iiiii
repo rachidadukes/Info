@@ -1,34 +1,79 @@
+using System.Net;
+using System.Net.Http;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
+
 private static HttpClientHandler CreateHandler(
     out SslPolicyErrors lastTlsErrors,
     out X509Certificate2? serverCert)
 {
-    // locals to capture inside lambda
-    SslPolicyErrors localTlsErrors = SslPolicyErrors.None;
-    X509Certificate2? localServerCert = null;
-
-    var handler = new HttpClientHandler();
-
-    handler.ServerCertificateCustomValidationCallback = (sender, cert, chain, errors) =>
+    try
     {
-        localTlsErrors = errors;
+        // Initialize outs
+        lastTlsErrors = SslPolicyErrors.None;
+        serverCert = null;
 
-        try
+        var handler = new HttpClientHandler();
+
+        // 🧩 Optional: enable CRL only on supported platforms
+        if (OperatingSystem.IsWindows())
+            handler.CheckCertificateRevocationList = true;
+
+        // 🔐 Capture TLS details
+        handler.ServerCertificateCustomValidationCallback = (req, cert, chain, errors) =>
         {
+            lastTlsErrors = errors;
+
             if (cert != null)
-                localServerCert = new X509Certificate2(cert);
-        }
-        catch
-        {
-            // ignore errors converting the certificate
-        }
+            {
+                if (cert is X509Certificate2 cert2)
+                {
+                    serverCert = cert2;
+                }
+                else
+                {
+                    // No nested try here; let it bubble up if invalid
+                    serverCert = new X509Certificate2(cert);
+                }
+            }
 
-        // ✅ TEMPORARY FIX: always trust for testing
-        return true;
-    };
+            // ⚠️ TEMP: trust all certificates for testing
+            return true;
+        };
 
-    // assign captured values back to out parameters
-    lastTlsErrors = localTlsErrors;
-    serverCert = localServerCert;
+        // ⚙️ Standard handler setup
+        handler.ClientCertificateOptions = ClientCertificateOption.Manual;
+        handler.AllowAutoRedirect = true;
+        handler.AutomaticDecompression = DecompressionMethods.None;
 
-    return handler;
+        return handler;
+    }
+    catch (PlatformNotSupportedException ex)
+    {
+        Console.WriteLine($"[CreateHandler] Platform not supported: {ex.Message}");
+        lastTlsErrors = SslPolicyErrors.None;
+        serverCert = null;
+        return new HttpClientHandler();
+    }
+    catch (CryptographicException ex)
+    {
+        Console.WriteLine($"[CreateHandler] Certificate error: {ex.Message}");
+        lastTlsErrors = SslPolicyErrors.RemoteCertificateChainErrors;
+        serverCert = null;
+        return new HttpClientHandler();
+    }
+    catch (HttpRequestException ex)
+    {
+        Console.WriteLine($"[CreateHandler] HTTP error: {ex.Message}");
+        lastTlsErrors = SslPolicyErrors.RemoteCertificateChainErrors;
+        serverCert = null;
+        return new HttpClientHandler();
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[CreateHandler] Unexpected error: {ex.Message}");
+        lastTlsErrors = SslPolicyErrors.None;
+        serverCert = null;
+        return new HttpClientHandler();
+    }
 }
