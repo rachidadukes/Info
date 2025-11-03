@@ -1,4 +1,3 @@
-// DiagnosticsUtil.cs (for .NET Framework 4.x)
 using System;
 using System.IO;
 using System.Net;
@@ -19,31 +18,32 @@ namespace NewServiceApp
             {
                 sb.AppendLine($"[{i.GetType().Name}] {i.Message}");
 
-                switch (i)
+                // No modern 'case Type var' pattern matching - use 'if' instead
+                if (i is HttpRequestException)
                 {
-                    case HttpRequestException hre:
-                        // In .NET Fx, look for WebException inside
-                        if (hre.InnerException is WebException we)
-                        {
-                            AppendWebException(sb, we);
-                        }
-                        break;
-
-                    case WebException we:
+                    var hre = (HttpRequestException)i;
+                    if (hre.InnerException is WebException we)
                         AppendWebException(sb, we);
-                        break;
-
-                    case SocketException se:
-                        sb.AppendLine($"  SocketError: {se.SocketErrorCode} (#{se.ErrorCode})");
-                        break;
-
-                    case AuthenticationException:
-                        sb.AppendLine("  TLS/SSL authentication failed");
-                        break;
-
-                    case IOException ioe when ioe.InnerException is SocketException se2:
+                }
+                else if (i is WebException)
+                {
+                    var we = (WebException)i;
+                    AppendWebException(sb, we);
+                }
+                else if (i is SocketException)
+                {
+                    var se = (SocketException)i;
+                    sb.AppendLine($"  SocketError: {se.SocketErrorCode} (#{se.ErrorCode})");
+                }
+                else if (i is AuthenticationException)
+                {
+                    sb.AppendLine("  TLS/SSL authentication failed");
+                }
+                else if (i is IOException)
+                {
+                    var ioe = (IOException)i;
+                    if (ioe.InnerException is SocketException se2)
                         sb.AppendLine($"  (IO->Socket) {se2.SocketErrorCode} (#{se2.ErrorCode})");
-                        break;
                 }
             }
 
@@ -53,6 +53,7 @@ namespace NewServiceApp
         private static void AppendWebException(StringBuilder sb, WebException we)
         {
             sb.AppendLine($"  WebExceptionStatus: {we.Status}");
+
             if (we.Response is HttpWebResponse http)
             {
                 sb.AppendLine($"  HTTP {(int)http.StatusCode} {http.StatusCode}");
@@ -70,7 +71,10 @@ namespace NewServiceApp
                         }
                     }
                 }
-                catch { /* ignore read errors */ }
+                catch
+                {
+                    sb.AppendLine("  (Failed to read response body)");
+                }
             }
         }
     }
