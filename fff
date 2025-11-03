@@ -1,13 +1,10 @@
-catch (TaskCanceledException tcex)
+HttpResponseMessage resp = null;
+try
 {
-    return "TaskCanceledException\n" + DiagnosticsUtil.ExceptionToString(tcex);
+    resp = await client.PostAsync(endpointUrl, content);   // <— failing here
 }
-catch (HttpRequestException hrex)
+catch (Exception ex)
 {
-    return "HttpRequestException\n" + DiagnosticsUtil.ExceptionToString(hrex);
+    // Return the deepest details (WebException/SChannel/Socket, etc.)
+    return "SEND FAIL\n" + DiagnosticsUtil.ExceptionToString(ex);
 }
-catch (AuthenticationException aex)
-{
-    return "AuthenticationException\n" + DiagnosticsUtil.ExceptionToString(aex);
-}
-
