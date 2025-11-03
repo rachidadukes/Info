@@ -1,0 +1,41 @@
+// File: DiagnosticsUtil.cs
+using System;
+using System.IO;
+using System.Net.Sockets;
+using System.Net.Http;
+using System.Security.Authentication;
+using System.Text;
+
+namespace YourApp.Diagnostics
+{
+    public static class DiagnosticsUtil
+    {
+        public static string ExceptionToString(Exception ex)
+        {
+            var sb = new StringBuilder();
+            for (var i = ex; i != null; i = i.InnerException)
+            {
+                sb.AppendLine($"[{i.GetType().Name}] {i.Message}");
+                switch (i)
+                {
+                    case HttpRequestException hre:
+                        sb.AppendLine($"  StatusCode: {(int?)hre.StatusCode} ({hre.StatusCode})");
+                        break;
+
+                    case SocketException se:
+                        sb.AppendLine($"  SocketError: {se.SocketErrorCode} (#{se.ErrorCode})");
+                        break;
+
+                    case AuthenticationException:
+                        sb.AppendLine("  TLS/SSL authentication failed");
+                        break;
+
+                    case IOException ioe when ioe.InnerException is SocketException se2:
+                        sb.AppendLine($"  (IO->Socket) {se2.SocketErrorCode} (#{se2.ErrorCode})");
+                        break;
+                }
+            }
+            return sb.ToString();
+        }
+    }
+}
