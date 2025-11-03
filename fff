@@ -1,81 +1,14 @@
-using System;
-using System.IO;
-using System.Net;
-using System.Net.Http;
-using System.Net.Sockets;
-using System.Security.Authentication;
-using System.Text;
-
-namespace NewServiceApp
+if (!resp.IsSuccessStatusCode)
 {
-    public static class DiagnosticsUtil
-    {
-        public static string ExceptionToString(Exception ex)
-        {
-            var sb = new StringBuilder();
+    var headers = string.Join("\n", resp.Headers.Select(h => $"{h.Key}: {string.Join(", ", h.Value)}"));
+    var contentHeaders = string.Join("\n", resp.Content.Headers.Select(h => $"{h.Key}: {string.Join(", ", h.Value)}"));
 
-            for (var i = ex; i != null; i = i.InnerException)
-            {
-                sb.AppendLine($"[{i.GetType().Name}] {i.Message}");
-
-                // No modern 'case Type var' pattern matching - use 'if' instead
-                if (i is HttpRequestException)
-                {
-                    var hre = (HttpRequestException)i;
-                    if (hre.InnerException is WebException we)
-                        AppendWebException(sb, we);
-                }
-                else if (i is WebException)
-                {
-                    var we = (WebException)i;
-                    AppendWebException(sb, we);
-                }
-                else if (i is SocketException)
-                {
-                    var se = (SocketException)i;
-                    sb.AppendLine($"  SocketError: {se.SocketErrorCode} (#{se.ErrorCode})");
-                }
-                else if (i is AuthenticationException)
-                {
-                    sb.AppendLine("  TLS/SSL authentication failed");
-                }
-                else if (i is IOException)
-                {
-                    var ioe = (IOException)i;
-                    if (ioe.InnerException is SocketException se2)
-                        sb.AppendLine($"  (IO->Socket) {se2.SocketErrorCode} (#{se2.ErrorCode})");
-                }
-            }
-
-            return sb.ToString();
-        }
-
-        private static void AppendWebException(StringBuilder sb, WebException we)
-        {
-            sb.AppendLine($"  WebExceptionStatus: {we.Status}");
-
-            if (we.Response is HttpWebResponse http)
-            {
-                sb.AppendLine($"  HTTP {(int)http.StatusCode} {http.StatusCode}");
-
-                try
-                {
-                    using (var sr = new StreamReader(http.GetResponseStream()))
-                    {
-                        var body = sr.ReadToEnd();
-                        if (!string.IsNullOrEmpty(body))
-                        {
-                            if (body.Length > 8192) body = body.Substring(0, 8192) + "...(truncated)";
-                            sb.AppendLine("  --- Response Body ---");
-                            sb.AppendLine(body);
-                        }
-                    }
-                }
-                catch
-                {
-                    sb.AppendLine("  (Failed to read response body)");
-                }
-            }
-        }
-    }
+    response =
+$@"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}
+--- Response Headers ---
+{headers}
+--- Content Headers ---
+{contentHeaders}
+--- Body ---
+{response}";
 }
