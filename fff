@@ -1,25 +1,36 @@
-// File: DiagnosticsUtil.cs
+// DiagnosticsUtil.cs (for .NET Framework 4.x)
 using System;
 using System.IO;
-using System.Net.Sockets;
+using System.Net;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Text;
 
-namespace YourApp.Diagnostics
+namespace NewServiceApp
 {
     public static class DiagnosticsUtil
     {
         public static string ExceptionToString(Exception ex)
         {
             var sb = new StringBuilder();
+
             for (var i = ex; i != null; i = i.InnerException)
             {
                 sb.AppendLine($"[{i.GetType().Name}] {i.Message}");
+
                 switch (i)
                 {
                     case HttpRequestException hre:
-                        sb.AppendLine($"  StatusCode: {(int?)hre.StatusCode} ({hre.StatusCode})");
+                        // In .NET Fx, look for WebException inside
+                        if (hre.InnerException is WebException we)
+                        {
+                            AppendWebException(sb, we);
+                        }
+                        break;
+
+                    case WebException we:
+                        AppendWebException(sb, we);
                         break;
 
                     case SocketException se:
@@ -35,7 +46,32 @@ namespace YourApp.Diagnostics
                         break;
                 }
             }
+
             return sb.ToString();
+        }
+
+        private static void AppendWebException(StringBuilder sb, WebException we)
+        {
+            sb.AppendLine($"  WebExceptionStatus: {we.Status}");
+            if (we.Response is HttpWebResponse http)
+            {
+                sb.AppendLine($"  HTTP {(int)http.StatusCode} {http.StatusCode}");
+
+                try
+                {
+                    using (var sr = new StreamReader(http.GetResponseStream()))
+                    {
+                        var body = sr.ReadToEnd();
+                        if (!string.IsNullOrEmpty(body))
+                        {
+                            if (body.Length > 8192) body = body.Substring(0, 8192) + "...(truncated)";
+                            sb.AppendLine("  --- Response Body ---");
+                            sb.AppendLine(body);
+                        }
+                    }
+                }
+                catch { /* ignore read errors */ }
+            }
         }
     }
 }
