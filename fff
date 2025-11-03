@@ -1,14 +1,13 @@
-if (!resp.IsSuccessStatusCode)
+catch (TaskCanceledException tcex)
 {
-    var headers = string.Join("\n", resp.Headers.Select(h => $"{h.Key}: {string.Join(", ", h.Value)}"));
-    var contentHeaders = string.Join("\n", resp.Content.Headers.Select(h => $"{h.Key}: {string.Join(", ", h.Value)}"));
-
-    response =
-$@"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}
---- Response Headers ---
-{headers}
---- Content Headers ---
-{contentHeaders}
---- Body ---
-{response}";
+    return "TaskCanceledException\n" + DiagnosticsUtil.ExceptionToString(tcex);
 }
+catch (HttpRequestException hrex)
+{
+    return "HttpRequestException\n" + DiagnosticsUtil.ExceptionToString(hrex);
+}
+catch (AuthenticationException aex)
+{
+    return "AuthenticationException\n" + DiagnosticsUtil.ExceptionToString(aex);
+}
+
