@@ -1,146 +1,18 @@
 
-
-======================================================
-public sealed class HttpCallResult
+// Optionally inspect REST payload for logical errors
+if (resp.IsSuccessStatusCode)
 {
-    public bool   RequestSucceeded { get; set; }          // true = we got a response from server (any HTTP code); false = exception before response
-    public bool   IsHttpSuccess    { get; set; }          // true = 2xx
-    public int?   StatusCode       { get; set; }          // null when exception before response
-    public string ReasonPhrase     { get; set; } = "";
-    public string ProtocolVersion  { get; set; } = "";
-    public string ResponseBody     { get; set; } = "";    // raw body
-    public Dictionary<string,string> Headers        { get; } = new Dictionary<string,string>();
-    public Dictionary<string,string> ContentHeaders { get; } = new Dictionary<string,string>();
-    public bool   LooksLikeSoapFault { get; set; }        // best-effort SOAP fault detector
-    public string Error            { get; set; } = "";    // exception.ToString() or synthesized error
+    // some REST APIs return 200 but have "error" fields in the JSON/XML
+    if (result.ResponseBody.Contains("\"error\"") ||
+        result.ResponseBody.Contains("\"errorCode\"") ||
+        result.ResponseBody.Contains("<Error>") ||
+        result.ResponseBody.Contains("<Fault>"))
+    {
+        result.Error = "Logical API error found in body despite HTTP 200";
+    }
 }
-==========================
-
-
-using System;
-using System.Collections.Generic;
-using System.Configuration;
-using System.IO;
-using System.Linq;
-using System.Net;
-using System.Net.Http;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Xml.Linq;
-
-public static class HttpXmlPoster
+else
 {
-    /// <summary>
-    /// Sends an XML string via POST and captures *everything* that can come back.
-    /// </summary>
-    /// <param name="endpointUrl">Absolute URL</param>
-    /// <param name="xmlPayload">Raw XML string</param>
-    /// <param name="timeoutSeconds">Request timeout</param>
-    /// <param name="acceptAnyServerCertificate">Set true only for legacy/self-signed systems</param>
-    public static async Task<HttpCallResult> PostXmlAsync(
-        string endpointUrl,
-        string xmlPayload,
-        int timeoutSeconds = 30,
-        bool acceptAnyServerCertificate = false,
-        CancellationToken cancellationToken = default)
-    {
-        var result = new HttpCallResult();
-
-        try
-        {
-            // Ensure TLS 1.2 for .NET 4.7
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-
-            var handler = new HttpClientHandler();
-
-            if (acceptAnyServerCertificate)
-            {
-                // Use only when you *must* hit a legacy/self-signed server
-                handler.ServerCertificateCustomValidationCallback = (msg, cert, chain, errors) => true;
-            }
-
-            using (var client = new HttpClient(handler))
-            {
-                client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
-
-                using (var content = new StringContent(xmlPayload, Encoding.UTF8, "application/xml"))
-                using (var request  = new HttpRequestMessage(HttpMethod.Post, endpointUrl) { Content = content })
-                {
-                    HttpResponseMessage resp = null;
-                    try
-                    {
-                        resp = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
-                                           .ConfigureAwait(false);
-
-                        result.RequestSucceeded = true;
-                        result.IsHttpSuccess    = resp.IsSuccessStatusCode;
-                        result.StatusCode       = (int)resp.StatusCode;
-                        result.ReasonPhrase     = resp.ReasonPhrase ?? "";
-                        result.ProtocolVersion  = resp.Version?.ToString() ?? "";
-
-                        // Headers
-                        foreach (var h in resp.Headers)
-                            result.Headers[h.Key] = string.Join(", ", h.Value);
-
-                        foreach (var h in resp.Content.Headers)
-                            result.ContentHeaders[h.Key] = string.Join(", ", h.Value);
-
-                        // Body (read fully)
-                        result.ResponseBody = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
-
-                        // Detect SOAP Faults even with HTTP 200
-                        result.LooksLikeSoapFault = IsSoapFault(result.ResponseBody);
-
-                        // If non-2xx, synthesize an error message (keep body for diagnostics)
-                        if (!result.IsHttpSuccess)
-                        {
-                            result.Error = $"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}";
-                        }
-                    }
-                    catch (TaskCanceledException tce) when (!cancellationToken.IsCancellationRequested)
-                    {
-                        // Timeout
-                        result.RequestSucceeded = false;
-                        result.Error = $"Timeout after {timeoutSeconds}s\n{tce}";
-                    }
-                    catch (Exception ex)
-                    {
-                        // DNS/SSL/Connection failures, etc.
-                        result.RequestSucceeded = false;
-                        result.Error = ex.ToString();
-                    }
-                }
-            }
-        }
-        catch (Exception exOuter)
-        {
-            // Catastrophic failure building the request/client
-            result.RequestSucceeded = false;
-            result.Error = $"Setup/Outer failure\n{exOuter}";
-        }
-
-        return result;
-    }
-
-    private static bool IsSoapFault(string body)
-    {
-        if (string.IsNullOrWhiteSpace(body)) return false;
-        try
-        {
-            var x = XDocument.Parse(body);
-            // Common SOAP 1.1 & 1.2 fault element names
-            XNamespace soap11 = "http://schemas.xmlsoap.org/soap/envelope/";
-            XNamespace soap12 = "http://www.w3.org/2003/05/soap-envelope";
-
-            return x.Descendants(soap11 + "Fault").Any()
-                || x.Descendants(soap12 + "Fault").Any()
-                || x.Descendants().Any(e => e.Name.LocalName.Equals("Fault", StringComparison.OrdinalIgnoreCase));
-        }
-        catch
-        {
-            // Not XML, so not a SOAP fault
-            return false;
-        }
-    }
+    // If non-2xx, synthesize an error message (keep body for diagnostics)
+    result.Error = $"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}";
 }
