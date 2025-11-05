@@ -1,99 +1,100 @@
-using System;
-using System.Configuration;
-using System.Net;
-using System.Net.Http;
-using System.Security.Authentication;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-
-public sealed class ApiXmlClientNoCert2
+public class ApiXmlClientNoCert2
 {
-    static ApiXmlClientNoCert2()
+    public async Task<string> GetResponseFromNewAPI(string xml)
     {
-        // .NET 4.7: lock to TLS 1.2 for legacy endpoints
-        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-
-        // Optional: some legacy gateways stall on Expect: 100-continue
-        ServicePointManager.Expect100Continue = false;
-
-        // DEV ONLY: if you must ignore invalid/self-signed server certs on 4.7.0
-        // ServicePointManager.ServerCertificateValidationCallback = (s, cert, chain, errors) => true;
-    }
-
-    public async Task<string> PostXmlAsync(string xml, CancellationToken ct = default)
-    {
-        var endpointUrl = ConfigurationManager.AppSettings["MessageConverterURL"];
-        if (string.IsNullOrWhiteSpace(endpointUrl))
-            return "CONFIG ERROR: 'MessageConverterURL' missing.";
-
+        string endpointUrl;
+        string response = "";
         try
         {
-            // 4.7: use HttpClientHandler; per-call client is OK if you dispose it
-            using (var handler = new HttpClientHandler())
+            // Keep this here (no static ctor)
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+            ServicePointManager.Expect100Continue = false;   // optional but helps some gateways
+            // DEV ONLY: uncomment if hitting self-signed endpoints
+            // ServicePointManager.ServerCertificateValidationCallback = (s, cert, chain, e) => true;
+
+            endpointUrl = ConfigurationManager.AppSettings["MessageConverterURL"];
+            if (string.IsNullOrWhiteSpace(endpointUrl))
+                return "CONFIG ERROR: 'MessageConverterURL' missing.";
+
+            var handler = new HttpClientHandler();
+            // If you’re on 4.7.1+, you can use the per-handler callback instead of global:
+            // handler.ServerCertificateCustomValidationCallback = (m, c, ch, e) => true; // DEV ONLY
+
             using (var client = new HttpClient(handler))
             {
                 client.Timeout = TimeSpan.FromSeconds(30);
 
-                using (var content = new StringContent(xml, Encoding.UTF8, "application/xml"))
-                using (var resp = await client.PostAsync(endpointUrl, content, ct).ConfigureAwait(false))
+                var content = new StringContent(xml, Encoding.UTF8, "application/xml");
+
+                // NOTE: BaseAddress not needed since we pass the absolute URL below.
+                HttpResponseMessage resp = await client.PostAsync(endpointUrl, content);
+
+                // centralize the status/logic mapping
+                string codeResponse = await ResponseResponses(resp);
+
+                // return raw body on success; otherwise return the mapped message
+                if (resp.IsSuccessStatusCode && !codeResponse.StartsWith("LOGICAL ERROR"))
                 {
-                    return await HandleResponseAsync(resp).ConfigureAwait(false);
+                    response = await resp.Content.ReadAsStringAsync();
                 }
+                else
+                {
+                    response = codeResponse;
+                }
+                return response;
             }
         }
-        catch (TaskCanceledException ex)
+        catch (TaskCanceledException tcex)
         {
-            return "TIMEOUT: The request timed out or was canceled.\n" + Flatten(ex);
+            return "TaskCanceledException\n" + DiagnosticsUtil.ExceptionToString(tcex);
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException hrex)
         {
-            return "HTTP ERROR: network/connection failure.\n" + Flatten(ex);
+            return "HttpRequestException\n" + DiagnosticsUtil.ExceptionToString(hrex);
         }
-        catch (AuthenticationException ex)
+        catch (AuthenticationException aex)
         {
-            return "TLS/SSL HANDSHAKE ERROR.\n" + Flatten(ex);
+            return "AuthenticationException\n" + DiagnosticsUtil.ExceptionToString(aex);
         }
-        catch (Exception ex)
+        catch (Exception outerEx)
         {
-            return "UNHANDLED FAILURE.\n" + Flatten(ex);
+            return "SETUP FAILURE\n" + outerEx;
         }
     }
 
-    private static async Task<string> HandleResponseAsync(HttpResponseMessage resp)
+    // keep your private helper — just small polish
+    private async Task<string> ResponseResponses(HttpResponseMessage resp)
     {
-        var status = (int)resp.StatusCode;
-        var reason = resp.ReasonPhrase ?? "";
-        var body = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+        int statusCode = (int)resp.StatusCode;
+        string reason = resp.ReasonPhrase ?? "";
+        string body = await resp.Content.ReadAsStringAsync();
 
-        // Helpful single-line trace if you log:
-        // System.Diagnostics.Trace.WriteLine($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}");
+        // Optional trace
+        // Console.WriteLine($"Status Code: {statusCode} ({reason})");
 
-        if (resp.IsSuccessStatusCode)
+        switch (statusCode)
         {
-            // If the service returns logical errors inside a 200 body:
-            if (body.IndexOf("<error", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                body.IndexOf("error", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return "LOGICAL ERROR (HTTP 200):\n" + body;
-            }
+            case 200:
+                if (body.IndexOf("error", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    body.IndexOf("<Error", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return "LOGICAL ERROR found in body (HTTP 200).\n" + body;
+                return "✓ Success.";
 
-            return body; // happy path: return raw XML/result to caller
-        }
+            case 400: return "✖ Bad Request: check input parameters.\n" + body;
+            case 401: return "🔒 Unauthorized: credentials or token invalid.\n" + body;
+            case 403: return "🚫 Forbidden: you do not have permission.\n" + body;
+            case 404: return "❓ Not Found: endpoint or resource missing.\n" + body;
+            case 415: return "🧾 Unsupported Media Type (ensure application/xml).\n" + body;
+            case 500: return "✴ Internal Server Error: problem on the server.\n" + body;
 
-        // Map common statuses; include body for diagnostics
-        switch (status)
-        {
-            case 400: return $"400 Bad Request.\n{body}";
-            case 401: return $"401 Unauthorized.\n{body}";
-            case 403: return $"403 Forbidden.\n{body}";
-            case 404: return $"404 Not Found.\n{body}";
-            case 415: return $"415 Unsupported Media Type (ensure 'application/xml').\n{body}";
-            case 500: return $"500 Internal Server Error.\n{body}";
-            default:  return $"{status} {reason}.\n{body}";
+            default:  return $"⚠ Unexpected status: {statusCode} {reason}\n{body}";
         }
     }
-
-    private static string Flatten(Exception ex)
-        => ex.Message + (ex.InnerException != null ? "\n" + ex.InnerException.Message : "");
 }
+=========================
+
+private async Task<string> HandleHttpResponseAsync(HttpResponseMessage resp)
+
+string codeResponse = await HandleHttpResponseAsync(resp);
+
+
