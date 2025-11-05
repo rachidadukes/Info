@@ -1,107 +1,99 @@
-public async Task<string> CallRestServiceAsync(string xml)
-{
-    string endpointUrl = ConfigurationManager.AppSettings["MessageConverterURL"];
-    string response = string.Empty;
+using System;
+using System.Configuration;
+using System.Net;
+using System.Net.Http;
+using System.Security.Authentication;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
-    try
+public sealed class ApiXmlClientNoCert2
+{
+    static ApiXmlClientNoCert2()
     {
+        // .NET 4.7: lock to TLS 1.2 for legacy endpoints
         ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
 
-        using (var handler = new HttpClientHandler())
-        {
-            handler.ServerCertificateCustomValidationCallback = (msg, cert, chain, errors) => true;
+        // Optional: some legacy gateways stall on Expect: 100-continue
+        ServicePointManager.Expect100Continue = false;
 
+        // DEV ONLY: if you must ignore invalid/self-signed server certs on 4.7.0
+        // ServicePointManager.ServerCertificateValidationCallback = (s, cert, chain, errors) => true;
+    }
+
+    public async Task<string> PostXmlAsync(string xml, CancellationToken ct = default)
+    {
+        var endpointUrl = ConfigurationManager.AppSettings["MessageConverterURL"];
+        if (string.IsNullOrWhiteSpace(endpointUrl))
+            return "CONFIG ERROR: 'MessageConverterURL' missing.";
+
+        try
+        {
+            // 4.7: use HttpClientHandler; per-call client is OK if you dispose it
+            using (var handler = new HttpClientHandler())
             using (var client = new HttpClient(handler))
             {
                 client.Timeout = TimeSpan.FromSeconds(30);
 
-                var content = new StringContent(xml, Encoding.UTF8, "application/xml");
-                HttpResponseMessage resp = null;
-
-                try
+                using (var content = new StringContent(xml, Encoding.UTF8, "application/xml"))
+                using (var resp = await client.PostAsync(endpointUrl, content, ct).ConfigureAwait(false))
                 {
-                    resp = await client.PostAsync(endpointUrl, content);
-
-                    int statusCode = (int)resp.StatusCode;
-                    string reason = resp.ReasonPhrase;
-                    string body = await resp.Content.ReadAsStringAsync();
-
-                    Console.WriteLine($"Status Code: {statusCode} ({reason})");
-
-                    // --- Handle different status codes explicitly ---
-                    switch (statusCode)
-                    {
-                        case 200:
-                            if (body.Contains("\"error\"") || body.Contains("<Error>"))
-                            {
-                                Console.WriteLine("⚠️ Logical error found in body (HTTP 200).");
-                            }
-                            else
-                            {
-                                Console.WriteLine("✅ Success.");
-                            }
-                            break;
-
-                        case 400:
-                            Console.WriteLine("❌ Bad Request: check input parameters.");
-                            break;
-
-                        case 401:
-                            Console.WriteLine("🔒 Unauthorized: credentials or token invalid.");
-                            break;
-
-                        case 403:
-                            Console.WriteLine("🚫 Forbidden: you do not have permission.");
-                            break;
-
-                        case 404:
-                            Console.WriteLine("❓ Not Found: endpoint or resource missing.");
-                            break;
-
-                        case 500:
-                            Console.WriteLine("💥 Internal Server Error: problem on the server.");
-                            break;
-
-                        default:
-                            Console.WriteLine($"⚠️ Unexpected status: {statusCode} {reason}");
-                            break;
-                    }
-
-                    // --- Combine diagnostic info ---
-                    response =
-                        $"HTTP {statusCode} {reason}\n" +
-                        $"Body:\n{body}\n";
-
-                    // Optional: log or save to file
-                    File.AppendAllText("ApiLog.txt",
-                        $"{DateTime.Now} - {statusCode} {reason}\n{body}\n----------------------\n");
-                }
-                catch (HttpRequestException httpEx)
-                {
-                    // Connection issues, DNS, SSL errors
-                    response = $"NETWORK ERROR\n{httpEx}";
-                    Console.WriteLine(response);
-                }
-                catch (TaskCanceledException tcEx)
-                {
-                    // Timeout
-                    response = "TIMEOUT: The request took too long.\n" + tcEx.ToString();
-                    Console.WriteLine(response);
-                }
-                catch (Exception ex)
-                {
-                    // Unexpected exception
-                    response = "UNEXPECTED ERROR\n" + ex.ToString();
-                    Console.WriteLine(response);
+                    return await HandleResponseAsync(resp).ConfigureAwait(false);
                 }
             }
         }
-    }
-    catch (Exception outerEx)
-    {
-        response = "SETUP FAILURE\n" + outerEx.ToString();
-        Console.WriteLine(response);
+        catch (TaskCanceledException ex)
+        {
+            return "TIMEOUT: The request timed out or was canceled.\n" + Flatten(ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            return "HTTP ERROR: network/connection failure.\n" + Flatten(ex);
+        }
+        catch (AuthenticationException ex)
+        {
+            return "TLS/SSL HANDSHAKE ERROR.\n" + Flatten(ex);
+        }
+        catch (Exception ex)
+        {
+            return "UNHANDLED FAILURE.\n" + Flatten(ex);
+        }
     }
 
-    return response;
+    private static async Task<string> HandleResponseAsync(HttpResponseMessage resp)
+    {
+        var status = (int)resp.StatusCode;
+        var reason = resp.ReasonPhrase ?? "";
+        var body = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        // Helpful single-line trace if you log:
+        // System.Diagnostics.Trace.WriteLine($"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}");
+
+        if (resp.IsSuccessStatusCode)
+        {
+            // If the service returns logical errors inside a 200 body:
+            if (body.IndexOf("<error", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                body.IndexOf("error", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return "LOGICAL ERROR (HTTP 200):\n" + body;
+            }
+
+            return body; // happy path: return raw XML/result to caller
+        }
+
+        // Map common statuses; include body for diagnostics
+        switch (status)
+        {
+            case 400: return $"400 Bad Request.\n{body}";
+            case 401: return $"401 Unauthorized.\n{body}";
+            case 403: return $"403 Forbidden.\n{body}";
+            case 404: return $"404 Not Found.\n{body}";
+            case 415: return $"415 Unsupported Media Type (ensure 'application/xml').\n{body}";
+            case 500: return $"500 Internal Server Error.\n{body}";
+            default:  return $"{status} {reason}.\n{body}";
+        }
+    }
+
+    private static string Flatten(Exception ex)
+        => ex.Message + (ex.InnerException != null ? "\n" + ex.InnerException.Message : "");
 }
