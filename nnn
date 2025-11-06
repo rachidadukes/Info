@@ -1,17 +1,16 @@
-SELECT 
-    [Id],
-    [AccountNumber],
-    LTRIM([AccountNumber], '0') AS AccountNumberWithoutZeros
-FROM AccessAcctNumbers;
-============================
+DELETE FROM AccessAcctNumbers
+WHERE Id NOT IN (
+    SELECT MIN(Id)
+    FROM AccessAcctNumbers
+    GROUP BY AccessNumber, AccountNumber, AccountType, Environment
+);
 
+===================================
 
-UPDATE AccessAcctNumbers
-SET AccountNumber = LTRIM(AccountNumber, '0')
-WHERE AccountNumber LIKE '0%';
+SELECT AccessNumber, AccountNumber, AccountType, Environment, COUNT(*) AS DuplicateCount
+FROM AccessAcctNumbers
+GROUP BY AccessNumber, AccountNumber, AccountType, Environment
+HAVING COUNT(*) > 1;
 
+================================
 
-===================
-
-SELECT DISTINCT AccountNumber FROM AccessAcctNumbers
-WHERE AccountNumber LIKE '0%';
