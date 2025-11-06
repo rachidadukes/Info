@@ -1,134 +1,35 @@
-using System;
-using System.Configuration;
-using System.Net;
-using System.Net.Http;
-using System.Security.Authentication;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-
-public class ApiXmlClientNoCert2
+try
 {
-    public async Task<string> GetResponseFromNewAPI(string xml)
+    var selectedAccessNum = selectedAcctAccessNumber.AccessNumber;
+    var selectedAcct      = Normalize(selectedAcctAccessNumber.AccountNumber);
+    var envir             = selectedAcctAccessNumber.Environment;
+
+    var memberProfile = await _memberProfileRepository.GetMemberProfileAsync(envir, selectedAccessNum);
+
+    if (memberProfile?.Data == null || memberProfile.IsSuccess == false)
     {
-        string endpointUrl;
-        string response;
-
-        try
-        {
-            // Keep your pattern
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-            ServicePointManager.Expect100Continue = false;
-            // DEV ONLY: uncomment below if testing with self-signed certs
-            // ServicePointManager.ServerCertificateValidationCallback = (s, c, ch, e) => true;
-
-            endpointUrl = ConfigurationManager.AppSettings["MessageConverterURL"];
-            if (string.IsNullOrWhiteSpace(endpointUrl))
-                return "CONFIG ERROR: 'MessageConverterURL' missing.";
-
-            using (var handler = new HttpClientHandler())
-            using (var client = new HttpClient(handler))
-            {
-                client.Timeout = TimeSpan.FromSeconds(30);
-
-                var content = new StringContent(xml, Encoding.UTF8, "application/xml");
-
-                // Log outgoing request for diagnostics
-                DiagnosticsUtil.LogInfo($"➡ Sending request to {endpointUrl}");
-
-                HttpResponseMessage resp = await client.PostAsync(endpointUrl, content);
-
-                response = await HandleHttpResponseAsync(resp);
-            }
-
-            return response;
-        }
-        catch (TaskCanceledException ex)
-        {
-            return DiagnosticsUtil.FormatException("TaskCanceledException", ex);
-        }
-        catch (HttpRequestException ex)
-        {
-            return DiagnosticsUtil.FormatException("HttpRequestException", ex);
-        }
-        catch (AuthenticationException ex)
-        {
-            return DiagnosticsUtil.FormatException("AuthenticationException", ex);
-        }
-        catch (Exception ex)
-        {
-            return DiagnosticsUtil.FormatException("SETUP FAILURE", ex);
-        }
+        MessageBox.Show($"Failed to retrieve member profile: {memberProfile?.ErrorMessage}", "Error", MessageBoxButton.OK);
+        return;
     }
 
-    // Now renamed and structured
-    private async Task<string> HandleHttpResponseAsync(HttpResponseMessage resp)
-    {
-        int statusCode = (int)resp.StatusCode;
-        string reason = resp.ReasonPhrase ?? "";
-        string body = await resp.Content.ReadAsStringAsync();
+    var accounts = memberProfile.Data.ProfileAccts ?? new List<AcctProfileDTO>();
+    if (accounts.Count == 0) return;
 
-        // Diagnostic trace
-        DiagnosticsUtil.LogInfo($"⬅ Response {statusCode} {reason}");
+    foreach (var acct in accounts)
+        acct.AccountNumber = Normalize(acct.AccountNumber);
 
-        if (resp.IsSuccessStatusCode)
-        {
-            // If body contains an internal logical error (your existing logic)
-            if (body.IndexOf("error", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                body.IndexOf("<Error", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return $"LOGICAL ERROR found in successful response.\n{body}";
-            }
-
-            return body; // return raw XML on success
-        }
-
-        // Otherwise map known error codes
-        switch (statusCode)
-        {
-            case 400: return DiagnosticsUtil.HttpError(statusCode, "Bad Request", body);
-            case 401: return DiagnosticsUtil.HttpError(statusCode, "Unauthorized", body);
-            case 403: return DiagnosticsUtil.HttpError(statusCode, "Forbidden", body);
-            case 404: return DiagnosticsUtil.HttpError(statusCode, "Not Found", body);
-            case 415: return DiagnosticsUtil.HttpError(statusCode, "Unsupported Media Type", body);
-            case 500: return DiagnosticsUtil.HttpError(statusCode, "Internal Server Error", body);
-            default:  return DiagnosticsUtil.HttpError(statusCode, reason, body);
-        }
-    }
+    var acctFound = accounts.FirstOrDefault(e => e.AccountNumber == selectedAcct);
+    if (acctFound != null)
+        await SaveCurrentBalanceAndStatus(selectedAccessNum, envir, acctFound);
 }
-======================================================
-using System;
-using System.Diagnostics;
-
-public static class DiagnosticsUtil
+catch (Exception ex)
 {
-    // Writes to Console and Trace simultaneously
-    public static void LogInfo(string message)
-    {
-        Console.WriteLine(message);
-        Trace.WriteLine($"{DateTime.Now:HH:mm:ss} {message}");
-    }
-
-    public static string FormatException(string type, Exception ex)
-    {
-        var msg = $"{type}: {ex.Message}";
-        if (ex.InnerException != null)
-            msg += $"\nInner: {ex.InnerException.Message}";
-        LogInfo($"❌ {msg}");
-        return msg;
-    }
-
-    public static string HttpError(int statusCode, string label, string body)
-    {
-        string message = $"{statusCode} {label}\n{body}";
-        LogInfo($"⚠ HTTP {statusCode} - {label}");
-        return message;
-    }
-
-    // Optional detailed stack output for deeper troubleshooting
-    public static string ExceptionToString(Exception ex)
-    {
-        return $"{ex.Message}\n{ex.StackTrace}";
-    }
+    Console.WriteLine($"Error in RetrieveMembersProfile: {ex.Message}");
 }
 
+private static string Normalize(string? value)
+{
+    if (string.IsNullOrEmpty(value)) return "0"; // or: return value;
+    var norm = value.TrimStart('0');
+    return norm.Length == 0 ? "0" : norm;
+}
