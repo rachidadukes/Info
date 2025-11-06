@@ -1,0 +1,17 @@
+SELECT 
+    [Id],
+    [AccountNumber],
+    LTRIM([AccountNumber], '0') AS AccountNumberWithoutZeros
+FROM AccessAcctNumbers;
+============================
+
+
+UPDATE AccessAcctNumbers
+SET AccountNumber = LTRIM(AccountNumber, '0')
+WHERE AccountNumber LIKE '0%';
+
+
+===================
+
+SELECT DISTINCT AccountNumber FROM AccessAcctNumbers
+WHERE AccountNumber LIKE '0%';
