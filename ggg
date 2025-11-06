@@ -1,0 +1,4 @@
+
+    // ✅ Remove leading zeros
+    accountNumber = accountNumber.TrimStart('0');
+    accessNumber = accessNumber.TrimStart('0');
