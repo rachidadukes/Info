@@ -1,48 +1,6 @@
-private static void BeautifyResponse(string rawXml)
+private static void PrintBlock(string text, Color color)
 {
-    // Pretty XML
-    string pretty = BeautifyXml(rawXml);
-
-    // Extract a few likely error fields
-    string infoMessage = ExtractTagContent(rawXml, "InfoMessage");
-    string statusDesc  = ExtractTagContent(rawXml, "StatusDesc");
-    string responseCode = ExtractTagContent(rawXml, "ResponseCode");
-
-    bool looksError =
-        (responseCode == "3") ||
-        Contains(rawXml, "error") ||
-        Contains(rawXml, "fault") ||
-        Contains(rawXml, "exception");
-
-    // Header
-    AnsiConsole.MarkupLine("[bold red]Response:[/]");
-
-    // 1) Beautified XML exactly like the white screen
-    AnsiConsole.MarkupLine("[grey]--- Beautified XML ---[/]");
-    PrintBlock(pretty, Color.Green);
-
-    // 2) Error paragraph (optional)
-    if (looksError)
-    {
-        var errorText = !string.IsNullOrWhiteSpace(infoMessage) ? infoMessage :
-                        !string.IsNullOrWhiteSpace(statusDesc)  ? statusDesc  :
-                        "Unknown error";
-
-        AnsiConsole.MarkupLine("[red]--- Detected Error Message ---[/]");
-        PrintBlock(errorText, Color.Red);
-    }
-}
-
-private static bool Contains(string s, string needle) =>
-    s?.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
-
-private static string ExtractTagContent(string xml, string tag)
-{
-    try
-    {
-        var x = XDocument.Parse(xml);
-        var n = x.Descendants().FirstOrDefault(e => e.Name.LocalName == tag);
-        return n?.Value?.Trim() ?? string.Empty;
-    }
-    catch { return string.Empty; }
+    var styled = new Text(text, new Style(foreground: color));
+    AnsiConsole.Write(styled);          // preserves all newlines/indentation
+    AnsiConsole.WriteLine();            // trailing newline
 }
