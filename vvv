@@ -1,6 +1,106 @@
-private static void PrintBlock(string text, Color color)
+using System;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Xml;
+using System.Xml.Linq;
+using Spectre.Console;
+
+public static class XmlResponseFormatter
 {
-    var styled = new Text(text, new Style(foreground: color));
-    AnsiConsole.Write(styled);          // preserves all newlines/indentation
-    AnsiConsole.WriteLine();            // trailing newline
+    public static void BeautifyResponse(string xml)
+    {
+        if (string.IsNullOrWhiteSpace(xml))
+        {
+            AnsiConsole.MarkupLine("[red]Empty response[/]");
+            return;
+        }
+
+        // ✅ Step 1: Beautify XML properly
+        string prettyXml = BeautifyXml(xml);
+
+        // ✅ Step 2: Extract meaningful error text if any
+        string infoMessage = ExtractTagContent(xml, "InfoMessage");
+        string statusDesc  = ExtractTagContent(xml, "StatusDesc");
+        string responseCode = ExtractTagContent(xml, "ResponseCode");
+
+        bool looksError =
+            xml.IndexOf("error", StringComparison.OrdinalIgnoreCase) >= 0 ||
+            xml.IndexOf("fault", StringComparison.OrdinalIgnoreCase) >= 0 ||
+            xml.IndexOf("exception", StringComparison.OrdinalIgnoreCase) >= 0 ||
+            responseCode == "3";
+
+        // ✅ Step 3: Print cleanly
+        AnsiConsole.MarkupLine("[bold red]Response:[/]");
+        AnsiConsole.WriteLine();
+
+        AnsiConsole.MarkupLine("[grey]--- Beautified XML ---[/]");
+        PrintPreserved(prettyXml, Color.Green);
+
+        if (looksError)
+        {
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine("[red]--- Detected Error Message ---[/]");
+
+            string finalError = !string.IsNullOrEmpty(infoMessage)
+                ? infoMessage
+                : !string.IsNullOrEmpty(statusDesc)
+                    ? statusDesc
+                    : "Unknown error";
+
+            PrintPreserved(finalError, Color.Red);
+        }
+    }
+
+    // ✅ Proper XML beautifier
+    private static string BeautifyXml(string xml)
+    {
+        try
+        {
+            var doc = XDocument.Parse(xml, LoadOptions.PreserveWhitespace);
+            var sb = new StringBuilder();
+
+            var settings = new XmlWriterSettings
+            {
+                Indent = true,
+                IndentChars = "  ",
+                NewLineChars = "\r\n",
+                NewLineHandling = NewLineHandling.Replace,
+                Encoding = new UTF8Encoding(false),
+                OmitXmlDeclaration = false
+            };
+
+            using (var writer = XmlWriter.Create(new StringWriter(sb), settings))
+                doc.Save(writer);
+
+            return sb.ToString();
+        }
+        catch
+        {
+            return xml; // fallback to raw XML
+        }
+    }
+
+    // ✅ Extract content of a given tag
+    private static string ExtractTagContent(string xml, string tag)
+    {
+        try
+        {
+            var doc = XDocument.Parse(xml);
+            var node = doc.Descendants().FirstOrDefault(e => e.Name.LocalName.Equals(tag, StringComparison.OrdinalIgnoreCase));
+            return node?.Value?.Trim() ?? string.Empty;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    // ✅ Preserve all line breaks (unlike MarkupLine)
+    private static void PrintPreserved(string text, Color color)
+    {
+        var block = new Text(text, new Style(foreground: color));
+        AnsiConsole.Write(block);
+        AnsiConsole.WriteLine();
+    }
 }
