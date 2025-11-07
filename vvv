@@ -1,0 +1,69 @@
+prettyResponse = prettyResponse.Replace(errorDetail, $"[red]{Markup.Escape(errorDetail)}[/]");
+AnsiConsole.MarkupLine(prettyResponse);
+
+
+
+
+private static void BeautifyResponse(string xmlString)
+{
+    // Pretty print the XML
+    var prettyResponse = BeautifyXmlString.BeautifyXml(xmlString);
+
+    // Detect errors in message body (case-insensitive)
+    bool looksError = xmlString.IndexOf("error", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                      xmlString.IndexOf("fault", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                      xmlString.IndexOf("exception", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                      xmlString.IndexOf("ResponseCode>3<", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                      xmlString.IndexOf("Host Connectivity", StringComparison.OrdinalIgnoreCase) >= 0;
+
+    // Highlight only the error paragraph if found
+    if (looksError)
+    {
+        // Try to extract the <InfoMessage> or <StatusDesc> text
+        string errorDetail = ExtractTagContent(xmlString, "InfoMessage");
+        if (string.IsNullOrEmpty(errorDetail))
+            errorDetail = ExtractTagContent(xmlString, "StatusDesc");
+
+        // Beautify and show with color highlighting
+        if (!string.IsNullOrEmpty(errorDetail))
+        {
+            AnsiConsole.MarkupLine("[green]--- Beautified XML ---[/]");
+            AnsiConsole.MarkupLine($"[green]{Markup.Escape(prettyResponse)}[/]");
+            AnsiConsole.MarkupLine("");
+            AnsiConsole.MarkupLine("[red]--- Detected Error Message ---[/]");
+            AnsiConsole.MarkupLine($"[red]{Markup.Escape(errorDetail)}[/]");
+        }
+        else
+        {
+            // fallback if no specific tag was found
+            AnsiConsole.MarkupLine($"[red]{Markup.Escape(prettyResponse)}[/]");
+        }
+    }
+    else
+    {
+        // Normal success case
+        AnsiConsole.MarkupLine($"[green]{Markup.Escape(prettyResponse)}[/]");
+    }
+}
+
+// Helper function to safely extract tag content
+private static string ExtractTagContent(string xml, string tagName)
+{
+    try
+    {
+        var startTag = $"<{tagName}>";
+        var endTag = $"</{tagName}>";
+
+        int startIndex = xml.IndexOf(startTag, StringComparison.OrdinalIgnoreCase);
+        int endIndex = xml.IndexOf(endTag, StringComparison.OrdinalIgnoreCase);
+
+        if (startIndex >= 0 && endIndex > startIndex)
+        {
+            int contentStart = startIndex + startTag.Length;
+            return xml.Substring(contentStart, endIndex - contentStart).Trim();
+        }
+    }
+    catch { }
+
+    return string.Empty;
+}
