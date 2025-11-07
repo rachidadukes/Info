@@ -1,69 +1,48 @@
-prettyResponse = prettyResponse.Replace(errorDetail, $"[red]{Markup.Escape(errorDetail)}[/]");
-AnsiConsole.MarkupLine(prettyResponse);
-
-
-
-
-private static void BeautifyResponse(string xmlString)
+private static void BeautifyResponse(string rawXml)
 {
-    // Pretty print the XML
-    var prettyResponse = BeautifyXmlString.BeautifyXml(xmlString);
+    // Pretty XML
+    string pretty = BeautifyXml(rawXml);
 
-    // Detect errors in message body (case-insensitive)
-    bool looksError = xmlString.IndexOf("error", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                      xmlString.IndexOf("fault", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                      xmlString.IndexOf("exception", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                      xmlString.IndexOf("ResponseCode>3<", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                      xmlString.IndexOf("Host Connectivity", StringComparison.OrdinalIgnoreCase) >= 0;
+    // Extract a few likely error fields
+    string infoMessage = ExtractTagContent(rawXml, "InfoMessage");
+    string statusDesc  = ExtractTagContent(rawXml, "StatusDesc");
+    string responseCode = ExtractTagContent(rawXml, "ResponseCode");
 
-    // Highlight only the error paragraph if found
+    bool looksError =
+        (responseCode == "3") ||
+        Contains(rawXml, "error") ||
+        Contains(rawXml, "fault") ||
+        Contains(rawXml, "exception");
+
+    // Header
+    AnsiConsole.MarkupLine("[bold red]Response:[/]");
+
+    // 1) Beautified XML exactly like the white screen
+    AnsiConsole.MarkupLine("[grey]--- Beautified XML ---[/]");
+    PrintBlock(pretty, Color.Green);
+
+    // 2) Error paragraph (optional)
     if (looksError)
     {
-        // Try to extract the <InfoMessage> or <StatusDesc> text
-        string errorDetail = ExtractTagContent(xmlString, "InfoMessage");
-        if (string.IsNullOrEmpty(errorDetail))
-            errorDetail = ExtractTagContent(xmlString, "StatusDesc");
+        var errorText = !string.IsNullOrWhiteSpace(infoMessage) ? infoMessage :
+                        !string.IsNullOrWhiteSpace(statusDesc)  ? statusDesc  :
+                        "Unknown error";
 
-        // Beautify and show with color highlighting
-        if (!string.IsNullOrEmpty(errorDetail))
-        {
-            AnsiConsole.MarkupLine("[green]--- Beautified XML ---[/]");
-            AnsiConsole.MarkupLine($"[green]{Markup.Escape(prettyResponse)}[/]");
-            AnsiConsole.MarkupLine("");
-            AnsiConsole.MarkupLine("[red]--- Detected Error Message ---[/]");
-            AnsiConsole.MarkupLine($"[red]{Markup.Escape(errorDetail)}[/]");
-        }
-        else
-        {
-            // fallback if no specific tag was found
-            AnsiConsole.MarkupLine($"[red]{Markup.Escape(prettyResponse)}[/]");
-        }
-    }
-    else
-    {
-        // Normal success case
-        AnsiConsole.MarkupLine($"[green]{Markup.Escape(prettyResponse)}[/]");
+        AnsiConsole.MarkupLine("[red]--- Detected Error Message ---[/]");
+        PrintBlock(errorText, Color.Red);
     }
 }
 
-// Helper function to safely extract tag content
-private static string ExtractTagContent(string xml, string tagName)
+private static bool Contains(string s, string needle) =>
+    s?.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
+
+private static string ExtractTagContent(string xml, string tag)
 {
     try
     {
-        var startTag = $"<{tagName}>";
-        var endTag = $"</{tagName}>";
-
-        int startIndex = xml.IndexOf(startTag, StringComparison.OrdinalIgnoreCase);
-        int endIndex = xml.IndexOf(endTag, StringComparison.OrdinalIgnoreCase);
-
-        if (startIndex >= 0 && endIndex > startIndex)
-        {
-            int contentStart = startIndex + startTag.Length;
-            return xml.Substring(contentStart, endIndex - contentStart).Trim();
-        }
+        var x = XDocument.Parse(xml);
+        var n = x.Descendants().FirstOrDefault(e => e.Name.LocalName == tag);
+        return n?.Value?.Trim() ?? string.Empty;
     }
-    catch { }
-
-    return string.Empty;
+    catch { return string.Empty; }
 }
