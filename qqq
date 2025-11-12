@@ -1,51 +1,9 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-// using Spectre.Console; // if you're using it elsewhere
-
-namespace NoCertClient
+for (int i = 0; i < toShow.Count; i += columns)
 {
-    public static class ConsoleDisplayHelper
-    {
-        // Keep a running list of completed transactions in this session
-        // NOTE: ValueTuple requires the System.ValueTuple NuGet package in .NET Fx projects.
-        private static readonly List<(DateTime When, UserInputModel Input, string WhichService)> _history =
-            new List<(DateTime When, UserInputModel Input, string WhichService)>();
+    var row = toShow.Skip(i).Take(columns).ToList();
+    var cells = row.Select(s => s ?? string.Empty).ToList();
+    while (cells.Count < columns)
+        cells.Add(string.Empty);
 
-        public static void PrintServiceHeader(string whichService)
-        {
-            if (string.IsNullOrWhiteSpace(whichService))
-                whichService = "Service";
-
-            // Example if you use Spectre.Console:
-            // AnsiConsole.MarkupLine($"[blue]Calling {EscapeMarkup(whichService)}[/]");
-            // AnsiConsole.WriteLine();
-        }
-
-        /// <summary>
-        /// Returns first N lines and indicates if truncation occurred.
-        /// </summary>
-        private static Tuple<string, bool> TakeFirstLines(string input, int maxLines)
-        {
-            if (maxLines <= 0 || string.IsNullOrEmpty(input))
-                return Tuple.Create(input ?? string.Empty, false);
-
-            // Split to lines
-            var lines = (input ?? string.Empty)
-                .Replace("\r\n", "\n")
-                .Split('\n');
-
-            if (lines.Length <= maxLines)
-                return Tuple.Create(string.Join("\n", lines), false);
-
-            var head = string.Join("\n", lines.Take(maxLines));
-            return Tuple.Create(head + "\n... (truncated)", true);
-        }
-
-        // If you had a Spectre helper:
-        // private static string EscapeMarkup(string s) => Markup.Escape(s ?? string.Empty);
-    }
-
-    // Stub so file compiles in this snippet
-    public class UserInputModel { }
+    grid.AddRow(cells.ToArray());
 }
