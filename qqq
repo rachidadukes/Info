@@ -1,9 +1,43 @@
-for (int i = 0; i < toShow.Count; i += columns)
-{
-    var row = toShow.Skip(i).Take(columns).ToList();
-    var cells = row.Select(s => s ?? string.Empty).ToList();
-    while (cells.Count < columns)
-        cells.Add(string.Empty);
+using System.Data.Common;
+using System.Data.Entity;
+using System.Data.SQLite;
+using EntitiesLib;
 
-    grid.AddRow(cells.ToArray());
+namespace DataLib
+{
+    public class DbContextSQLite : DbContext
+    {
+        // Constructor explicitly creates a SQLite connection
+        public DbContextSQLite()
+            : base(CreateConnection(), contextOwnsConnection: true)
+        {
+        }
+
+        private static DbConnection CreateConnection()
+        {
+            // Full absolute path to your SQLite file
+            var connectionString = 
+                @"Data Source=C:\Code\EncoreRachida\00. Encore eServices - Modify HostMsg\Apps\Requests\RequestsDB.db;Version=3;Foreign Keys=True;FailIfMissing=True;";
+
+            var connection = new SQLiteConnection(connectionString);
+            return connection;
+        }
+
+        // DbSets represent your database tables
+        public DbSet<RequestModel> Request { get; set; }
+        public DbSet<ResponseModel> Response { get; set; }
+
+        protected override void OnModelCreating(DbModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+
+            // Explicitly map tables
+            modelBuilder.Entity<RequestModel>()
+                        .ToTable("Request")
+                        .HasKey(e => e.RequestId);
+
+            modelBuilder.Entity<ResponseModel>()
+                        .ToTable("Response");
+        }
+    }
 }
