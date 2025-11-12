@@ -1,0 +1,21 @@
+using System.Data.Entity;
+
+public class DbContextSQLite : DbContext
+{
+    public DbContextSQLite()
+        : base("name=YourConnectionStringName")
+    {
+    }
+
+    public DbSet<TransactionRequestModel> TransactionRequests { get; set; }
+    public DbSet<TransactionTypeModel> TransactionTypes { get; set; }
+    public DbSet<AccessAcctNumbersModel> AccessAcctNumbers { get; set; }
+    public DbSet<RequestHeaderTemplateModel> RequestHeaderTemplate { get; set; }
+    public DbSet<RequestResponseModel> RequestResponse { get; set; }
+
+    protected override void OnModelCreating(DbModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+        modelBuilder.Entity<TransactionRequestModel>().ToTable("TransactionRequests");
+    }
+}
