@@ -1,21 +1,51 @@
-using System.Data.Entity;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+// using Spectre.Console; // if you're using it elsewhere
 
-public class DbContextSQLite : DbContext
+namespace NoCertClient
 {
-    public DbContextSQLite()
-        : base("name=YourConnectionStringName")
+    public static class ConsoleDisplayHelper
     {
+        // Keep a running list of completed transactions in this session
+        // NOTE: ValueTuple requires the System.ValueTuple NuGet package in .NET Fx projects.
+        private static readonly List<(DateTime When, UserInputModel Input, string WhichService)> _history =
+            new List<(DateTime When, UserInputModel Input, string WhichService)>();
+
+        public static void PrintServiceHeader(string whichService)
+        {
+            if (string.IsNullOrWhiteSpace(whichService))
+                whichService = "Service";
+
+            // Example if you use Spectre.Console:
+            // AnsiConsole.MarkupLine($"[blue]Calling {EscapeMarkup(whichService)}[/]");
+            // AnsiConsole.WriteLine();
+        }
+
+        /// <summary>
+        /// Returns first N lines and indicates if truncation occurred.
+        /// </summary>
+        private static Tuple<string, bool> TakeFirstLines(string input, int maxLines)
+        {
+            if (maxLines <= 0 || string.IsNullOrEmpty(input))
+                return Tuple.Create(input ?? string.Empty, false);
+
+            // Split to lines
+            var lines = (input ?? string.Empty)
+                .Replace("\r\n", "\n")
+                .Split('\n');
+
+            if (lines.Length <= maxLines)
+                return Tuple.Create(string.Join("\n", lines), false);
+
+            var head = string.Join("\n", lines.Take(maxLines));
+            return Tuple.Create(head + "\n... (truncated)", true);
+        }
+
+        // If you had a Spectre helper:
+        // private static string EscapeMarkup(string s) => Markup.Escape(s ?? string.Empty);
     }
 
-    public DbSet<TransactionRequestModel> TransactionRequests { get; set; }
-    public DbSet<TransactionTypeModel> TransactionTypes { get; set; }
-    public DbSet<AccessAcctNumbersModel> AccessAcctNumbers { get; set; }
-    public DbSet<RequestHeaderTemplateModel> RequestHeaderTemplate { get; set; }
-    public DbSet<RequestResponseModel> RequestResponse { get; set; }
-
-    protected override void OnModelCreating(DbModelBuilder modelBuilder)
-    {
-        base.OnModelCreating(modelBuilder);
-        modelBuilder.Entity<TransactionRequestModel>().ToTable("TransactionRequests");
-    }
+    // Stub so file compiles in this snippet
+    public class UserInputModel { }
 }
