@@ -1,4 +1,0 @@
-Thought for 1m 50shttps://encore-dev.nfcu.net/transfer/actuator/env
-DEL {{mock_url}}/_admin/requests
-GET https://encore-dev.nfcu.net/transfer/actuator/env
-GET https://encore-dev.nfcu.net/deposit/actuator/env
