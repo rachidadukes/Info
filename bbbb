@@ -1,18 +1,20 @@
 using Microsoft.Data.Sqlite;
 using System;
 using System.IO;
+using System.Text;
 
 public static class SqliteLogCopier
 {
     /// <summary>
-    /// Copies all rows from LogDetails in sourceDbPath to LogDetails in destinationDbPath.
-    /// Destination table is emptied first.
-    /// Returns true on success; false on error and sets errorMessage.
+    /// Copies all rows for the given table names from sourceDbPath to destinationDbPath.
+    /// For each table: DELETE destinationTable; INSERT INTO destinationTable SELECT * FROM sourceTable.
+    /// All work is done in a single transaction. Returns true on success; false on error.
     /// </summary>
-    public static bool CopyLogDetails(
+    public static bool CopyTables(
         string sourceDbPath,
         string destinationDbPath,
-        out string errorMessage)
+        out string errorMessage,
+        params string[] tableNames)
     {
         errorMessage = string.Empty;
 
@@ -23,6 +25,9 @@ public static class SqliteLogCopier
 
             if (!File.Exists(destinationDbPath))
                 throw new FileNotFoundException("Destination DB not found.", destinationDbPath);
+
+            if (tableNames == null || tableNames.Length == 0)
+                throw new ArgumentException("You must specify at least one table name.", nameof(tableNames));
 
             var destConnString = new SqliteConnectionStringBuilder
             {
@@ -36,18 +41,22 @@ public static class SqliteLogCopier
             using var cmd = connection.CreateCommand();
             cmd.Transaction = transaction;
 
-            cmd.CommandText = @"
-                ATTACH DATABASE $srcPath AS SrcDb;
+            // Build SQL: attach once, loop over tables, detach once
+            var sb = new StringBuilder();
+            sb.AppendLine("ATTACH DATABASE $srcPath AS SrcDb;");
 
-                DELETE FROM LogDetails;
+            foreach (var table in tableNames)
+            {
+                // Simple safety: quote identifiers
+                var safeTable = table.Replace("\"", "\"\""); // escape double quotes
 
-                INSERT INTO LogDetails
-                SELECT *
-                FROM SrcDb.LogDetails;
+                sb.AppendLine($@"DELETE FROM ""{safeTable}"";");
+                sb.AppendLine($@"INSERT INTO ""{safeTable}"" SELECT * FROM SrcDb.""{safeTable}"";");
+            }
 
-                DETACH DATABASE SrcDb;
-            ";
+            sb.AppendLine("DETACH DATABASE SrcDb;");
 
+            cmd.CommandText = sb.ToString();
             cmd.Parameters.AddWithValue("$srcPath", sourceDbPath);
 
             cmd.ExecuteNonQuery();
@@ -62,35 +71,34 @@ public static class SqliteLogCopier
         }
         catch (SqliteException ex)
         {
-            // Any SQLite-specific issues (locking, SQL error, etc.)
-            errorMessage = $"SQLite error while copying LogDetails: {ex.Message}";
+            errorMessage = $"SQLite error while copying tables: {ex.Message}";
             return false;
         }
         catch (Exception ex)
         {
-            // Anything unexpected
-            errorMessage = $"Unexpected error while copying LogDetails: {ex.Message}";
+            errorMessage = $"Unexpected error while copying tables: {ex.Message}";
             return false;
         }
     }
 }
 
 
-
-
-
-========================
-
+==========================================
 
 string error;
-bool ok = SqliteLogCopier.CopyLogDetails(
+bool ok = SqliteLogCopier.CopyTables(
     @"C:\Path\To\SQLiteLogs.db",
     @"C:\Path\To\SQLiteLogsTransactions.db",
-    out error);
+    out error,
+    "LogDetails",
+    "RequestResponse"   // second table
+);
 
 if (!ok)
 {
-    // In WPF you might show a MessageBox, log, etc.
-    MessageBox.Show(error, "Copy LogDetails Failed");
+    MessageBox.Show(error, "Copy Tables Failed");
 }
-
+else
+{
+    MessageBox.Show("Tables copied successfully.");
+}
