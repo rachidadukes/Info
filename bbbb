@@ -1,0 +1,51 @@
+using Microsoft.Data.Sqlite;
+using System;
+using System.IO;
+
+public static class SqliteLogCopier
+{
+    public static void CopyLogDetails(
+        string sourceDbPath,          // e.g. @"C:\Db\SQLiteLogs.db"
+        string destinationDbPath      // e.g. @"C:\Db\SQLiteLogsTransactions.db"
+    )
+    {
+        if (!File.Exists(sourceDbPath))
+            throw new FileNotFoundException("Source DB not found", sourceDbPath);
+
+        if (!File.Exists(destinationDbPath))
+            throw new FileNotFoundException("Destination DB not found", destinationDbPath);
+
+        var destConnString = new SqliteConnectionStringBuilder
+        {
+            DataSource = destinationDbPath
+        }.ToString();
+
+        using var connection = new SqliteConnection(destConnString);
+        connection.Open();
+
+        using var transaction = connection.BeginTransaction();
+        using var cmd = connection.CreateCommand();
+        cmd.Transaction = transaction;
+
+        cmd.CommandText = @"
+            -- Attach the source DB
+            ATTACH DATABASE $srcPath AS SrcDb;
+
+            -- 1. Empty destination table
+            DELETE FROM LogDetails;
+
+            -- 2. Copy data from source to destination
+            INSERT INTO LogDetails
+            SELECT *
+            FROM SrcDb.LogDetails;
+
+            -- Detach when done
+            DETACH DATABASE SrcDb;
+        ";
+
+        cmd.Parameters.AddWithValue("$srcPath", sourceDbPath);
+
+        cmd.ExecuteNonQuery();
+        transaction.Commit();
+    }
+}
