@@ -1,1 +1,43 @@
 
+string sourceDb  = @"C:\Path\To\SQLiteLogs.db";
+    string destDb    = @"C:\Path\To\SQLiteLogsTransactions.db";
+
+    // Optional: disable button so user can't click twice
+    btnCopyLogs.IsEnabled = false;
+
+    // Show hourglass cursor
+    Mouse.OverrideCursor = Cursors.Wait;
+
+    try
+    {
+        // Run the copy on a background thread so the UI stays responsive
+        var result = await Task.Run(() =>
+        {
+            bool ok = SqliteLogCopier.CopyTables(
+                sourceDb,
+                destDb,
+                out string errorMessage,
+                "LogDetails",
+                "RequestResponse"   // your second table
+            );
+
+            return (ok, errorMessage);
+        });
+
+        if (!result.ok)
+        {
+            MessageBox.Show(result.errorMessage, "Copy Failed",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        else
+        {
+            MessageBox.Show("Tables copied successfully.",
+                "Done", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+    }
+    finally
+    {
+        // Always restore cursor & button, even if there was an error
+        Mouse.OverrideCursor = null;
+        btnCopyLogs.IsEnabled = true;
+    }
