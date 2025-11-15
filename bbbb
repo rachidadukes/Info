@@ -1,125 +1,110 @@
-using Microsoft.Data.Sqlite;
-using System;
-using System.IO;
-using System.Text;
-
-public static class SqliteLogCopier
+public static bool CopySingleTable(
+    string sourceDbPath,
+    string destinationDbPath,
+    string tableName,
+    out string errorMessage)
 {
-    public static bool CopyTables(
-        string sourceDbPath,
-        string destinationDbPath,
-        out string errorMessage,
-        params string[] tableNames)
-    {
-        errorMessage = string.Empty;
-
-        try
-        {
-            if (!File.Exists(sourceDbPath))
-                throw new FileNotFoundException("Source DB not found.", sourceDbPath);
-
-            if (!File.Exists(destinationDbPath))
-                throw new FileNotFoundException("Destination DB not found.", destinationDbPath);
-
-            if (tableNames == null || tableNames.Length == 0)
-                throw new ArgumentException("You must specify at least one table name.", nameof(tableNames));
-
-            // IMPORTANT: close any pooled SQLite connections from this process
-            SqliteConnection.ClearAllPools();
-
-            var destConnString = new SqliteConnectionStringBuilder
-            {
-                DataSource = destinationDbPath
-            }.ToString();
-
-            using var connection = new SqliteConnection(destConnString);
-            connection.DefaultTimeout = 10; // seconds
-            connection.Open();
-
-            // Wait up to 5 seconds if another process temporarily holds a lock
-            using (var pragmaCmd = connection.CreateCommand())
-            {
-                pragmaCmd.CommandText = "PRAGMA busy_timeout = 5000;";
-                pragmaCmd.ExecuteNonQuery();
-            }
-
-            using var transaction = connection.BeginTransaction();
-            using var cmd = connection.CreateCommand();
-            cmd.Transaction = transaction;
-
-            var sb = new StringBuilder();
-            sb.AppendLine("ATTACH DATABASE $srcPath AS SrcDb;");
-
-            foreach (var table in tableNames)
-            {
-                var safeTable = table.Replace("\"", "\"\"");
-
-                sb.AppendLine($@"DELETE FROM ""{safeTable}"";");
-                sb.AppendLine($@"INSERT INTO ""{safeTable}"" SELECT * FROM SrcDb.""{safeTable}"";");
-            }
-
-            sb.AppendLine("DETACH DATABASE SrcDb;");
-
-            cmd.CommandText = sb.ToString();
-            cmd.Parameters.AddWithValue("$srcPath", sourceDbPath);
-
-            cmd.ExecuteNonQuery();
-            transaction.Commit();
-
-            return true;
-        }
-        catch (FileNotFoundException ex)
-        {
-            errorMessage = $"File not found: {ex.FileName}";
-            return false;
-        }
-        catch (SqliteException ex)
-        {
-            errorMessage = $"SQLite error while copying tables: {ex.Message}";
-            return false;
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"Unexpected error while copying tables: {ex.Message}";
-            return false;
-        }
-    }
-}
-
-
-===========================
-
-
-private async void btnCopyLogs_Click(object sender, RoutedEventArgs e)
-{
-    Mouse.OverrideCursor = Cursors.Wait;
-    btnCopyLogs.IsEnabled = false;
+    errorMessage = string.Empty;
 
     try
     {
-        SqliteConnection.ClearAllPools(); // extra safety
+        if (!File.Exists(sourceDbPath))
+            throw new FileNotFoundException("Source DB not found.", sourceDbPath);
 
-        var result = await Task.Run(() =>
+        if (!File.Exists(destinationDbPath))
+            throw new FileNotFoundException("Destination DB not found.", destinationDbPath);
+
+        SqliteConnection.ClearAllPools();
+
+        var srcConnString = new SqliteConnectionStringBuilder
         {
-            bool ok = SqliteLogCopier.CopyTables(
-                @"C:\Path\SQLiteLogs.db",
-                @"C:\Path\SQLiteLogsTransactions.db",
-                out string error,
-                "LogDetails",
-                "RequestResponse");
+            DataSource = sourceDbPath,
+            Mode       = SqliteOpenMode.ReadOnly
+        }.ToString();
 
-            return (ok, error);
-        });
+        var destConnString = new SqliteConnectionStringBuilder
+        {
+            DataSource = destinationDbPath
+        }.ToString();
 
-        if (!result.ok)
-            MessageBox.Show(result.error, "Copy Failed");
-        else
-            MessageBox.Show("Copy completed successfully.");
+        using var src  = new SqliteConnection(srcConnString);
+        using var dest = new SqliteConnection(destConnString);
+
+        src.Open();
+        dest.Open();
+
+        using var tx = dest.BeginTransaction();
+
+        var safeTable = tableName.Replace("\"", "\"\"");
+
+        // 1) Clear destination table
+        using (var delCmd = dest.CreateCommand())
+        {
+            delCmd.Transaction = tx;
+            delCmd.CommandText = $@"DELETE FROM ""{safeTable}"";";
+            delCmd.ExecuteNonQuery();
+        }
+
+        // 2) Read from source and insert into dest
+        using (var selCmd = src.CreateCommand())
+        {
+            selCmd.CommandText = $@"SELECT * FROM ""{safeTable}"";";
+            using var reader = selCmd.ExecuteReader();
+
+            // Build INSERT based on column names
+            var columnNames = Enumerable.Range(0, reader.FieldCount)
+                                        .Select(reader.GetName)
+                                        .ToArray();
+
+            var cols  = string.Join(",", columnNames.Select(n => $@"""{n}"""));
+            var parms = string.Join(",", columnNames.Select((n, i) => $"@p{i}"));
+
+            using var insCmd = dest.CreateCommand();
+            insCmd.Transaction = tx;
+            insCmd.CommandText = $@"INSERT INTO ""{safeTable}"" ({cols}) VALUES ({parms});";
+
+            while (reader.Read())
+            {
+                insCmd.Parameters.Clear();
+                for (int i = 0; i < reader.FieldCount; i++)
+                {
+                    var value = reader.IsDBNull(i) ? DBNull.Value : reader.GetValue(i);
+                    insCmd.Parameters.AddWithValue($"@p{i}", value);
+                }
+
+                insCmd.ExecuteNonQuery();
+            }
+        }
+
+        tx.Commit();
+        return true;
     }
-    finally
+    catch (Exception ex)
     {
-        Mouse.OverrideCursor = null;
-        btnCopyLogs.IsEnabled = true;
+        errorMessage = $"Error while copying table '{tableName}': {ex.Message}";
+        return false;
     }
 }
+
+
+
+=========================
+string error;
+bool ok1 = SqliteLogCopier.CopySingleTable(
+    @"C:\Path\SQLiteLogs.db",
+    @"C:\Path\SQLiteLogsTransactions.db",
+    "LogDetails",
+    out error);
+
+if (!ok1) { MessageBox.Show(error); return; }
+
+bool ok2 = SqliteLogCopier.CopySingleTable(
+    @"C:\Path\SQLiteLogs.db",
+    @"C:\Path\SQLiteLogsTransactions.db",
+    "RequestResponse",
+    out error);
+
+if (!ok2) { MessageBox.Show(error); return; }
+
+MessageBox.Show("Tables copied successfully.");
 
