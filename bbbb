@@ -4,48 +4,93 @@ using System.IO;
 
 public static class SqliteLogCopier
 {
-    public static void CopyLogDetails(
-        string sourceDbPath,          // e.g. @"C:\Db\SQLiteLogs.db"
-        string destinationDbPath      // e.g. @"C:\Db\SQLiteLogsTransactions.db"
-    )
+    /// <summary>
+    /// Copies all rows from LogDetails in sourceDbPath to LogDetails in destinationDbPath.
+    /// Destination table is emptied first.
+    /// Returns true on success; false on error and sets errorMessage.
+    /// </summary>
+    public static bool CopyLogDetails(
+        string sourceDbPath,
+        string destinationDbPath,
+        out string errorMessage)
     {
-        if (!File.Exists(sourceDbPath))
-            throw new FileNotFoundException("Source DB not found", sourceDbPath);
+        errorMessage = string.Empty;
 
-        if (!File.Exists(destinationDbPath))
-            throw new FileNotFoundException("Destination DB not found", destinationDbPath);
-
-        var destConnString = new SqliteConnectionStringBuilder
+        try
         {
-            DataSource = destinationDbPath
-        }.ToString();
+            if (!File.Exists(sourceDbPath))
+                throw new FileNotFoundException("Source DB not found.", sourceDbPath);
 
-        using var connection = new SqliteConnection(destConnString);
-        connection.Open();
+            if (!File.Exists(destinationDbPath))
+                throw new FileNotFoundException("Destination DB not found.", destinationDbPath);
 
-        using var transaction = connection.BeginTransaction();
-        using var cmd = connection.CreateCommand();
-        cmd.Transaction = transaction;
+            var destConnString = new SqliteConnectionStringBuilder
+            {
+                DataSource = destinationDbPath
+            }.ToString();
 
-        cmd.CommandText = @"
-            -- Attach the source DB
-            ATTACH DATABASE $srcPath AS SrcDb;
+            using var connection = new SqliteConnection(destConnString);
+            connection.Open();
 
-            -- 1. Empty destination table
-            DELETE FROM LogDetails;
+            using var transaction = connection.BeginTransaction();
+            using var cmd = connection.CreateCommand();
+            cmd.Transaction = transaction;
 
-            -- 2. Copy data from source to destination
-            INSERT INTO LogDetails
-            SELECT *
-            FROM SrcDb.LogDetails;
+            cmd.CommandText = @"
+                ATTACH DATABASE $srcPath AS SrcDb;
 
-            -- Detach when done
-            DETACH DATABASE SrcDb;
-        ";
+                DELETE FROM LogDetails;
 
-        cmd.Parameters.AddWithValue("$srcPath", sourceDbPath);
+                INSERT INTO LogDetails
+                SELECT *
+                FROM SrcDb.LogDetails;
 
-        cmd.ExecuteNonQuery();
-        transaction.Commit();
+                DETACH DATABASE SrcDb;
+            ";
+
+            cmd.Parameters.AddWithValue("$srcPath", sourceDbPath);
+
+            cmd.ExecuteNonQuery();
+            transaction.Commit();
+
+            return true;
+        }
+        catch (FileNotFoundException ex)
+        {
+            errorMessage = $"File not found: {ex.FileName}";
+            return false;
+        }
+        catch (SqliteException ex)
+        {
+            // Any SQLite-specific issues (locking, SQL error, etc.)
+            errorMessage = $"SQLite error while copying LogDetails: {ex.Message}";
+            return false;
+        }
+        catch (Exception ex)
+        {
+            // Anything unexpected
+            errorMessage = $"Unexpected error while copying LogDetails: {ex.Message}";
+            return false;
+        }
     }
 }
+
+
+
+
+
+========================
+
+
+string error;
+bool ok = SqliteLogCopier.CopyLogDetails(
+    @"C:\Path\To\SQLiteLogs.db",
+    @"C:\Path\To\SQLiteLogsTransactions.db",
+    out error);
+
+if (!ok)
+{
+    // In WPF you might show a MessageBox, log, etc.
+    MessageBox.Show(error, "Copy LogDetails Failed");
+}
+
