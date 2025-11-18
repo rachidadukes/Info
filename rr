@@ -1,0 +1,24 @@
+using Spectre.Console;
+
+var accounts = new List<Account>
+{
+    new("001234567"),
+    new("001234568"),
+    new("001234569")
+};
+
+var selectedAccount = AnsiConsole.Prompt(
+    new SelectionPrompt<Account>()
+        .Title("Select an [green]account[/]:")
+        .PageSize(10)
+        .MoreChoicesText("[grey](Move up and down to see more accounts)[/]")
+        .UseConverter(a => a.Number)   // display only the number
+        .AddChoices(accounts));
+
+AnsiConsole.MarkupLine($"You selected: [yellow]{selectedAccount.Number}[/]");
+
+Console.WriteLine();
+Console.WriteLine("Press any key to exit...");
+Console.ReadKey();
+
+public record Account(string Number);
