@@ -1,0 +1,74 @@
+Private Sub SendToConverterEndpoint(ByRef xml As String, ByRef response As String)
+    Const ROUTINE As String = "HostMsg.SendToSTEndpoint"
+    Const LogTraceKey As String = "HostMsgLogTrace"
+
+    ' read trace setting once
+    Dim traceSetting As String = ConfigurationManager.AppSettings.Get(LogTraceKey)
+    If String.IsNullOrEmpty(traceSetting) Then
+        traceSetting = Constants.Trace.None
+    End If
+
+    Dim endpointUrl As String = ConfigurationManager.AppSettings.Get("MessageConverterURL")
+    Dim sendTime As String = String.Empty
+    Dim recvTime As String = String.Empty
+
+    Try
+        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12
+
+        ' ----- do the HTTP call -----
+        sendTime = Now.ToString("MM/dd/yyyy HH:mm:ss.ffff")
+
+        Using client As New HttpClient()
+            client.Timeout = TimeSpan.FromSeconds(30)
+
+            Dim content As New StringContent(xml, System.Text.Encoding.UTF8, "application/xml")
+            Dim resp As HttpResponseMessage = client.PostAsync(endpointUrl, content).Result
+
+            response = resp.Content.ReadAsStringAsync().Result
+            recvTime = Now.ToString("MM/dd/yyyy HH:mm:ss.ffff")
+
+            If Not resp.IsSuccessStatusCode Then
+                Throw New HttpRequestException( _
+                    String.Format("{0} Error {1}: {2}", ROUTINE, CInt(resp.StatusCode), response))
+            End If
+        End Using
+
+        ' ============================
+        ' THIS IS THE ONE CALL YOU NEEDED
+        ' ============================
+        Dim traceLog As String = BuildTraceLog(traceSetting, _
+                                               "Send to Converter", _
+                                               "Receive from Converter", _
+                                               sendTime, _
+                                               recvTime, _
+                                               xml, _
+                                               response, _
+                                               False)   ' success path
+
+        If traceLog.Length > 0 AndAlso _
+           Not traceSetting.Equals(Constants.Trace.None, StringComparison.OrdinalIgnoreCase) Then
+
+            RaiseEvent LogError(msDBID, traceLog, "Trace to/from Converter")
+        End If
+
+    Catch ex As Exception
+        ' optional: log payloads even on error, same helper:
+        Dim traceLog As String = BuildTraceLog(traceSetting, _
+                                               "Send to Converter", _
+                                               "Receive from Converter", _
+                                               Nothing, _
+                                               Nothing, _
+                                               xml, _
+                                               response, _
+                                               True)   ' error path
+
+        If traceLog.Length > 0 AndAlso _
+           Not traceSetting.Equals(Constants.Trace.None, StringComparison.OrdinalIgnoreCase) Then
+
+            RaiseEvent LogError(msDBID, Left(traceLog, 6000), "Trace to/from Converter")
+        End If
+
+        RaiseEvent LogError(msDBID, ex.Message, ROUTINE)
+        Throw
+    End Try
+End Sub
