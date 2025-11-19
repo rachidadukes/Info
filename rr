@@ -1,22 +1,12 @@
-using System;
-using System.Globalization;
-using Spectre.Console;
-
-namespace ConsoleApp10
-{
-    internal class Program
-    {
-        static void Main(string[] args)
-        {
-            // Default values
-            var defaultUserId = Environment.UserName; // or "testuser"
-            var defaultDateTo = DateOnly.FromDateTime(DateTime.Today);
-            var defaultDateFrom = defaultDateTo.AddDays(-7);
+   // Default values (DateTime)
+            DateTime defaultDateTo = DateTime.Today;
+            DateTime defaultDateFrom = defaultDateTo.AddDays(-7);
+            string defaultUserId = Environment.UserName; // or "testuser"
 
             AnsiConsole.MarkupLine("[bold cyan]User search parameters[/]");
 
             // Ask for User Id with default
-            var userId = AnsiConsole.Prompt(
+            string userId = AnsiConsole.Prompt(
                 new TextPrompt<string>("Enter [green]User Id[/]:")
                     .PromptStyle("yellow")
                     .DefaultValue(defaultUserId)
@@ -29,15 +19,21 @@ namespace ConsoleApp10
                     }));
 
             // Ask for DateFrom with default
-            var dateFrom = PromptForDate(
+            DateTime dateFrom = PromptForDate(
                 "Enter [green]Date From[/] (yyyy-MM-dd):",
                 defaultDateFrom);
 
             // Ask for DateTo with default, must be >= DateFrom
-            var dateTo = PromptForDate(
+            // If the default "to" is earlier than the chosen "from", bump it up
+            DateTime adjustedDefaultDateTo = defaultDateTo < dateFrom ? dateFrom : defaultDateTo;
+
+            DateTime dateTo = PromptForDate(
                 "Enter [green]Date To[/] (yyyy-MM-dd):",
-                defaultDateTo < dateFrom ? dateFrom : defaultDateTo,
+                adjustedDefaultDateTo,
                 dateFrom);
+
+            // Now you can pass userId, dateFrom, dateTo to your method:
+            // MyMethod(userId, dateFrom, dateTo);
 
             AnsiConsole.WriteLine();
             AnsiConsole.MarkupLine("[bold]Summary:[/]");
@@ -47,38 +43,3 @@ namespace ConsoleApp10
 
             AnsiConsole.MarkupLine("\nPress any key to exit...");
             Console.ReadKey();
-        }
-
-        private static DateOnly PromptForDate(string promptText, DateOnly defaultDate, DateOnly? minDate = null)
-        {
-            while (true)
-            {
-                var input = AnsiConsole.Prompt(
-                    new TextPrompt<string>(promptText)
-                        .PromptStyle("yellow")
-                        .DefaultValue(defaultDate.ToString("yyyy-MM-dd"))
-                        .ShowDefaultValue());
-
-                if (!DateOnly.TryParseExact(
-                        input,
-                        "yyyy-MM-dd",
-                        CultureInfo.InvariantCulture,
-                        DateTimeStyles.None,
-                        out var date))
-                {
-                    AnsiConsole.MarkupLine("[red]Invalid date format. Use yyyy-MM-dd.[/]");
-                    continue;
-                }
-
-                if (minDate.HasValue && date < minDate.Value)
-                {
-                    AnsiConsole.MarkupLine(
-                        $"[red]Date must be on or after {minDate.Value:yyyy-MM-dd}.[/]");
-                    continue;
-                }
-
-                return date;
-            }
-        }
-    }
-}
