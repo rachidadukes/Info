@@ -1,24 +1,84 @@
+using System;
+using System.Globalization;
 using Spectre.Console;
 
-var accounts = new List<Account>
+namespace ConsoleApp10
 {
-    new("001234567"),
-    new("001234568"),
-    new("001234569")
-};
+    internal class Program
+    {
+        static void Main(string[] args)
+        {
+            // Default values
+            var defaultUserId = Environment.UserName; // or "testuser"
+            var defaultDateTo = DateOnly.FromDateTime(DateTime.Today);
+            var defaultDateFrom = defaultDateTo.AddDays(-7);
 
-var selectedAccount = AnsiConsole.Prompt(
-    new SelectionPrompt<Account>()
-        .Title("Select an [green]account[/]:")
-        .PageSize(10)
-        .MoreChoicesText("[grey](Move up and down to see more accounts)[/]")
-        .UseConverter(a => a.Number)   // display only the number
-        .AddChoices(accounts));
+            AnsiConsole.MarkupLine("[bold cyan]User search parameters[/]");
 
-AnsiConsole.MarkupLine($"You selected: [yellow]{selectedAccount.Number}[/]");
+            // Ask for User Id with default
+            var userId = AnsiConsole.Prompt(
+                new TextPrompt<string>("Enter [green]User Id[/]:")
+                    .PromptStyle("yellow")
+                    .DefaultValue(defaultUserId)
+                    .ShowDefaultValue()
+                    .Validate(input =>
+                    {
+                        if (string.IsNullOrWhiteSpace(input))
+                            return ValidationResult.Error("[red]User Id cannot be empty[/]");
+                        return ValidationResult.Success();
+                    }));
 
-Console.WriteLine();
-Console.WriteLine("Press any key to exit...");
-Console.ReadKey();
+            // Ask for DateFrom with default
+            var dateFrom = PromptForDate(
+                "Enter [green]Date From[/] (yyyy-MM-dd):",
+                defaultDateFrom);
 
-public record Account(string Number);
+            // Ask for DateTo with default, must be >= DateFrom
+            var dateTo = PromptForDate(
+                "Enter [green]Date To[/] (yyyy-MM-dd):",
+                defaultDateTo < dateFrom ? dateFrom : defaultDateTo,
+                dateFrom);
+
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine("[bold]Summary:[/]");
+            AnsiConsole.MarkupLine($"User Id: [yellow]{userId}[/]");
+            AnsiConsole.MarkupLine($"Date From: [yellow]{dateFrom:yyyy-MM-dd}[/]");
+            AnsiConsole.MarkupLine($"Date To: [yellow]{dateTo:yyyy-MM-dd}[/]");
+
+            AnsiConsole.MarkupLine("\nPress any key to exit...");
+            Console.ReadKey();
+        }
+
+        private static DateOnly PromptForDate(string promptText, DateOnly defaultDate, DateOnly? minDate = null)
+        {
+            while (true)
+            {
+                var input = AnsiConsole.Prompt(
+                    new TextPrompt<string>(promptText)
+                        .PromptStyle("yellow")
+                        .DefaultValue(defaultDate.ToString("yyyy-MM-dd"))
+                        .ShowDefaultValue());
+
+                if (!DateOnly.TryParseExact(
+                        input,
+                        "yyyy-MM-dd",
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.None,
+                        out var date))
+                {
+                    AnsiConsole.MarkupLine("[red]Invalid date format. Use yyyy-MM-dd.[/]");
+                    continue;
+                }
+
+                if (minDate.HasValue && date < minDate.Value)
+                {
+                    AnsiConsole.MarkupLine(
+                        $"[red]Date must be on or after {minDate.Value:yyyy-MM-dd}.[/]");
+                    continue;
+                }
+
+                return date;
+            }
+        }
+    }
+}
