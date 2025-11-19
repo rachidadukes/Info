@@ -1,0 +1,70 @@
+Public Class HostMsg
+
+    ' ... your existing members, Sending, SendToConverterEndpoint, etc ...
+
+
+    ' ===== Helper methods for tracing (add near bottom of the class) =====
+    Private Function BuildTraceLog(traceSetting As String,
+                                   sendLabel As String,
+                                   recvLabel As String,
+                                   sendTime As String,
+                                   recvTime As String,
+                                   sendPayload As String,
+                                   recvPayload As String,
+                                   Optional isError As Boolean = False) As String
+
+        Dim sb As New System.Text.StringBuilder()
+
+        Dim setting As String = If(traceSetting, "none").ToLowerInvariant()
+        If setting = "none" Then
+            Return String.Empty
+        End If
+
+        Select Case setting
+            Case "sendonly"
+                Dim line = BuildTraceLine(sendLabel, sendPayload, sendTime, isError)
+                If line.Length > 0 Then sb.Append(line)
+
+            Case "receiveonly"
+                Dim line = BuildTraceLine(recvLabel, recvPayload, recvTime, isError)
+                If line.Length > 0 Then sb.Append(line)
+
+            Case "sendandreceive"
+                Dim lineSend = BuildTraceLine(sendLabel, sendPayload, sendTime, isError)
+                Dim lineRecv = BuildTraceLine(recvLabel, recvPayload, recvTime, isError)
+
+                If lineSend.Length > 0 Then sb.Append(lineSend)
+                If lineRecv.Length > 0 Then
+                    If sb.Length > 0 Then sb.Append(vbCrLf)
+                    sb.Append(lineRecv)
+                End If
+        End Select
+
+        Return sb.ToString()
+    End Function
+
+    Private Function BuildTraceLine(label As String,
+                                    payload As String,
+                                    timestamp As String,
+                                    isError As Boolean) As String
+        If String.IsNullOrEmpty(payload) Then
+            Return String.Empty
+        End If
+
+        If isError OrElse String.IsNullOrEmpty(timestamp) Then
+            Return String.Format("{0}; len={1};{2}{3}",
+                                 label,
+                                 payload.Length,
+                                 vbCrLf,
+                                 payload)
+        Else
+            Return String.Format("{0}; len={1} {2}{3}{4}",
+                                 label,
+                                 payload.Length,
+                                 timestamp,
+                                 vbCrLf,
+                                 payload)
+        End If
+    End Function
+
+End Class
