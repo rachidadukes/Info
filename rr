@@ -1,4 +1,14 @@
-   // Default values (DateTime)
+using System;
+using System.Globalization;
+using Spectre.Console;
+
+namespace ConsoleApp10
+{
+    internal class Program
+    {
+        static void Main(string[] args)
+        {
+            // Default values (DateTime)
             DateTime defaultDateTo = DateTime.Today;
             DateTime defaultDateFrom = defaultDateTo.AddDays(-7);
             string defaultUserId = Environment.UserName; // or "testuser"
@@ -43,3 +53,38 @@
 
             AnsiConsole.MarkupLine("\nPress any key to exit...");
             Console.ReadKey();
+        }
+
+        private static DateTime PromptForDate(string promptText, DateTime defaultDate, DateTime? minDate = null)
+        {
+            while (true)
+            {
+                string input = AnsiConsole.Prompt(
+                    new TextPrompt<string>(promptText)
+                        .PromptStyle("yellow")
+                        .DefaultValue(defaultDate.ToString("yyyy-MM-dd"))
+                        .ShowDefaultValue());
+
+                if (!DateTime.TryParseExact(
+                        input,
+                        "yyyy-MM-dd",
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.None,
+                        out DateTime date))
+                {
+                    AnsiConsole.MarkupLine("[red]Invalid date format. Use yyyy-MM-dd.[/]");
+                    continue;
+                }
+
+                if (minDate.HasValue && date < minDate.Value)
+                {
+                    AnsiConsole.MarkupLine(
+                        $"[red]Date must be on or after {minDate.Value:yyyy-MM-dd}.[/]");
+                    continue;
+                }
+
+                return date;
+            }
+        }
+    }
+}
