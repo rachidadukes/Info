@@ -1,81 +1,40 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
-
-namespace ReadLiveLogsApp
+// If nothing came back, stop here
+if (logs == null || logs.Count == 0)
 {
-    public static class RetrieveOriginalLogs
-    {
-        public static async Task<List<EventDetailsModel>> ReadOriginalLogs(
-            DbContext context,
-            string userId,
-            DateTime fromDateTimeStamp,
-            DateTime toDateTimeStamp)
-        {
-            try
-            {
-                // Build the query: by user, date range, not deleted, newest first
-                var query = context.Set<EventDetailsModel>()
-                    .Where(e =>
-                        e.UserID == userId &&
-                        e.DateTimeStamp >= fromDateTimeStamp &&
-                        e.DateTimeStamp <= toDateTimeStamp &&
-                        !e.Deleted)
-                    .OrderByDescending(e => e.DateTimeStamp)
-                    .AsAsyncEnumerable();
-
-                var result = new List<EventDetailsModel>();
-
-                // Stream results asynchronously
-                await foreach (var e in query)
-                {
-                    // You can just add e directly if you don’t need to clone
-                    var log = new EventDetailsModel
-                    {
-                        EventID       = e.EventID,
-                        DBID          = e.DBID,
-                        EventDesc     = e.EventDesc,
-                        EventSource   = e.EventSource,
-                        DateTimeStamp = e.DateTimeStamp,
-                        Deleted       = e.Deleted,
-                        UserID        = e.UserID
-                    };
-
-                    result.Add(log);
-                }
-
-                return result;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error while reading original logs: {ex.Message}");
-                return new List<EventDetailsModel>();
-            }
-        }
-    }
-}
-
-
-
-===========================
-
-
-var helper = new DbContextFactoryHelper();
-using var context = await helper.InitializeDbContextFactory(environment);
-
-if (context is null)
-{
-    Console.WriteLine("Could not create DbContext.");
+    AnsiConsole.MarkupLine("[yellow]No logs found for this user and date range.[/]");
     return;
 }
 
-List<EventDetailsModel> logs =
-    await RetrieveOriginalLogs.ReadOriginalLogs(context, userId, dateFrom, dateTo);
+// Let the user select ONE log from the list
+EventDetailsModel selectedLog = AnsiConsole.Prompt(
+    new SelectionPrompt<EventDetailsModel>()
+        .Title("[bold]Select a log entry[/]")
+        .PageSize(10)
+        .MoreChoicesText("[grey](Use ↑/↓ to move, Enter to select)[/]")
+        .UseConverter(log =>
+            $"{log.EventID,6} | {log.DateTimeStamp:yyyy-MM-dd HH:mm:ss} | {Truncate(log.EventDesc, 60)}")
+        .AddChoices(logs));
+
+// Now use selectedLog as you already planned
+RequestResponseModel selectedRequestResponse =
+    ExtractRequestsResponses.RequestResponsesFromSelectedLog(selectedLog);
+
+string? xmlRequest  = selectedRequestResponse.Request;
+string? xmlResponse = selectedRequestResponse.Response;
+
+// ... your existing code to display / pretty-print xmlRequest & xmlResponse
 
 
 
 
+==================
 
+private static string Truncate(string? value, int maxLength)
+{
+    if (string.IsNullOrEmpty(value))
+        return string.Empty;
 
+    return value.Length <= maxLength
+        ? value
+        : value.Substring(0, maxLength - 3) + "...";
+}
