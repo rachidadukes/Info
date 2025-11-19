@@ -1,4 +1,6 @@
 
+public static class TransactionFilterExtensions
+{
     // Text shown in the console menu
     public static string GetDisplayName(this TransactionFilter filter) => filter switch
     {
@@ -7,6 +9,17 @@
         TransactionFilter.All         => "All Transaction Types",
         _ => filter.ToString()
     };
+
+    // Value used in SQL / code (column TxnType, etc.)
+    public static string? GetDbValue(this TransactionFilter filter) => filter switch
+    {
+        TransactionFilter.CreditAddRq => "CreditAddRq",
+        TransactionFilter.DebitAddRq  => "DebitAddRq",
+        TransactionFilter.All         => null,          // null means "no filter"
+        _ => null
+    };
+}
+
 ============================
 
 var trxFilter = AnsiConsole.Prompt(
