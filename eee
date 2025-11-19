@@ -1,30 +1,16 @@
-// Ask the user which transaction type to include
-var trxType = AnsiConsole.Prompt(
-    new SelectionPrompt<string>()
+
+    // Text shown in the console menu
+    public static string GetDisplayName(this TransactionFilter filter) => filter switch
+    {
+        TransactionFilter.CreditAddRq => "Credit Add Request",
+        TransactionFilter.DebitAddRq  => "Debit Add Request",
+        TransactionFilter.All         => "All Transaction Types",
+        _ => filter.ToString()
+    };
+============================
+
+var trxFilter = AnsiConsole.Prompt(
+    new SelectionPrompt<TransactionFilter>()
         .Title("Select [green]transaction type[/]:")
-        .PageSize(3)
-        .AddChoices(new[]
-        {
-            "CreditAddRq",
-            "DebitAddRq",
-            "All"
-        }));
-
-// Optional: map to an enum for later use
-TransactionFilter filter = trxType switch
-{
-    "CreditAddRq" => TransactionFilter.CreditAddRq,
-    "DebitAddRq"  => TransactionFilter.DebitAddRq,
-    _             => TransactionFilter.All
-};
-
-
-
-==========================================
-
-public enum TransactionFilter
-{
-    CreditAddRq,
-    DebitAddRq,
-    All
-}
+        .UseConverter(f => f.GetDisplayName())
+        .AddChoices(Enum.GetValues<TransactionFilter>()));
