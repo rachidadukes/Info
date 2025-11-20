@@ -1,74 +1,146 @@
-Private Sub SendToConverterEndpoint(ByRef xml As String, ByRef response As String)
-    Const ROUTINE As String = "HostMsg.SendToSTEndpoint"
-    Const LogTraceKey As String = "HostMsgLogTrace"
+let’s turn that blue box into one reusable helper and then I’ll show you exactly how to call it from both places.
+1. One helper that encapsulates the blue-box logic
 
-    ' read trace setting once
-    Dim traceSetting As String = ConfigurationManager.AppSettings.Get(LogTraceKey)
-    If String.IsNullOrEmpty(traceSetting) Then
-        traceSetting = Constants.Trace.None
+Add this inside HostMsg (same class where Sending lives), under your other helpers:
+========================
+
+' Logs send/receive trace for any endpoint (Host or Converter)
+Private Sub LogRequestResponseTrace(traceSetting As String,
+                                    dbId As String,
+                                    sendLabel As String,
+                                    recvLabel As String,
+                                    sendTime As String,
+                                    recvTime As String,
+                                    sendMsg As String,
+                                    recvMsg As String,
+                                    traceMaxLogLen As Integer,
+                                    logCategory As String)
+
+    ' Do nothing if tracing is disabled
+    If String.IsNullOrEmpty(traceSetting) OrElse _
+       traceSetting.Equals("none", StringComparison.OrdinalIgnoreCase) Then
+        Exit Sub
     End If
 
-    Dim endpointUrl As String = ConfigurationManager.AppSettings.Get("MessageConverterURL")
-    Dim sendTime As String = String.Empty
-    Dim recvTime As String = String.Empty
+    Dim sTraceLog As String = String.Empty
+    Dim setting As String = traceSetting.ToLowerInvariant()
 
-    Try
-        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12
-
-        ' ----- do the HTTP call -----
-        sendTime = Now.ToString("MM/dd/yyyy HH:mm:ss.ffff")
-
-        Using client As New HttpClient()
-            client.Timeout = TimeSpan.FromSeconds(30)
-
-            Dim content As New StringContent(xml, System.Text.Encoding.UTF8, "application/xml")
-            Dim resp As HttpResponseMessage = client.PostAsync(endpointUrl, content).Result
-
-            response = resp.Content.ReadAsStringAsync().Result
-            recvTime = Now.ToString("MM/dd/yyyy HH:mm:ss.ffff")
-
-            If Not resp.IsSuccessStatusCode Then
-                Throw New HttpRequestException( _
-                    String.Format("{0} Error {1}: {2}", ROUTINE, CInt(resp.StatusCode), response))
+    Select Case setting
+        Case "sendonly"
+            If Not String.IsNullOrEmpty(sendMsg) Then
+                sTraceLog = String.Format("{0}; len={1}{2}{3}{4}", _
+                                          sendLabel, _
+                                          sendMsg.Length & " ", _
+                                          sendTime, _
+                                          vbCrLf, _
+                                          sendMsg)
             End If
-        End Using
 
-        ' ============================
-        ' THIS IS THE ONE CALL YOU NEEDED
-        ' ============================
-        Dim traceLog As String = BuildTraceLog(traceSetting, _
-                                               "Send to Converter", _
-                                               "Receive from Converter", _
-                                               sendTime, _
-                                               recvTime, _
-                                               xml, _
-                                               response, _
-                                               False)   ' success path
+        Case "receiveonly"
+            If Not String.IsNullOrEmpty(recvMsg) Then
+                sTraceLog = String.Format("{0}; len={1}{2}{3}{4}", _
+                                          recvLabel, _
+                                          recvMsg.Length & " ", _
+                                          recvTime, _
+                                          vbCrLf, _
+                                          recvMsg)
+            End If
 
-        If traceLog.Length > 0 AndAlso _
-           Not traceSetting.Equals(Constants.Trace.None, StringComparison.OrdinalIgnoreCase) Then
+        Case "sendandreceive"
+            If Not String.IsNullOrEmpty(sendMsg) Then
+                sTraceLog = String.Format("{0}; len={1}{2}{3}{4}", _
+                                          sendLabel, _
+                                          sendMsg.Length & " ", _
+                                          sendTime, _
+                                          vbCrLf, _
+                                          sendMsg)
 
-            RaiseEvent LogError(msDBID, traceLog, "Trace to/from Converter")
-        End If
+                ' same length check you had in the blue box
+                Dim totalLen As Integer = sendMsg.Length + If(recvMsg, String.Empty).Length
+                If traceMaxLogLen > 0 AndAlso totalLen > traceMaxLogLen Then
+                    RaiseEvent LogError(dbId, Left(sTraceLog, traceMaxLogLen), logCategory)
+                    sTraceLog = ""
+                Else
+                    sTraceLog &= vbCrLf
+                End If
+            End If
 
-    Catch ex As Exception
-        ' optional: log payloads even on error, same helper:
-        Dim traceLog As String = BuildTraceLog(traceSetting, _
-                                               "Send to Converter", _
-                                               "Receive from Converter", _
-                                               Nothing, _
-                                               Nothing, _
-                                               xml, _
-                                               response, _
-                                               True)   ' error path
+            If Not String.IsNullOrEmpty(recvMsg) Then
+                sTraceLog &= String.Format("{0}; len={1}{2}{3}{4}", _
+                                           recvLabel, _
+                                           recvMsg.Length & " ", _
+                                           recvTime, _
+                                           vbCrLf, _
+                                           recvMsg)
+            End If
+    End Select
 
-        If traceLog.Length > 0 AndAlso _
-           Not traceSetting.Equals(Constants.Trace.None, StringComparison.OrdinalIgnoreCase) Then
+    If sTraceLog.Length > 0 Then
+        RaiseEvent LogError(dbId, sTraceLog, logCategory)
+    End If
 
-            RaiseEvent LogError(msDBID, Left(traceLog, 6000), "Trace to/from Converter")
-        End If
+===================================
 
-        RaiseEvent LogError(msDBID, ex.Message, ROUTINE)
-        Throw
-    End Try
+2. Calling it from Sending
+
+Right now in Sending you have this (blue box):
+
+Dim sSendTime As String = Now.ToString("MM/dd/yyyy HH:mm:ss.ffff")
+hostStatus = hostAdaptor.SendAndReceive(sSendMsg, sRecvMsg)
+Dim sRecvTime As String = Now.ToString("MM/dd/yyyy HH:mm:ss.ffff")
+
+If sTrace.ToLower = "sendonly" Then
+    ...
+ElseIf sTrace.ToLower = "receiveonly" Then
+    ...
+ElseIf sTrace.ToLower = "sendandreceive" Then
+    ...
+End If
+
+If sTraceLog.Length > 0 Then
+    RaiseEvent LogError(msDBID, sTraceLog, "Trace to/from Host")
+End If
 End Sub
+
+====================================
+3. Calling it from SendToConverterEndpoint
+
+In your converter method, after you have the request and response plus times:
+
+Dim sendTime As String = Now.ToString("MM/dd/yyyy HH:mm:ss.ffff")
+' do HttpClient POST, set response
+Dim recvTime As String = Now.ToString("MM/dd/yyyy HH:mm:ss.ffff")
+
+
+add this call:
+
+LogRequestResponseTrace(traceSetting, _
+                        msDBID, _
+                        "Send to Converter", _
+                        "Receive from Converter", _
+                        sendTime, _
+                        recvTime, _
+                        xml, _
+                        response, _
+                        TraceMaxLogLen, _   ' or 0 if you don't want the length cap here
+                        "Trace to/from Converter")
+
+==========================================
+
+Delete that entire If sTrace.ToLower ... + If sTraceLog.Length > 0 block, and replace it with one line:
+
+Dim sSendTime As String = Now.ToString("MM/dd/yyyy HH:mm:ss.ffff")
+hostStatus = hostAdaptor.SendAndReceive(sSendMsg, sRecvMsg)
+Dim sRecvTime As String = Now.ToString("MM/dd/yyyy HH:mm:ss.ffff")
+
+' NEW: call common helper
+LogRequestResponseTrace(sTrace, _
+                        msDBID, _
+                        "Send to Host", _
+                        "Receive from Host", _
+                        sSendTime, _
+                        sRecvTime, _
+                        sSendMsg, _
+                        sRecvMsg, _
+                        TraceMaxLogLen, _
+                        "Trace to/from Host")
