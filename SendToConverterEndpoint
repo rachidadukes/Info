@@ -1,21 +1,32 @@
-to call it from Sending ✅
 
-Dim sSendTime As String = Now.ToString("MM/dd/yyyy HH:mm:ss.ffff")
-hostStatus = hostAdaptor.SendAndReceive(sSendMsg, sRecvMsg)
-Dim sRecvTime As String = Now.ToString("MM/dd/yyyy HH:mm:ss.ffff")
+ ' ********** CALL YOUR NEW HELPER HERE (SUCCESS PATH) **********
+        LogRequestResponseTrace(traceSetting, _
+                                msDBID, _
+                                "Send to Converter", _
+                                "Receive from Converter", _
+                                sendTime, _
+                                recvTime, _
+                                xml, _
+                                response, _
+                                TraceMaxLogLen, _
+                                "Trace to/from Converter")
+        ' **************************************************************
 
-LogRequestResponseTrace(sTrace, _
-                        msDBID, _
-                        "Send to Host", _
-                        "Receive from Host", _
-                        sSendTime, _
-                        sRecvTime, _
-                        sSendMsg, _
-                        sRecvMsg, _
-                        TraceMaxLogLen, _
-                        "Trace to/from Host")
+    Catch ex As Exception
 
+        ' (Optional) also log request/response when there is an error:
+        LogRequestResponseTrace(traceSetting, _
+                                msDBID, _
+                                "Send to Converter", _
+                                "Receive from Converter", _
+                                "", _          ' no timestamps on error
+                                "", _
+                                xml, _
+                                response, _
+                                TraceMaxLogLen, _
+                                "Trace to/from Converter")
 
-Just make sure you’ve:
-
-Deleted the old If sTrace.ToLower = "sendonly" / "receiveonly" / "sendandreceive" block and the If sTraceLog.Length > 0 Then RaiseEvent ... that were under it.
+        RaiseEvent LogError(msDBID, ex.Message, ROUTINE)
+        Throw
+    End Try
+End Sub
