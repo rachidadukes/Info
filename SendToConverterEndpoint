@@ -1,9 +1,3 @@
-let’s turn that blue box into one reusable helper and then I’ll show you exactly how to call it from both places.
-1. One helper that encapsulates the blue-box logic
-
-Add this inside HostMsg (same class where Sending lives), under your other helpers:
-========================
-
 ' Logs send/receive trace for any endpoint (Host or Converter)
 Private Sub LogRequestResponseTrace(traceSetting As String,
                                     dbId As String,
@@ -16,131 +10,71 @@ Private Sub LogRequestResponseTrace(traceSetting As String,
                                     traceMaxLogLen As Integer,
                                     logCategory As String)
 
-    ' Do nothing if tracing is disabled
-    If String.IsNullOrEmpty(traceSetting) OrElse _
-       traceSetting.Equals("none", StringComparison.OrdinalIgnoreCase) Then
-        Exit Sub
-    End If
-
     Dim sTraceLog As String = String.Empty
-    Dim setting As String = traceSetting.ToLowerInvariant()
+    Dim setting As String = traceSetting
 
-    Select Case setting
-        Case "sendonly"
-            If Not String.IsNullOrEmpty(sendMsg) Then
-                sTraceLog = String.Format("{0}; len={1}{2}{3}{4}", _
-                                          sendLabel, _
-                                          sendMsg.Length & " ", _
-                                          sendTime, _
-                                          vbCrLf, _
-                                          sendMsg)
+    ' Match old behavior: if Nothing, treat as "none"
+    If setting Is Nothing Then
+        setting = "none"
+    End If
+    setting = setting.ToLower()
+
+    ' ===== same structure as old blue block, but parameterized =====
+    If setting = "sendonly" Then
+
+        If Not String.IsNullOrEmpty(sendMsg) Then
+            sTraceLog = String.Format("{0}; len={1}{2}{3}{4}", _
+                                      sendLabel, _
+                                      sendMsg.Length & " ", _
+                                      sendTime, _
+                                      vbCrLf, _
+                                      sendMsg)
+        End If
+
+    ElseIf setting = "receiveonly" Then
+
+        If Not String.IsNullOrEmpty(recvMsg) Then
+            sTraceLog = String.Format("{0}; len={1}{2}{3}{4}", _
+                                      recvLabel, _
+                                      recvMsg.Length & " ", _
+                                      recvTime, _
+                                      vbCrLf, _
+                                      recvMsg)
+        End If
+
+    ElseIf setting = "sendandreceive" Then
+
+        If Not String.IsNullOrEmpty(sendMsg) Then
+            sTraceLog = String.Format("{0}; len={1}{2}{3}{4}", _
+                                      sendLabel, _
+                                      sendMsg.Length & " ", _
+                                      sendTime, _
+                                      vbCrLf, _
+                                      sendMsg)
+
+            ' same length check you had before
+            Dim totalLen As Integer = sendMsg.Length + If(recvMsg, String.Empty).Length
+            If traceMaxLogLen > 0 AndAlso totalLen > traceMaxLogLen Then
+                RaiseEvent LogError(dbId, Left(sTraceLog, traceMaxLogLen), logCategory)
+                sTraceLog = ""
+            Else
+                sTraceLog &= vbCrLf
             End If
+        End If
 
-        Case "receiveonly"
-            If Not String.IsNullOrEmpty(recvMsg) Then
-                sTraceLog = String.Format("{0}; len={1}{2}{3}{4}", _
-                                          recvLabel, _
-                                          recvMsg.Length & " ", _
-                                          recvTime, _
-                                          vbCrLf, _
-                                          recvMsg)
-            End If
+        If Not String.IsNullOrEmpty(recvMsg) Then
+            sTraceLog &= String.Format("{0}; len={1}{2}{3}{4}", _
+                                       recvLabel, _
+                                       recvMsg.Length & " ", _
+                                       recvTime, _
+                                       vbCrLf, _
+                                       recvMsg)
+        End If
 
-        Case "sendandreceive"
-            If Not String.IsNullOrEmpty(sendMsg) Then
-                sTraceLog = String.Format("{0}; len={1}{2}{3}{4}", _
-                                          sendLabel, _
-                                          sendMsg.Length & " ", _
-                                          sendTime, _
-                                          vbCrLf, _
-                                          sendMsg)
-
-                ' same length check you had in the blue box
-                Dim totalLen As Integer = sendMsg.Length + If(recvMsg, String.Empty).Length
-                If traceMaxLogLen > 0 AndAlso totalLen > traceMaxLogLen Then
-                    RaiseEvent LogError(dbId, Left(sTraceLog, traceMaxLogLen), logCategory)
-                    sTraceLog = ""
-                Else
-                    sTraceLog &= vbCrLf
-                End If
-            End If
-
-            If Not String.IsNullOrEmpty(recvMsg) Then
-                sTraceLog &= String.Format("{0}; len={1}{2}{3}{4}", _
-                                           recvLabel, _
-                                           recvMsg.Length & " ", _
-                                           recvTime, _
-                                           vbCrLf, _
-                                           recvMsg)
-            End If
-    End Select
+    End If
+    ' ===============================================================
 
     If sTraceLog.Length > 0 Then
         RaiseEvent LogError(dbId, sTraceLog, logCategory)
     End If
-
-===================================
-
-2. Calling it from Sending
-
-Right now in Sending you have this (blue box):
-
-Dim sSendTime As String = Now.ToString("MM/dd/yyyy HH:mm:ss.ffff")
-hostStatus = hostAdaptor.SendAndReceive(sSendMsg, sRecvMsg)
-Dim sRecvTime As String = Now.ToString("MM/dd/yyyy HH:mm:ss.ffff")
-
-If sTrace.ToLower = "sendonly" Then
-    ...
-ElseIf sTrace.ToLower = "receiveonly" Then
-    ...
-ElseIf sTrace.ToLower = "sendandreceive" Then
-    ...
-End If
-
-If sTraceLog.Length > 0 Then
-    RaiseEvent LogError(msDBID, sTraceLog, "Trace to/from Host")
-End If
 End Sub
-
-====================================
-3. Calling it from SendToConverterEndpoint
-
-In your converter method, after you have the request and response plus times:
-
-Dim sendTime As String = Now.ToString("MM/dd/yyyy HH:mm:ss.ffff")
-' do HttpClient POST, set response
-Dim recvTime As String = Now.ToString("MM/dd/yyyy HH:mm:ss.ffff")
-
-
-add this call:
-
-LogRequestResponseTrace(traceSetting, _
-                        msDBID, _
-                        "Send to Converter", _
-                        "Receive from Converter", _
-                        sendTime, _
-                        recvTime, _
-                        xml, _
-                        response, _
-                        TraceMaxLogLen, _   ' or 0 if you don't want the length cap here
-                        "Trace to/from Converter")
-
-==========================================
-
-Delete that entire If sTrace.ToLower ... + If sTraceLog.Length > 0 block, and replace it with one line:
-
-Dim sSendTime As String = Now.ToString("MM/dd/yyyy HH:mm:ss.ffff")
-hostStatus = hostAdaptor.SendAndReceive(sSendMsg, sRecvMsg)
-Dim sRecvTime As String = Now.ToString("MM/dd/yyyy HH:mm:ss.ffff")
-
-' NEW: call common helper
-LogRequestResponseTrace(sTrace, _
-                        msDBID, _
-                        "Send to Host", _
-                        "Receive from Host", _
-                        sSendTime, _
-                        sRecvTime, _
-                        sSendMsg, _
-                        sRecvMsg, _
-                        TraceMaxLogLen, _
-                        "Trace to/from Host")
