@@ -1,80 +1,21 @@
-' Logs send/receive trace for any endpoint (Host or Converter)
-Private Sub LogRequestResponseTrace(traceSetting As String,
-                                    dbId As String,
-                                    sendLabel As String,
-                                    recvLabel As String,
-                                    sendTime As String,
-                                    recvTime As String,
-                                    sendMsg As String,
-                                    recvMsg As String,
-                                    traceMaxLogLen As Integer,
-                                    logCategory As String)
+to call it from Sending ✅
 
-    Dim sTraceLog As String = String.Empty
-    Dim setting As String = traceSetting
+Dim sSendTime As String = Now.ToString("MM/dd/yyyy HH:mm:ss.ffff")
+hostStatus = hostAdaptor.SendAndReceive(sSendMsg, sRecvMsg)
+Dim sRecvTime As String = Now.ToString("MM/dd/yyyy HH:mm:ss.ffff")
 
-    ' Match old behavior: if Nothing, treat as "none"
-    If setting Is Nothing Then
-        setting = "none"
-    End If
-    setting = setting.ToLower()
+LogRequestResponseTrace(sTrace, _
+                        msDBID, _
+                        "Send to Host", _
+                        "Receive from Host", _
+                        sSendTime, _
+                        sRecvTime, _
+                        sSendMsg, _
+                        sRecvMsg, _
+                        TraceMaxLogLen, _
+                        "Trace to/from Host")
 
-    ' ===== same structure as old blue block, but parameterized =====
-    If setting = "sendonly" Then
 
-        If Not String.IsNullOrEmpty(sendMsg) Then
-            sTraceLog = String.Format("{0}; len={1}{2}{3}{4}", _
-                                      sendLabel, _
-                                      sendMsg.Length & " ", _
-                                      sendTime, _
-                                      vbCrLf, _
-                                      sendMsg)
-        End If
+Just make sure you’ve:
 
-    ElseIf setting = "receiveonly" Then
-
-        If Not String.IsNullOrEmpty(recvMsg) Then
-            sTraceLog = String.Format("{0}; len={1}{2}{3}{4}", _
-                                      recvLabel, _
-                                      recvMsg.Length & " ", _
-                                      recvTime, _
-                                      vbCrLf, _
-                                      recvMsg)
-        End If
-
-    ElseIf setting = "sendandreceive" Then
-
-        If Not String.IsNullOrEmpty(sendMsg) Then
-            sTraceLog = String.Format("{0}; len={1}{2}{3}{4}", _
-                                      sendLabel, _
-                                      sendMsg.Length & " ", _
-                                      sendTime, _
-                                      vbCrLf, _
-                                      sendMsg)
-
-            ' same length check you had before
-            Dim totalLen As Integer = sendMsg.Length + If(recvMsg, String.Empty).Length
-            If traceMaxLogLen > 0 AndAlso totalLen > traceMaxLogLen Then
-                RaiseEvent LogError(dbId, Left(sTraceLog, traceMaxLogLen), logCategory)
-                sTraceLog = ""
-            Else
-                sTraceLog &= vbCrLf
-            End If
-        End If
-
-        If Not String.IsNullOrEmpty(recvMsg) Then
-            sTraceLog &= String.Format("{0}; len={1}{2}{3}{4}", _
-                                       recvLabel, _
-                                       recvMsg.Length & " ", _
-                                       recvTime, _
-                                       vbCrLf, _
-                                       recvMsg)
-        End If
-
-    End If
-    ' ===============================================================
-
-    If sTraceLog.Length > 0 Then
-        RaiseEvent LogError(dbId, sTraceLog, logCategory)
-    End If
-End Sub
+Deleted the old If sTrace.ToLower = "sendonly" / "receiveonly" / "sendandreceive" block and the If sTraceLog.Length > 0 Then RaiseEvent ... that were under it.
