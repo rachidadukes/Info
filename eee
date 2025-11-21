@@ -1,24 +1,80 @@
-private static string FindTransactionType(string fullLog)
+public class HostSettings
 {
-    if (string.IsNullOrWhiteSpace(fullLog))
-        return string.Empty;
+    public string HostURL { get; set; }            // if there is a general one
+    public string HostMemberSearchURL { get; set; }
+    public string HostAcctInquiryURL { get; set; }
+    public string HostCashBoxURL { get; set; }
+}
 
-    foreach (var filter in Enum.GetValues<TransactionFilter>())
+==============================
+{
+  "HostSettings": {
+    "HostURL": "https://unit-dpa-01-plt0.nfcutest.net:5501/NEBranchExService/FinancialPosService",
+    "HostMemberSearchURL": "https://....",
+    "HostAcctInquiryURL": "https://....",
+    "HostCashBoxURL": "https://...."
+  }
+}
+====================
+
+dotnet add package Microsoft.Extensions.Configuration
+dotnet add package Microsoft.Extensions.Configuration.Json
+
+===========================
+
+using System;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
+using FinancialInquiryService;   // your connected service namespace
+
+internal class Program
+{
+    static async Task Main(string[] args)
     {
-        // skip "All" because it means no filter
-        if (filter == TransactionFilter.All)
-            continue;
+        // 1) Load config
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
+            .Build();
 
-        var dbValue = filter.GetDbValue();
-        if (dbValue is null)
-            continue;
+        var hostSettings = configuration
+            .GetSection("HostSettings")
+            .Get<HostSettings>();
 
-        // Case-insensitive search
-        if (fullLog.Contains(dbValue, StringComparison.OrdinalIgnoreCase))
-        {
-            return dbValue;   // return the actual DB transaction name
-        }
+        // For this first test we’ll use the account inquiry URL:
+        var serviceUrl = hostSettings.HostAcctInquiryURL;
+
+        await TestAccountInquiryAsync(serviceUrl);
+
+        Console.WriteLine("Done. Press any key to exit.");
+        Console.ReadKey();
     }
 
-    return string.Empty; // none found
-}
+
+=====================
+
+
+    private static async Task TestAccountInquiryAsync(string serviceUrl)
+    {
+        // Binding: match what the legacy app uses.
+        // Start with BasicHttpsBinding (HTTPS + SOAP 1.1) – adjust later if needed.
+        var binding = new System.ServiceModel.BasicHttpsBinding(
+            System.ServiceModel.BasicHttpsSecurityMode.Transport);
+
+        // (Optional) tune limits
+        binding.MaxReceivedMessageSize = 1024 * 1024; // 1 MB, change if needed
+
+        var endpoint = new System.ServiceModel.EndpointAddress(serviceUrl);
+
+        var client = new FinancialInquiryWsClient(binding, endpoint);
+
+        // If the service requires credentials, set them here
+        // client.ClientCredentials.UserName.UserName = "user";
+        // client.ClientCredentials.UserName.Password = "pwd";
+
+        // Now build ONE request
+        await CallStAccountInquiryAsync(client);
+    }
+
+
+
