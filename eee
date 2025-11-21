@@ -1,0 +1,24 @@
+private static string FindTransactionType(string fullLog)
+{
+    if (string.IsNullOrWhiteSpace(fullLog))
+        return string.Empty;
+
+    foreach (var filter in Enum.GetValues<TransactionFilter>())
+    {
+        // skip "All" because it means no filter
+        if (filter == TransactionFilter.All)
+            continue;
+
+        var dbValue = filter.GetDbValue();
+        if (dbValue is null)
+            continue;
+
+        // Case-insensitive search
+        if (fullLog.Contains(dbValue, StringComparison.OrdinalIgnoreCase))
+        {
+            return dbValue;   // return the actual DB transaction name
+        }
+    }
+
+    return string.Empty; // none found
+}
