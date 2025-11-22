@@ -1,80 +1,41 @@
-public class HostSettings
-{
-    public string HostURL { get; set; }            // if there is a general one
-    public string HostMemberSearchURL { get; set; }
-    public string HostAcctInquiryURL { get; set; }
-    public string HostCashBoxURL { get; set; }
-}
+ private static async Task TestAccountInquiryAsync(string serviceUrl)
+        {
+            // Binding – starting point, we can adjust once we see errors
+            var binding = new System.ServiceModel.BasicHttpsBinding(
+                System.ServiceModel.BasicHttpsSecurityMode.Transport);
 
-==============================
-{
-  "HostSettings": {
-    "HostURL": "https://unit-dpa-01-plt0.nfcutest.net:5501/NEBranchExService/FinancialPosService",
-    "HostMemberSearchURL": "https://....",
-    "HostAcctInquiryURL": "https://....",
-    "HostCashBoxURL": "https://...."
-  }
-}
-====================
+            binding.MaxReceivedMessageSize = 1024 * 1024; // adjust if needed
 
-dotnet add package Microsoft.Extensions.Configuration
-dotnet add package Microsoft.Extensions.Configuration.Json
+            var endpoint = new System.ServiceModel.EndpointAddress(serviceUrl);
 
-===========================
+            var client = new FinancialInquiryWsClient(binding, endpoint);
 
-using System;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
-using FinancialInquiryService;   // your connected service namespace
+            await CallStAccountInquiryAsync(client);
+        }
 
-internal class Program
-{
-    static async Task Main(string[] args)
-    {
-        // 1) Load config
-        var configuration = new ConfigurationBuilder()
-            .SetBasePath(AppContext.BaseDirectory)
-            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
-            .Build();
+        private static async Task CallStAccountInquiryAsync(FinancialInquiryWsClient client)
+        {
+            // TODO: build this based on your sample XML and Reference.cs
+            var rq = new StAccountInqRq
+            {
+                // MsgRqHdr = new MsgRqHdr_Type { ... },
+                // StAccountInqInfo = new StAccountInqInfo_Type { ... }
+            };
 
-        var hostSettings = configuration
-            .GetSection("HostSettings")
-            .Get<HostSettings>();
+            var requestMessage = new StAccountInqRequestMessage
+            {
+                StAccountInqRq = rq
+            };
 
-        // For this first test we’ll use the account inquiry URL:
-        var serviceUrl = hostSettings.HostAcctInquiryURL;
+            Console.WriteLine("Calling StAccountInq...");
+            var response = await client.StAccountInqAsync(requestMessage);
 
-        await TestAccountInquiryAsync(serviceUrl);
+            var rs = response.StAccountInqRs;
 
-        Console.WriteLine("Done. Press any key to exit.");
-        Console.ReadKey();
+            // TODO: inspect properties that matter
+            // Console.WriteLine($"Status: {rs.Status?.StatusCode} - {rs.Status?.StatusDesc}");
+
+            Console.WriteLine("Response received.");
+        }
     }
-
-
-=====================
-
-
-    private static async Task TestAccountInquiryAsync(string serviceUrl)
-    {
-        // Binding: match what the legacy app uses.
-        // Start with BasicHttpsBinding (HTTPS + SOAP 1.1) – adjust later if needed.
-        var binding = new System.ServiceModel.BasicHttpsBinding(
-            System.ServiceModel.BasicHttpsSecurityMode.Transport);
-
-        // (Optional) tune limits
-        binding.MaxReceivedMessageSize = 1024 * 1024; // 1 MB, change if needed
-
-        var endpoint = new System.ServiceModel.EndpointAddress(serviceUrl);
-
-        var client = new FinancialInquiryWsClient(binding, endpoint);
-
-        // If the service requires credentials, set them here
-        // client.ClientCredentials.UserName.UserName = "user";
-        // client.ClientCredentials.UserName.Password = "pwd";
-
-        // Now build ONE request
-        await CallStAccountInquiryAsync(client);
-    }
-
-
-
+}
