@@ -2,65 +2,74 @@ try
 {
     Console.WriteLine("Calling VerifyAcctNumberInq...");
 
-    // rq is your VerifyAcctNumberInqRq object
-    var rs = await client.verifyAcctNumberAsync(rq);
+    // your call
+    var response = await client.verifyAcctNumberAsync(xmlAccountRequest); 
+    // or `rq` if you’re using the typed object
 
     Console.WriteLine("Response received.");
-    // TODO: inspect rs here
 }
-catch (System.ServiceModel.FaultException fe)
+catch (System.ServiceModel.FaultException fault)
 {
-    Console.WriteLine("========== WCF FaultException ==========");
-    Console.WriteLine($"Type       : {fe.GetType().FullName}");
-    Console.WriteLine($"Action     : {fe.Action}");
-    Console.WriteLine($"Code       : {fe.Code}");
-    Console.WriteLine($"Reason     : {fe.Reason}");
-    Console.WriteLine($"Message    : {fe.Message}");
-    Console.WriteLine("StackTrace :");
-    Console.WriteLine(fe.StackTrace);
+    var sb = new StringBuilder();
 
-    if (fe.InnerException != null)
+    sb.AppendLine("========== WCF FaultException ==========");
+    sb.AppendLine($"Type            : {fault.GetType().FullName}");
+    sb.AppendLine($"Message         : {fault.Message}");
+
+    if (fault.Reason != null)
+        sb.AppendLine($"Reason          : {fault.Reason}");
+
+    if (fault.Code != null)
     {
-        Console.WriteLine("------ InnerException ------");
-        Console.WriteLine(fe.InnerException.GetType().FullName);
-        Console.WriteLine(fe.InnerException.Message);
-        Console.WriteLine(fe.InnerException.StackTrace);
+        sb.AppendLine($"Code.Name       : {fault.Code.Name}");
+        sb.AppendLine($"Code.Namespace  : {fault.Code.Namespace}");
+
+        if (fault.Code.SubCode != null)
+        {
+            sb.AppendLine($"SubCode.Name    : {fault.Code.SubCode.Name}");
+            sb.AppendLine($"SubCode.Ns      : {fault.Code.SubCode.Namespace}");
+        }
     }
 
-    // Optional: log the XML you sent so you can correlate with the fault
-    Console.WriteLine("------ Request XML ------");
-    Console.WriteLine(stringXmlAccountRequest);   // your original XML string
+    sb.AppendLine($"Action          : {fault.Action}");
+    sb.AppendLine($"Source          : {fault.Source}");
+    sb.AppendLine("StackTrace:");
+    sb.AppendLine(fault.StackTrace ?? "<null>");
 
-    // Optionally rethrow or handle as needed
+    if (fault.InnerException != null)
+    {
+        sb.AppendLine("------ InnerException ------");
+        sb.AppendLine($"Type    : {fault.InnerException.GetType().FullName}");
+        sb.AppendLine($"Message : {fault.InnerException.Message}");
+        sb.AppendLine("Inner StackTrace:");
+        sb.AppendLine(fault.InnerException.StackTrace ?? "<null>");
+    }
+
+    // Log the XML you sent – super important for debugging these “Internal Error” faults
+    sb.AppendLine("------ Request XML ------");
+    sb.AppendLine(xmlAccountRequest);      // or stringXmlAccountRequest / whatever your raw XML string is
+
+    var logText = sb.ToString();
+
+    Console.WriteLine(logText);            // console
+    File.AppendAllText("wcf_fault.log", 
+        $"[{DateTime.Now:O}]{Environment.NewLine}{logText}{Environment.NewLine}");
+
+    // Decide if you want to rethrow or swallow:
     // throw;
 }
-catch (System.ServiceModel.CommunicationException ce)
+catch (System.ServiceModel.CommunicationException commEx)
 {
     Console.WriteLine("========== CommunicationException ==========");
-    Console.WriteLine(ce.ToString());
+    Console.WriteLine(commEx.ToString());
 }
-catch (System.TimeoutException te)
+catch (System.TimeoutException timeoutEx)
 {
     Console.WriteLine("========== TimeoutException ==========");
-    Console.WriteLine(te.ToString());
+    Console.WriteLine(timeoutEx.ToString());
 }
 catch (Exception ex)
 {
     Console.WriteLine("========== Unexpected Exception ==========");
     Console.WriteLine(ex.ToString());
 }
-
-
-===============================
-
-catch (System.ServiceModel.FaultException<FinancialInquiryWs.SomeFaultType> fe)
-{
-    Console.WriteLine("========== Typed FaultException ==========");
-    Console.WriteLine($"Message : {fe.Message}");
-    Console.WriteLine($"Reason  : {fe.Reason}");
-    Console.WriteLine("------ Fault Detail ------");
-    Console.WriteLine($"ErrorCode   : {fe.Detail.ErrorCode}");
-    Console.WriteLine($"Description : {fe.Detail.Description}");
-    // etc. based on the properties of SomeFaultType
-}
-
