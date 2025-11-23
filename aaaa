@@ -1,75 +1,13 @@
-try
+catch (InvalidOperationException ex) when (ex.InnerException is System.Xml.XmlException xmlEx)
 {
-    Console.WriteLine("Calling VerifyAcctNumberInq...");
+    Console.WriteLine("===== XML DESERIALIZATION ERROR =====");
+    Console.WriteLine($"XmlException.Message : {xmlEx.Message}");
+    Console.WriteLine($"Line                 : {xmlEx.LineNumber}");
+    Console.WriteLine($"Position             : {xmlEx.LinePosition}");
+    Console.WriteLine();
+    Console.WriteLine("Offending XML:");
+    Console.WriteLine(stringXmlAccountRequest); // whatever string you’re deserializing
 
-    // your call
-    var response = await client.verifyAcctNumberAsync(xmlAccountRequest); 
-    // or `rq` if you’re using the typed object
-
-    Console.WriteLine("Response received.");
-}
-catch (System.ServiceModel.FaultException fault)
-{
-    var sb = new StringBuilder();
-
-    sb.AppendLine("========== WCF FaultException ==========");
-    sb.AppendLine($"Type            : {fault.GetType().FullName}");
-    sb.AppendLine($"Message         : {fault.Message}");
-
-    if (fault.Reason != null)
-        sb.AppendLine($"Reason          : {fault.Reason}");
-
-    if (fault.Code != null)
-    {
-        sb.AppendLine($"Code.Name       : {fault.Code.Name}");
-        sb.AppendLine($"Code.Namespace  : {fault.Code.Namespace}");
-
-        if (fault.Code.SubCode != null)
-        {
-            sb.AppendLine($"SubCode.Name    : {fault.Code.SubCode.Name}");
-            sb.AppendLine($"SubCode.Ns      : {fault.Code.SubCode.Namespace}");
-        }
-    }
-
-    sb.AppendLine($"Action          : {fault.Action}");
-    sb.AppendLine($"Source          : {fault.Source}");
-    sb.AppendLine("StackTrace:");
-    sb.AppendLine(fault.StackTrace ?? "<null>");
-
-    if (fault.InnerException != null)
-    {
-        sb.AppendLine("------ InnerException ------");
-        sb.AppendLine($"Type    : {fault.InnerException.GetType().FullName}");
-        sb.AppendLine($"Message : {fault.InnerException.Message}");
-        sb.AppendLine("Inner StackTrace:");
-        sb.AppendLine(fault.InnerException.StackTrace ?? "<null>");
-    }
-
-    // Log the XML you sent – super important for debugging these “Internal Error” faults
-    sb.AppendLine("------ Request XML ------");
-    sb.AppendLine(xmlAccountRequest);      // or stringXmlAccountRequest / whatever your raw XML string is
-
-    var logText = sb.ToString();
-
-    Console.WriteLine(logText);            // console
-    File.AppendAllText("wcf_fault.log", 
-        $"[{DateTime.Now:O}]{Environment.NewLine}{logText}{Environment.NewLine}");
-
-    // Decide if you want to rethrow or swallow:
+    // rethrow if you want:
     // throw;
-}
-catch (System.ServiceModel.CommunicationException commEx)
-{
-    Console.WriteLine("========== CommunicationException ==========");
-    Console.WriteLine(commEx.ToString());
-}
-catch (System.TimeoutException timeoutEx)
-{
-    Console.WriteLine("========== TimeoutException ==========");
-    Console.WriteLine(timeoutEx.ToString());
-}
-catch (Exception ex)
-{
-    Console.WriteLine("========== Unexpected Exception ==========");
-    Console.WriteLine(ex.ToString());
 }
