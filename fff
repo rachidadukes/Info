@@ -1,62 +1,57 @@
-using FinancialInquiryService; // namespace of the generated proxy
+using System.IO;
+using System.Xml.Serialization;
+using FinancialInquiryService; // namespace of VerifyAcctNumberInqRq
 
-namespace FinancialInquiryServiceApp
+public static class XmlHelper
 {
-    public class AccountRequest
+    public static T DeserializeXml<T>(string xml)
     {
-        // optional: inject settings later (HostSettings, user, branch, etc.)
-        // private readonly HostSettings _settings;
-        // public AccountRequest(HostSettings settings) => _settings = settings;
-
-        public VerifyAcctNumberInqRq GenerateVerifyAcctNumberInqRq(AccountModel account)
-        {
-            if (account is null)
-                throw new ArgumentNullException(nameof(account));
-
-            return new VerifyAcctNumberInqRq
-            {
-                MsgRqHdr = BuildHeader(),
-                VerifyAcctNumberInqInfo = BuildInfo(account)
-            };
-        }
-
-        private MsgRqHdr_Type BuildHeader()
-        {
-            // 🔁 Later you can pull these from config instead of hard-coding
-            return new MsgRqHdr_Type
-            {
-                RqUID          = "e3fa9c33-d5d9-4f07-a299-9997d6144d36",
-                TranCode       = "0084",
-                BranchId       = "D3",
-                PCName         = "LTCU34439W0EBE4",
-                TranCodeQual   = "0000",
-                CashBoxId      = "0",
-                EmployeeId     = "15308",
-                PostingDt      = "2022-02-18",
-                CalendarDt     = "2025-11-17",
-                TranTime       = "14:23:21",
-                TranSeqNum     = "0",
-                ForwardTranFlag = YesNo_Type.N,
-                MultiTranFlag   = YesNo_Type.Y
-            };
-        }
-
-        private VerifyAcctNumberInqInfo_Type BuildInfo(AccountModel account)
-        {
-            return new VerifyAcctNumberInqInfo_Type
-            {
-                AcctKeys = new AcctKeys_Type
-                {
-                    AcctId = account.AccountNumber,
-                    AcctType = account.AccountType switch
-                    {
-                        "SAV" => AcctKeys_TypeAcctType.SAV,
-                        "CHK" => AcctKeys_TypeAcctType.CHK,
-                        "SHR" => AcctKeys_TypeAcctType.SHR,
-                        _     => AcctKeys_TypeAcctType.CHK
-                    }
-                }
-            };
-        }
+        var serializer = new XmlSerializer(typeof(T));
+        using var reader = new StringReader(xml);
+        return (T)serializer.Deserialize(reader)!;
     }
 }
+
+
+=================================
+
+// 1) Build the request as XML (your existing code)
+string xmlAccountRequest = StringAccountRequest.GenerateAccountRequest(selectedAccount);
+
+// (optional) log it
+Console.WriteLine("REQUEST XML:");
+Console.WriteLine(xmlAccountRequest);
+
+// 2) Deserialize XML -> strongly-typed WCF request
+var rq = XmlHelper.DeserializeXml<VerifyAcctNumberInqRq>(xmlAccountRequest);
+
+// 3) Call the WCF method
+Console.WriteLine("Calling VerifyAcctNumberInq...");
+var rs = await client.VerifyAcctNumberInqAsync(rq);
+
+// 4) Inspect response
+Console.WriteLine($"Status: {rs.Status?.StatusCode} - {rs.Status?.StatusDesc}");
+Console.WriteLine("Response received.");
+
+
+================================
+
+
+var soapEnvelope = $@"<?xml version=""1.0""?>
+<s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/"">
+  <s:Body>
+    {xmlAccountRequest}
+  </s:Body>
+</s:Envelope>";
+
+using var httpClient = new HttpClient();
+var content = new StringContent(soapEnvelope, Encoding.UTF8, "text/xml");
+content.Headers.Add("SOAPAction", "VerifyAcctNumberInq"); // depends on WSDL
+
+var httpResponse = await httpClient.PostAsync(serviceUrl, content);
+var soapResponseXml = await httpResponse.Content.ReadAsStringAsync();
+==========================
+
+string xmlAccountRequest = StringAccountRequest.GenerateAccountRequest(selectedAccount);
+var rq = XmlHelper.DeserializeXml<VerifyAcctNumberInqRq>(xmlAccountRequest);
+var rs = await client.VerifyAcctNumberInqAsync(rq);
