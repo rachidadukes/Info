@@ -1,0 +1,66 @@
+try
+{
+    Console.WriteLine("Calling VerifyAcctNumberInq...");
+
+    // rq is your VerifyAcctNumberInqRq object
+    var rs = await client.verifyAcctNumberAsync(rq);
+
+    Console.WriteLine("Response received.");
+    // TODO: inspect rs here
+}
+catch (System.ServiceModel.FaultException fe)
+{
+    Console.WriteLine("========== WCF FaultException ==========");
+    Console.WriteLine($"Type       : {fe.GetType().FullName}");
+    Console.WriteLine($"Action     : {fe.Action}");
+    Console.WriteLine($"Code       : {fe.Code}");
+    Console.WriteLine($"Reason     : {fe.Reason}");
+    Console.WriteLine($"Message    : {fe.Message}");
+    Console.WriteLine("StackTrace :");
+    Console.WriteLine(fe.StackTrace);
+
+    if (fe.InnerException != null)
+    {
+        Console.WriteLine("------ InnerException ------");
+        Console.WriteLine(fe.InnerException.GetType().FullName);
+        Console.WriteLine(fe.InnerException.Message);
+        Console.WriteLine(fe.InnerException.StackTrace);
+    }
+
+    // Optional: log the XML you sent so you can correlate with the fault
+    Console.WriteLine("------ Request XML ------");
+    Console.WriteLine(stringXmlAccountRequest);   // your original XML string
+
+    // Optionally rethrow or handle as needed
+    // throw;
+}
+catch (System.ServiceModel.CommunicationException ce)
+{
+    Console.WriteLine("========== CommunicationException ==========");
+    Console.WriteLine(ce.ToString());
+}
+catch (System.TimeoutException te)
+{
+    Console.WriteLine("========== TimeoutException ==========");
+    Console.WriteLine(te.ToString());
+}
+catch (Exception ex)
+{
+    Console.WriteLine("========== Unexpected Exception ==========");
+    Console.WriteLine(ex.ToString());
+}
+
+
+===============================
+
+catch (System.ServiceModel.FaultException<FinancialInquiryWs.SomeFaultType> fe)
+{
+    Console.WriteLine("========== Typed FaultException ==========");
+    Console.WriteLine($"Message : {fe.Message}");
+    Console.WriteLine($"Reason  : {fe.Reason}");
+    Console.WriteLine("------ Fault Detail ------");
+    Console.WriteLine($"ErrorCode   : {fe.Detail.ErrorCode}");
+    Console.WriteLine($"Description : {fe.Detail.Description}");
+    // etc. based on the properties of SomeFaultType
+}
+
