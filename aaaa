@@ -1,13 +1,29 @@
-catch (InvalidOperationException ex) when (ex.InnerException is System.Xml.XmlException xmlEx)
+var rq = new FinancialInquiryWs.VerifyAcctNumberInqRq
 {
-    Console.WriteLine("===== XML DESERIALIZATION ERROR =====");
-    Console.WriteLine($"XmlException.Message : {xmlEx.Message}");
-    Console.WriteLine($"Line                 : {xmlEx.LineNumber}");
-    Console.WriteLine($"Position             : {xmlEx.LinePosition}");
-    Console.WriteLine();
-    Console.WriteLine("Offending XML:");
-    Console.WriteLine(stringXmlAccountRequest); // whatever string you’re deserializing
+    MsgRqHdr = new FinancialInquiryWs.MsgRqHdr_Type
+    {
+        RqUID           = Guid.NewGuid().ToString(),
+        EnvironmentName = "UNIT",         // or INTG / whatever matches the host
+        TranCode        = "0004",
+        BranchId        = "D3",
+        PCName          = "LTC...BE4",
+        TranCodeQual    = "0000",
+        CashBoxId       = "X1",
+        EmployeeId      = "15308",
+        PostingDt       = new DateTime(2022, 02, 18),
+        CalendarDt      = DateTime.Today,
+        TranTime        = DateTime.Now.ToString("HH:mm:ss"),
+        TranSeqNum      = 0,
+        ForwardTranFlag = "0",
+        MultiTranFlag   = "0"
+    },
+    VerifyAcctNumberInqInfo = new FinancialInquiryWs.VerifyAcctNumberInqInfo_Type
+    {
+        AcctKeys = new FinancialInquiryWs.AcctKeys_Type
+        {
+            AcctId   = "00000000001000039709",
+            AcctType = "SHK"
+        }
+    }
+};
 
-    // rethrow if you want:
-    // throw;
-}
