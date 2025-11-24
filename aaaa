@@ -1,29 +1,124 @@
-var rq = new FinancialInquiryWs.VerifyAcctNumberInqRq
-{
-    MsgRqHdr = new FinancialInquiryWs.MsgRqHdr_Type
+using System;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+
+
+    /// <summary>
+    /// Sends VerifyAcctNumberInq SOAP requests to the legacy service.
+    /// </summary>
+    public sealed class SendVerifyAcctNumberInqSoapAsync
     {
-        RqUID           = Guid.NewGuid().ToString(),
-        EnvironmentName = "UNIT",         // or INTG / whatever matches the host
-        TranCode        = "0004",
-        BranchId        = "D3",
-        PCName          = "LTC...BE4",
-        TranCodeQual    = "0000",
-        CashBoxId       = "X1",
-        EmployeeId      = "15308",
-        PostingDt       = new DateTime(2022, 02, 18),
-        CalendarDt      = DateTime.Today,
-        TranTime        = DateTime.Now.ToString("HH:mm:ss"),
-        TranSeqNum      = 0,
-        ForwardTranFlag = "0",
-        MultiTranFlag   = "0"
-    },
-    VerifyAcctNumberInqInfo = new FinancialInquiryWs.VerifyAcctNumberInqInfo_Type
-    {
-        AcctKeys = new FinancialInquiryWs.AcctKeys_Type
+        private readonly HttpClient _httpClient;
+        private readonly string _serviceUrl;
+        private readonly string _soapAction;
+
+        /// <summary>
+        /// Creates a new client for VerifyAcctNumberInq.
+        /// </summary>
+        /// <param name="httpClient">HttpClient instance (can be shared / injected).</param>
+        /// <param name="serviceUrl">Full endpoint URL of the SOAP service.</param>
+        /// <param name="soapAction">
+        /// SOAPAction header value. Often something like
+        /// "http://tempuri.org/VerifyAcctNumberInq" or "VerifyAcctNumberInq".
+        /// </param>
+        public VerifyAcctNumberInquiryClient(
+            HttpClient httpClient,
+            string serviceUrl,
+            string soapAction = "VerifyAcctNumberInq")
         {
-            AcctId   = "00000000001000039709",
-            AcctType = "SHK"
+            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+            _serviceUrl = serviceUrl ?? throw new ArgumentNullException(nameof(serviceUrl));
+            _soapAction = soapAction ?? throw new ArgumentNullException(nameof(soapAction));
+        }
+
+        /// <summary>
+        /// Sends a VerifyAcctNumberInq SOAP request and returns the raw SOAP response XML.
+        /// </summary>
+        /// <param name="innerRequestXml">
+        /// The inner XML for &lt;s:Body&gt; – typically your &lt;VerifyAcctNumberInqRq&gt;…&lt;/VerifyAcctNumberInqRq&gt;.
+        /// </param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>Raw SOAP response XML as a string.</returns>
+        public async Task<string> SendVerifyAcctNumberInqAsync(
+            string innerRequestXml,
+            CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(innerRequestXml))
+                throw new ArgumentException("Request XML cannot be null or empty.", nameof(innerRequestXml));
+
+            var soapEnvelope = $@"<?xml version=""1.0"" encoding=""utf-8""?>
+<s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/"">
+  <s:Body>
+    {innerRequestXml}
+  </s:Body>
+</s:Envelope>";
+
+            Console.WriteLine("===== OUTGOING SOAP REQUEST =====");
+            Console.WriteLine(soapEnvelope);
+
+            using var content = new StringContent(soapEnvelope, Encoding.UTF8);
+            content.Headers.ContentType = new MediaTypeHeaderValue("text/xml")
+            {
+                CharSet = "utf-8"
+            };
+
+            // Many SOAP services require the value to be quoted.
+            content.Headers.Add("SOAPAction", $"\"{_soapAction}\"");
+
+            HttpResponseMessage response;
+            try
+            {
+                response = await _httpClient.PostAsync(_serviceUrl, content, cancellationToken)
+                                            .ConfigureAwait(false);
+            }
+            catch (HttpRequestException hre)
+            {
+                Console.WriteLine("===== HttpRequestException (VerifyAcctNumberInq) =====");
+                Console.WriteLine(hre);
+                throw;
+            }
+            catch (TaskCanceledException tce)
+            {
+                Console.WriteLine("===== Timeout/TaskCanceled (VerifyAcctNumberInq) =====");
+                Console.WriteLine(tce);
+                throw;
+            }
+
+            var responseXml = await response.Content.ReadAsStringAsync(cancellationToken)
+                                                   .ConfigureAwait(false);
+
+            Console.WriteLine("===== HTTP RESPONSE STATUS =====");
+            Console.WriteLine($"{(int)response.StatusCode} {response.ReasonPhrase}");
+            Console.WriteLine("===== RAW SOAP RESPONSE =====");
+            Console.WriteLine(responseXml);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var message =
+                    $"VerifyAcctNumberInq SOAP call failed. " +
+                    $"Status {(int)response.StatusCode} {response.ReasonPhrase}{Environment.NewLine}{responseXml}";
+
+                Console.WriteLine("===== ERROR (VerifyAcctNumberInq) =====");
+                Console.WriteLine(message);
+
+                throw new InvalidOperationException(message);
+            }
+
+            return responseXml;
         }
     }
-};
 
+
+
+==========================
+
+
+var httpClient = new HttpClient();
+var verifyClient = new VerifyAcctNumberInquiryClient(
+    httpClient,
+    serviceUrl,                  // your endpoint
+    "http://tempuri.org/VerifyAcctNumberInq" // or whatever SOAPAction actually is
+);
