@@ -1,105 +1,12 @@
-using System;
-using System.IO;
-using System.Text;
-using System.Xml;
-using System.Xml.Serialization;
-using System.Threading.Tasks;
+   // 5) Call the WCF method
+    VerifyAcctNumberResponseMessage responseMessage =
+        await _client.verifyAcctNumberAsync(rqWithNamespaces);
 
-namespace YourCompany.FinancialInquiry
-{
-    public class VerifyAcctNumberInquiryService
-    {
-        private readonly FinancialInquiryWsClient _client;
+    // IntelliSense will show you the right property name here:
+    // usually something like VerifyAcctNumberInqRs or VerifyAcctNumberInqRsField, etc.
+    var result = responseMessage.VerifyAcctNumberInqRs;
 
-        // inject the generated WCF client
-        public VerifyAcctNumberInquiryService(FinancialInquiryWsClient client)
-        {
-            _client = client ?? throw new ArgumentNullException(nameof(client));
-        }
-
-        /// <summary>
-        /// Mimics the legacy SendAndReceive for VerifyAcctNumberInq:
-        ///  - builds the typed request
-        ///  - serializes to XML
-        ///  - injects the NFBranchExService namespaces via string.Replace
-        ///  - deserializes back to the typed request
-        ///  - calls verifyAcctNumber on the WCF proxy
-        ///  - returns the typed response
-        /// </summary>
-        public async Task<VerifyAcctNumberInqRs> SendAndReceiveAsync(
-            string environmentName,
-            string branchId,
-            string pcName,
-            string employeeId,
-            string acctId,
-            AcctKeys_TypeAcctType acctType)
-        {
-            // 1) Build typed request like the VB code
-            var rq = new VerifyAcctNumberInqRq
-            {
-                MsgRqHdr = new MsgRqHdr_Type
-                {
-                    RqUID           = Guid.NewGuid().ToString(),
-                    EnvironmentName = environmentName,      // e.g. "test" / "NFCU" / "UNIT"
-                    TranCode        = "Q004",               // match legacy
-                    BranchId        = branchId,             // "D3" or "01" etc.
-                    PCName          = pcName,               // "LTCC4B3A490BE4"
-                    TranCodeQual    = "0000",
-                    CashBoxId       = "1",
-                    EmployeeId      = employeeId,           // "15308"
-                    PostingDt       = new DateTime(2022, 02, 18),
-                    CalendarDt      = DateTime.Today,
-                    TranTime        = DateTime.Now,         // adjust if needed
-                    TranSeqNum      = 0,
-                    ForwardTranFlag = 0,
-                    MultiTranFlag   = 0
-                    // add any extra fields you see in MsgRqHdr_Type from Reference.cs
-                },
-                VerifyAcctNumberInqInfo = new VerifyAcctNumberInqInfo_Type
-                {
-                    AcctKeys = new AcctKeys_Type
-                    {
-                        AcctId   = acctId,          // "0000006800004269605"
-                        AcctType = acctType         // e.g. AcctKeys_TypeAcctType.SC
-                    }
-                }
-            };
-
-            // 2) Serialize to XML like legacy code
-            string xml;
-            var serializer = new XmlSerializer(typeof(VerifyAcctNumberInqRq));
-            using (var sw = new StringWriter())
-            {
-                serializer.Serialize(sw, rq);
-                xml = sw.ToString();
-            }
-
-            // 3) Inject the NFBranchExService namespaces via Replace (exactly like VB)
-            const string ns = "http://schemas.navyfederal.org/2010/04/NFBranchExService";
-
-            xml = xml.Replace("<MsgRqHdr>",
-                              $"<MsgRqHdr xmlns=\"{ns}\">");
-
-            xml = xml.Replace("<VerifyAcctNumberInqInfo>",
-                              $"<VerifyAcctNumberInqInfo xmlns=\"{ns}\">");
-
-            // 4) Deserialize back into the typed request
-            VerifyAcctNumberInqRq rqWithNamespaces;
-            using (var sr = new StringReader(xml))
-            using (var xr = new XmlTextReader(sr) { WhitespaceHandling = WhitespaceHandling.None })
-            {
-                rqWithNamespaces = (VerifyAcctNumberInqRq)serializer.Deserialize(xr);
-            }
-
-            // 5) Call the WCF method (sync or async depending on your generated client)
-            // adjust method name if your client uses a different signature
-            var response = await _client.verifyAcctNumberAsync(rqWithNamespaces);
-
-            return response;
-        }
-    }
-}
-
+    return result;
 
 ===========================
 
