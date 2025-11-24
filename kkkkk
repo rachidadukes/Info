@@ -1,34 +1,33 @@
-   // 5) Call the WCF method
-    VerifyAcctNumberResponseMessage responseMessage =
-        await _client.verifyAcctNumberAsync(rqWithNamespaces);
+using System;
+using System.ServiceModel;
+using FinancialInquiry.AccountValidation;
+using FinancialInquiryServiceClient;
 
-    // IntelliSense will show you the right property name here:
-    // usually something like VerifyAcctNumberInqRs or VerifyAcctNumberInqRsField, etc.
-    var result = responseMessage.VerifyAcctNumberInqRs;
+var serviceUrl = "https://your-host-url/FinancialInquiryWs.svc";
 
-    return result;
-
-===========================
-
-// set up binding/endpoint same way you already do
 var binding = new BasicHttpsBinding
 {
-    MaxReceivedMessageSize = 1024 * 1024
-    // security settings etc.
+    MaxReceivedMessageSize = 1024 * 1024,
+    Security = new BasicHttpsSecurity
+    {
+        Mode = BasicHttpsSecurityMode.Transport
+    }
 };
+
 var endpoint = new EndpointAddress(serviceUrl);
+var client = new FinancialInquiryWsClient(binding, endpoint);
 
-var client   = new FinancialInquiryWsClient(binding, endpoint);
-var service  = new VerifyAcctNumberInquiryService(client);
+var sendReceive = new SendReceive(client);
 
-var response = await service.SendAndReceiveAsync(
-    environmentName: "test",                // match the working legacy value
-    branchId: "01",
-    pcName: "nparuchuri",                  // or your real PCName
-    employeeId: "12444",
-    acctId: "0000006800004269605",
-    acctType: AcctKeys_TypeAcctType.SC     // use the enum value that matches
+var response = await sendReceive.SendAndReceiveAsync(
+    environmentName: "test",
+    branchId:       "01",
+    pcName:         "nparuchuri",
+    employeeId:     "12444",
+    acctId:         "0000006800004269605",
+    acctType:       AcctKeys_TypeAcctType.SC
 );
 
-// now inspect response.VerifyAcctNumberInqRs / RespDisplayData etc.
-
+Console.WriteLine("Response received from VerifyAcctNumberInq:");
+Console.WriteLine(response.Status?.StatusDesc);
+Console.ReadKey();
