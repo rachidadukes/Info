@@ -1,33 +1,15 @@
-using System;
-using System.ServiceModel;
-using FinancialInquiry.AccountValidation;
-using FinancialInquiryServiceClient;
-
-var serviceUrl = "https://your-host-url/FinancialInquiryWs.svc";
-
-var binding = new BasicHttpsBinding
+private static string FixTranTime(string xml, string timeValue)
 {
-    MaxReceivedMessageSize = 1024 * 1024,
-    Security = new BasicHttpsSecurity
-    {
-        Mode = BasicHttpsSecurityMode.Transport
-    }
-};
+    // Replace ISO8601 DateTime with simple HH:mm:ss
+    // regex: <TranTime>...</TranTime>
+    return System.Text.RegularExpressions.Regex.Replace(
+        xml,
+        @"<TranTime>.*?</TranTime>",
+        $"<TranTime>{timeValue}</TranTime>");
+}
 
-var endpoint = new EndpointAddress(serviceUrl);
-var client = new FinancialInquiryWsClient(binding, endpoint);
 
-var sendReceive = new SendReceive(client);
+==================
 
-var response = await sendReceive.SendAndReceiveAsync(
-    environmentName: "test",
-    branchId:       "01",
-    pcName:         "nparuchuri",
-    employeeId:     "12444",
-    acctId:         "0000006800004269605",
-    acctType:       AcctKeys_TypeAcctType.SC
-);
-
-Console.WriteLine("Response received from VerifyAcctNumberInq:");
-Console.WriteLine(response.Status?.StatusDesc);
-Console.ReadKey();
+// ===== FIX TRAN TIME HERE =====
+xml = FixTranTime(xml, "14:23:21");
