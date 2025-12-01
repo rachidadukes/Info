@@ -1,0 +1,11 @@
+// 2) Wrap in the message contract that the WCF operation expects
+var requestMessage = new VerifyAcctNumberRequestMessage(inqRq);
+
+// 3) Call the WCF method
+VerifyAcctNumberResponseMessage responseMessage =
+    await _client.VerifyAcctNumberInqAsync(requestMessage);
+
+// 4) Extract the response payload
+var result = responseMessage.VerifyAcctNumberInqRs;
+
+return result;
