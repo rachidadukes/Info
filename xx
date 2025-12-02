@@ -1,11 +1,92 @@
-// 2) Wrap in the message contract that the WCF operation expects
-var requestMessage = new VerifyAcctNumberRequestMessage(inqRq);
+catch (FaultException fault)
+{
+    Console.WriteLine("===== SOAP FAULT =====");
 
-// 3) Call the WCF method
-VerifyAcctNumberResponseMessage responseMessage =
-    await _client.VerifyAcctNumberInqAsync(requestMessage);
+    // Basic info
+    Console.WriteLine($"Type    : {fault.GetType().FullName}");
+    Console.WriteLine($"Message : {fault.Message}");
 
-// 4) Extract the response payload
-var result = responseMessage.VerifyAcctNumberInqRs;
+    if (fault.Code != null)
+    {
+        Console.WriteLine($"Code    : {fault.Code}");
+        Console.WriteLine($"Code.Name     : {fault.Code.Name}");
+        Console.WriteLine($"Code.Namespace: {fault.Code.Namespace}");
 
-return result;
+        if (fault.Code.SubCode != null)
+        {
+            Console.WriteLine($"SubCode.Name     : {fault.Code.SubCode.Name}");
+            Console.WriteLine($"SubCode.Namespace: {fault.Code.SubCode.Namespace}");
+        }
+    }
+
+    if (fault.Reason != null)
+    {
+        Console.WriteLine("Reasons:");
+        foreach (var r in fault.Reason.Translations)
+        {
+            Console.WriteLine($"  [{r.XmlLang}] {r.Text}");
+        }
+    }
+
+    // Try to extract the <detail> element in as many ways as possible
+    try
+    {
+        var msgFault = fault.CreateMessageFault();
+        Console.WriteLine($"HasDetail: {msgFault.HasDetail}");
+
+        if (msgFault.HasDetail)
+        {
+            Console.WriteLine("---- Fault Detail (as string) ----");
+
+            // 1) Try simple string
+            try
+            {
+                var detailString = msgFault.GetDetail<string>();
+                Console.WriteLine(detailString);
+            }
+            catch
+            {
+                Console.WriteLine("Detail is not a plain string.");
+            }
+
+            // 2) Try XML element
+            try
+            {
+                var detailElement = msgFault.GetDetail<XmlElement>();
+                Console.WriteLine("---- Fault Detail (XML) ----");
+                Console.WriteLine(detailElement.OuterXml);
+            }
+            catch
+            {
+                Console.WriteLine("Detail is not XmlElement.");
+            }
+
+            // 3) Try LINQ to XML for nicer formatting
+            try
+            {
+                using (var reader = msgFault.GetReaderAtDetailContents())
+                {
+                    var xdetail = XDocument.Load(reader);
+                    Console.WriteLine("---- Fault Detail (pretty XML) ----");
+                    Console.WriteLine(xdetail.ToString());
+                }
+            }
+            catch
+            {
+                Console.WriteLine("Could not pretty-print detail XML.");
+            }
+        }
+        else
+        {
+            Console.WriteLine("No <detail> element in fault.");
+        }
+    }
+    catch (Exception ex2)
+    {
+        Console.WriteLine("Error while inspecting fault detail:");
+        Console.WriteLine(ex2);
+    }
+
+    Console.WriteLine("===== END SOAP FAULT =====");
+    return null;
+}
