@@ -1,16 +1,1 @@
-SELECT EventID, DBID, EventDesc, EventSource, DateTimeStamp, Deleted, UserID 
-FROM EventDetails 
-WHERE UserID = '15308' 
-  AND DateTimeStamp >= '2025-11-20'
-  AND DateTimeStamp <= '2025-11-21'
-ORDER BY EventID DESC;
 
-
-=====================
-
-SELECT EventID, DBID, EventDesc, EventSource, DateTimeStamp, Deleted, UserID 
-FROM EventDetails 
-WHERE UserID = '15308'
-  AND DateTimeStamp >= '2025-11-18'
-  AND DateTimeStamp <= '2025-11-21'
-  AND EventDesc LIKE '%<CreditAddRq>%';
