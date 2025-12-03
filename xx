@@ -1,31 +1,5 @@
-  // 👉 REQUEST XML
-        string requestXml = XmlHelpers.SerializeToXml(inqRq);
-        Console.WriteLine("===== REQUEST XML =====");
-        Console.WriteLine(requestXml);
-
-        // Call WCF
-        var response = await _client.verifyAcctNumberAsync(inqRq);
-
-        // If the WCF call returns the actual response type:
-        // var respObj = response;  // or response.verifyAcctNumberResult, depends on proxy
-
-        // 👉 RESPONSE XML
-        string responseXml = XmlHelpers.SerializeToXml(response);
-        Console.WriteLine("===== RESPONSE XML =====");
-        Console.WriteLine(responseXml);
-
-=================================
-
-var response = await _client.verifyAcctNumberAsync(inqRq);
-string responseXml = XmlHelpers.SerializeToXml(response.verifyAcctNumberResult);
-
-=================================
-
-var response = await sendReceive.SendAndReceiveAsync(
-    selectedAccount.AccountNumber!,
-    selectedAccount.AccountType);
-
-// print response XML here if you prefer:
-string responseXml = XmlHelpers.SerializeToXml(response);
-Console.WriteLine("===== RESPONSE XML =====");
-Console.WriteLine(responseXml);
+var acctTypeEnum =
+    (AcctKeys_TypeAcctType)Enum.Parse(
+        typeof(AcctKeys_TypeAcctType),
+        userInput.AccountType,
+        ignoreCase: true);
