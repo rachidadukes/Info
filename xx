@@ -1,5 +1,1 @@
-var acctTypeEnum =
-    (AcctKeys_TypeAcctType)Enum.Parse(
-        typeof(AcctKeys_TypeAcctType),
-        userInput.AccountType,
-        ignoreCase: true);
+
