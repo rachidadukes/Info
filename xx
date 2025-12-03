@@ -1,1 +1,71 @@
 
+using System.IO;
+using System.Text;
+using System.Xml;
+using System.Xml.Serialization;
+
+namespace FinancialInquiry.Infrastructure.Xml;
+
+public static class XmlHelpers
+{
+    public static string SerializeToXml<T>(T obj)
+    {
+        var serializer = new XmlSerializer(typeof(T));
+
+        var settings = new XmlWriterSettings
+        {
+            Encoding = new UTF8Encoding(false),
+            Indent = true,
+            OmitXmlDeclaration = false
+        };
+
+        using var sw = new StringWriter();
+        using var xw = XmlWriter.Create(sw, settings);
+        serializer.Serialize(xw, obj);
+        return sw.ToString();
+    }
+
+    public static T DeserializeFromXml<T>(string xml)
+    {
+        var serializer = new XmlSerializer(typeof(T));
+        using var sr = new StringReader(xml);
+        return (T)serializer.Deserialize(sr)!;
+    }
+}
+
+
+================================
+
+namespace FinancialInquiry.Infrastructure.Xml;
+
+public static class XmlNamespacesFactory
+{
+    public static XmlSerializerNamespaces Default()
+    {
+        var ns = new XmlSerializerNamespaces();
+        ns.Add("", "http://schemas.nfcu.org/...your namespace...");
+        return ns;
+    }
+}
+
+
+===========================
+
+
+namespace FinancialInquiry.Infrastructure.Xml;
+
+public static class SoapLogger
+{
+    public static void LogRequest(string xml)
+    {
+        File.WriteAllText("soap-request.xml", xml);
+    }
+
+    public static void LogResponse(string xml)
+    {
+        File.WriteAllText("soap-response.xml", xml);
+    }
+}
+
+
+==========================
