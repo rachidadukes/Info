@@ -1,71 +1,31 @@
+  // 👉 REQUEST XML
+        string requestXml = XmlHelpers.SerializeToXml(inqRq);
+        Console.WriteLine("===== REQUEST XML =====");
+        Console.WriteLine(requestXml);
 
-using System.IO;
-using System.Text;
-using System.Xml;
-using System.Xml.Serialization;
+        // Call WCF
+        var response = await _client.verifyAcctNumberAsync(inqRq);
 
-namespace FinancialInquiry.Infrastructure.Xml;
+        // If the WCF call returns the actual response type:
+        // var respObj = response;  // or response.verifyAcctNumberResult, depends on proxy
 
-public static class XmlHelpers
-{
-    public static string SerializeToXml<T>(T obj)
-    {
-        var serializer = new XmlSerializer(typeof(T));
+        // 👉 RESPONSE XML
+        string responseXml = XmlHelpers.SerializeToXml(response);
+        Console.WriteLine("===== RESPONSE XML =====");
+        Console.WriteLine(responseXml);
 
-        var settings = new XmlWriterSettings
-        {
-            Encoding = new UTF8Encoding(false),
-            Indent = true,
-            OmitXmlDeclaration = false
-        };
+=================================
 
-        using var sw = new StringWriter();
-        using var xw = XmlWriter.Create(sw, settings);
-        serializer.Serialize(xw, obj);
-        return sw.ToString();
-    }
+var response = await _client.verifyAcctNumberAsync(inqRq);
+string responseXml = XmlHelpers.SerializeToXml(response.verifyAcctNumberResult);
 
-    public static T DeserializeFromXml<T>(string xml)
-    {
-        var serializer = new XmlSerializer(typeof(T));
-        using var sr = new StringReader(xml);
-        return (T)serializer.Deserialize(sr)!;
-    }
-}
+=================================
 
+var response = await sendReceive.SendAndReceiveAsync(
+    selectedAccount.AccountNumber!,
+    selectedAccount.AccountType);
 
-================================
-
-namespace FinancialInquiry.Infrastructure.Xml;
-
-public static class XmlNamespacesFactory
-{
-    public static XmlSerializerNamespaces Default()
-    {
-        var ns = new XmlSerializerNamespaces();
-        ns.Add("", "http://schemas.nfcu.org/...your namespace...");
-        return ns;
-    }
-}
-
-
-===========================
-
-
-namespace FinancialInquiry.Infrastructure.Xml;
-
-public static class SoapLogger
-{
-    public static void LogRequest(string xml)
-    {
-        File.WriteAllText("soap-request.xml", xml);
-    }
-
-    public static void LogResponse(string xml)
-    {
-        File.WriteAllText("soap-response.xml", xml);
-    }
-}
-
-
-==========================
+// print response XML here if you prefer:
+string responseXml = XmlHelpers.SerializeToXml(response);
+Console.WriteLine("===== RESPONSE XML =====");
+Console.WriteLine(responseXml);
