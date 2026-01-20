@@ -1,2 +1,1 @@
-Dim cert As X509Certificate2 =
-    HFS_EncHostWebService.Security.CertificateLoader.GetCertificate()
+ggggggggggggggggg
