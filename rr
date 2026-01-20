@@ -1,5 +1,0 @@
-Imports System.Net
-Imports System.Net.Http
-Imports System.Text
-Imports System.Security.Cryptography.X509Certificates
-Imports HFS_EncHostRulesProcB.Security   ' adjust if your root namespace differs
