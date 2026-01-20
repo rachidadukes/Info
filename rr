@@ -1,0 +1,57 @@
+Private Sub SendToConverterEndpoint(ByRef request As String, ByRef response As String)
+
+    Const ROUTINE As String = "HostMsg.SendToConverterEndpoint"
+    Dim endpointUrl As String = ConfigurationManager.AppSettings.Get("MessageConverterURL")
+
+    Dim trace As New StringBuilder()
+    Dim sSendTime As String = Now.ToString("MM/dd/yyyy HH:mm:ss.ffff")
+    Dim sRecvTime As String = ""
+
+    Try
+        ' Keep legacy TLS behavior
+        ServicePointManager.Expect100Continue = True
+        ServicePointManager.CheckCertificateRevocationList = True
+        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12
+
+        ' 1) Load client certificate from store (your new Security files)
+        Dim cert As X509Certificate2 = CertificateLoader.GetCertificate()
+
+        ' 2) Create handler + attach cert
+        Dim handler As New HttpClientHandler()
+        If cert IsNot Nothing Then
+            handler.ClientCertificates.Add(cert)
+        End If
+
+        ' IMPORTANT:
+        ' Do NOT bypass SSL validation in production.
+        ' If you absolutely need DEV-only bypass, gate it behind a config switch:
+        ' handler.ServerCertificateCustomValidationCallback = Function(msg, c, chain, errors) True
+
+        Using client As New HttpClient(handler)
+            client.Timeout = TimeSpan.FromSeconds(30)
+
+            Using content As New StringContent(request, Encoding.UTF8, "application/xml")
+                ' Use GetAwaiter().GetResult() to avoid Task.Run deadlocks in legacy sync code
+                Dim resp As HttpResponseMessage = client.PostAsync(endpointUrl, content).GetAwaiter().GetResult()
+                response = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+
+                If Not resp.IsSuccessStatusCode Then
+                    Throw New HttpRequestException($"[{ROUTINE}] Error {CInt(resp.StatusCode)}: {response}")
+                End If
+            End Using
+        End Using
+
+        sRecvTime = Now.ToString("MM/dd/yyyy HH:mm:ss.ffff")
+
+        ' Keep your existing logging call if present in your file
+        ' (matches your screenshot)
+        sTrace = ConfigurationManager.AppSettings.Get("HostMsgLogTrace")
+        LogRequestResponseTrace(sTrace, request, response, sSendTime, sRecvTime)
+
+    Catch ex As Exception
+        ' keep existing legacy behavior
+        RaiseEvent LogError("encore", ex.Message, ROUTINE)
+        Throw
+    End Try
+
+End Sub
