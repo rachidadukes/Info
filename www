@@ -1,1 +1,6 @@
-39  Using store As New X509Store(If(storeNameStr.Equals("WebHosting", StringComparison.OrdinalIgnoreCase), "WebHosting", storeName.ToString()), storeLoc)
+39  Dim store As X509Store =
+40      If(storeNameStr.Equals("WebHosting", StringComparison.OrdinalIgnoreCase),
+41         New X509Store("WebHosting", storeLoc),
+42         New X509Store(storeName, storeLoc))
+43
+44  Using store
