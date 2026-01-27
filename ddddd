@@ -1,119 +1,109 @@
-Imports Spectre.Console
 Imports System
-Imports System.Configuration
+Imports System.IO
 Imports System.Linq
-Imports System.Net
-Imports System.Net.Http
-Imports System.Security.Authentication
-Imports System.Security.Cryptography.X509Certificates
 Imports System.Text
-Imports System.Threading.Tasks
+Imports System.Xml
+Imports System.Xml.Linq
+Imports Spectre.Console
 
-Public Class ApiXmlClient
+Public NotInheritable Class XmlStringFormatter
+    Private Sub New()
+    End Sub
 
-    Public Async Function GetResponseFromNewAPI(xml As String) As Task(Of String)
-
-        Dim endpointUrl As String = ""
-        Dim responseText As String = ""
-
-        Try
-            endpointUrl = ConfigurationManager.AppSettings("MessageConverterURL")
-
-            ServicePointManager.Expect100Continue = True
-            ServicePointManager.CheckCertificateRevocationList = True
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12
-
-            Dim cert As X509Certificate2 = CertificateLoader.GetCertificate()
-            DumpCert(cert)
-
-            Dim handler As New WebRequestHandler()
-            If cert IsNot Nothing Then
-                handler.ClientCertificates.Add(cert)
-            End If
-
-            ' DEV only: bypass SSL validation (remove in PROD)
-            handler.ServerCertificateValidationCallback =
-                Function(sender, cert2, chain, errors)
-                    AnsiConsole.MarkupLine("")
-                    AnsiConsole.MarkupLine("[red bold]Bypassing SSL validation for:[/]")
-                    Dim subj As String = If(cert2?.Subject, "(no subject)")
-                    AnsiConsole.MarkupLine($"[green]{Markup.Escape(subj)}[/]")
-                    Return True
-                End Function
-
-            Using client As New HttpClient(handler)
-                client.BaseAddress = New Uri(endpointUrl)
-                client.Timeout = TimeSpan.FromSeconds(30)
-
-                Using content As New StringContent(xml, Encoding.UTF8, "application/xml")
-                    Dim resp As HttpResponseMessage = Await client.PostAsync(endpointUrl, content)
-
-                    Dim code As Integer = CInt(resp.StatusCode)
-                    Dim reason As String = If(resp.ReasonPhrase, String.Empty)
-
-                    Dim color As String
-                    If code >= 200 AndAlso code < 300 Then
-                        color = "green"
-                    ElseIf code >= 400 AndAlso code < 500 Then
-                        color = "yellow"
-                    ElseIf code >= 500 Then
-                        color = "red"
-                    Else
-                        color = "white"
-                    End If
-
-                    AnsiConsole.MarkupLine($"[bold {color}]HTTP {code} {Markup.Escape(reason)}[/]")
-
-                    responseText = Await resp.Content.ReadAsStringAsync()
-
-                    If Not resp.IsSuccessStatusCode Then
-                        Throw New HttpRequestException($"HTTP {code} {reason}{Environment.NewLine}{responseText}")
-                    End If
-
-                    Return responseText
-                End Using
-            End Using
-
-        Catch tcex As TaskCanceledException
-            Console.WriteLine("TaskCanceledException (likely timeout or TLS stall).")
-            If tcex.InnerException IsNot Nothing Then Console.WriteLine("Inner: " & tcex.InnerException.ToString())
-            Return responseText
-
-        Catch hrex As HttpRequestException
-            Console.WriteLine("HttpRequestException:")
-            Console.WriteLine(hrex.ToString())
-            If hrex.InnerException IsNot Nothing Then Console.WriteLine("Inner: " & hrex.InnerException.ToString())
-            Return responseText
-
-        Catch aex As AuthenticationException
-            Console.WriteLine("AuthenticationException (TLS handshake): " & aex.Message)
-            If aex.InnerException IsNot Nothing Then Console.WriteLine("Inner: " & aex.InnerException.Message)
-            Return responseText
-        End Try
-
-    End Function
-
-    Private Shared Sub DumpCert(cert As X509Certificate2)
-        If cert Is Nothing Then
-            AnsiConsole.MarkupLine("[red]Picked cert: (null)[/]")
+    Public Shared Sub BeautifyXmlString(xml As String)
+        If String.IsNullOrWhiteSpace(xml) Then
+            AnsiConsole.MarkupLine("[red]Empty response[/]")
             Return
         End If
 
-        AnsiConsole.MarkupLine("")
-        AnsiConsole.MarkupLine("[red bold]Picked cert:[/]")
-        AnsiConsole.MarkupLine($"[green bold] Subject : {Markup.Escape(cert.Subject)}[/]")
-        AnsiConsole.MarkupLine($"[green bold] NotBefore : {cert.NotBefore.ToUniversalTime():u}[/]")
-        AnsiConsole.MarkupLine($"[green bold] NotAfter  : {cert.NotAfter.ToUniversalTime():u}[/]")
+        ' Fix 1: Trim non-XML header lines
+        Dim xmlStart As Integer = xml.IndexOf("<"c)
+        If xmlStart > 0 Then
+            xml = xml.Substring(xmlStart).Trim()
+        End If
 
-        Dim ekus = cert.Extensions _
-            .OfType(Of X509EnhancedKeyUsageExtension)() _
-            .SelectMany(Function(e) e.EnhancedKeyUsages.Cast(Of Oid)()) _
-            .Select(Function(o) o.Value) _
-            .ToArray()
+        Dim prettyXml As String = BeautifyXml(xml)
 
-        AnsiConsole.MarkupLine($"[green bold] EKUs : {Markup.Escape(String.Join(", ", ekus))}[/]")
-        AnsiConsole.MarkupLine($"[green bold] Issuer : {Markup.Escape(cert.Issuer)}[/]")
-        AnsiConsole.MarkupLine("")
+        ' Extract meaningful fields
+        Dim infoMessage As String = ExtractTagContent(xml, "InfoMessage")
+        Dim statusDesc As String = ExtractTagContent(xml, "StatusDesc")
+        Dim responseCode As String = ExtractTagContent(xml, "ResponseCode")
+
+        Dim looksError As Boolean =
+            xml.IndexOf("error", StringComparison.OrdinalIgnoreCase) >= 0 OrElse
+            xml.IndexOf("fault", StringComparison.OrdinalIgnoreCase) >= 0 OrElse
+            xml.IndexOf("exception", StringComparison.OrdinalIgnoreCase) >= 0 OrElse
+            responseCode = "3"
+
+        ' Output
+        PrintPreserved(prettyXml, Color.Green)
+
+        If looksError Then
+            AnsiConsole.WriteLine()
+            AnsiConsole.MarkupLine("[red]--- Detected Error Message ---[/]")
+
+            Dim finalError As String =
+                If(Not String.IsNullOrEmpty(infoMessage),
+                   infoMessage,
+                   If(Not String.IsNullOrEmpty(statusDesc),
+                      statusDesc,
+                      "Unknown error"))
+
+            PrintPreserved(finalError, Color.Red)
+        End If
+    End Sub
+
+    Private Shared Function BeautifyXml(xml As String) As String
+        Try
+            ' Fix 2: Skip anything before the root tag
+            Dim start As Integer = xml.IndexOf("<"c)
+            If start > 0 Then
+                xml = xml.Substring(start).Trim()
+            End If
+
+            Dim doc As XDocument = XDocument.Parse(xml, LoadOptions.PreserveWhitespace)
+            Dim sb As New StringBuilder()
+
+            Dim settings As New XmlWriterSettings() With {
+                .Indent = True,
+                .IndentChars = "  ",
+                .NewLineChars = vbCrLf,
+                .NewLineHandling = NewLineHandling.Replace,
+                .Encoding = New UTF8Encoding(False),
+                .OmitXmlDeclaration = False
+            }
+
+            Using writer As XmlWriter = XmlWriter.Create(New StringWriter(sb), settings)
+                doc.Save(writer)
+            End Using
+
+            Return sb.ToString()
+
+        Catch
+            Return xml ' fallback to raw
+        End Try
+    End Function
+
+    Private Shared Function ExtractTagContent(xml As String, tag As String) As String
+        Try
+            Dim doc As XDocument = XDocument.Parse(xml)
+            Dim node = doc.Descendants().FirstOrDefault(
+                Function(e) e.Name.LocalName.Equals(tag, StringComparison.OrdinalIgnoreCase))
+
+            If node Is Nothing Then Return String.Empty
+
+            Dim value As String = If(node.Value, "").Trim()
+            Return value
+
+        Catch
+            Return String.Empty
+        End Try
+    End Function
+
+    Private Shared Sub PrintPreserved(text As String, color As Color)
+        Dim block As New Text(text, New Style(foreground:=color))
+        AnsiConsole.Write(block)
+        AnsiConsole.WriteLine()
     End Sub
 
 End Class
