@@ -1,23 +1,29 @@
-static async Task Main(string[] args)
-{
-    try
-    {
-        var request = RequestWithGLAcct.BuildXmlRequest();
-        ApiXmlClient objNewAPI = new ApiXmlClient();
-        var response = await objNewAPI.GetResponseFromNewAPI(request);
+Imports System
+Imports System.Threading.Tasks
 
-        AnsiConsole.MarkupLine("[bold red]Request:[/]");
-        AnsiConsole.WriteLine();
-        XmlStringFormatter.BeautifyXmlString(request);
+Module Program
 
-        Console.WriteLine();
+    Async Function Main(args As String()) As Task
+        Try
+            Dim request As String = RequestWithGLAcct.BuildXmlRequest()
 
-        AnsiConsole.MarkupLine("[bold red]Response:[/]");
-        AnsiConsole.WriteLine();
-        XmlStringFormatter.BeautifyXmlString(response);
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Error Rest Response: {ex.Message}");
-    }
-}
+            Dim objNewAPI As New ApiXmlClient()
+            Dim response As String = Await objNewAPI.GetResponseFromNewAPI(request)
+
+            AnsiConsole.MarkupLine("[bold red]Request:[/]")
+            AnsiConsole.WriteLine()
+            XmlStringFormatter.BeautifyXmlString(request)
+
+            Console.WriteLine()
+            Console.WriteLine()
+
+            AnsiConsole.MarkupLine("[bold red]Response:[/]")
+            AnsiConsole.WriteLine()
+            XmlStringFormatter.BeautifyXmlString(response)
+
+        Catch ex As Exception
+            Console.WriteLine($"Error Rest Response: {ex.Message}")
+        End Try
+    End Function
+
+End Module
