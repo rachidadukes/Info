@@ -1,0 +1,70 @@
+is the real Subject (CN) and (most importantly) the real certificate store location where the cert is installed:
+
+Store: Local Computer → Web Hosting → Certificates
+
+Subject CN: encoresvc-unit.nfcu.net
+
+============================
+<add key="ClientCert.SubjectName" value="encoresvc-unit.nfcu.net" />
+<add key="ClientCert.StoreLocation" value="LocalMachine" />
+<add key="ClientCert.StoreName" value="WebHosting" />
+
+
+===============================
+
+Imports System.Configuration
+Imports System.Security.Cryptography.X509Certificates
+
+Public Module CertificateLoader
+
+    Public Function GetCertificate() As X509Certificate2
+        Dim subject = ConfigurationManager.AppSettings("ClientCert.SubjectName")
+        If String.IsNullOrWhiteSpace(subject) Then
+            Throw New ConfigurationErrorsException("Missing appSetting: ClientCert.SubjectName")
+        End If
+
+        Dim storeLocStr = ConfigurationManager.AppSettings("ClientCert.StoreLocation")
+        Dim storeNameStr = ConfigurationManager.AppSettings("ClientCert.StoreName")
+
+        Dim storeLoc As StoreLocation = StoreLocation.LocalMachine
+        If Not String.IsNullOrWhiteSpace(storeLocStr) Then
+            [Enum].TryParse(storeLocStr, True, storeLoc)
+        End If
+
+        Dim store As X509Store
+
+        ' WebHosting is NOT in the StoreName enum, so handle it explicitly
+        If String.Equals(storeNameStr, "WebHosting", StringComparison.OrdinalIgnoreCase) Then
+            store = New X509Store("WebHosting", storeLoc)
+        Else
+            Dim storeName As StoreName = StoreName.My
+            If Not String.IsNullOrWhiteSpace(storeNameStr) Then
+                [Enum].TryParse(storeNameStr, True, storeName)
+            End If
+            store = New X509Store(storeName, storeLoc)
+        End If
+
+        Using store
+            store.Open(OpenFlags.ReadOnly Or OpenFlags.OpenExistingOnly)
+
+            ' FindBySubjectName is a "contains" match (CN included), good for your CN value
+            Dim matches = store.Certificates.Find(
+                X509FindType.FindBySubjectName,
+                subject,
+                validOnly:=False
+            )
+
+            If matches Is Nothing OrElse matches.Count = 0 Then
+                Throw New Exception($"Client certificate not found. Subject contains: '{subject}'. Store={storeNameStr}, Location={storeLoc}")
+            End If
+
+            ' If multiple match, choose the newest (or pick by thumbprint if you can get it)
+            Dim selected = matches.Cast(Of X509Certificate2)().
+                OrderByDescending(Function(c) c.NotAfter).
+                First()
+
+            Return selected
+        End Using
+    End Function
+
+End Module
