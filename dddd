@@ -1,19 +1,5 @@
-Imports System.Security.Cryptography.X509Certificates
-Imports System.Linq
+Dim cert As X509Certificate2 = FindValidCertificateBySubjectName(matches, subject)
 
-Private Shared Function FindValidCertificateBySubjectName(subjectName As String) As X509Certificate2
-    Dim certificate As X509Certificate2 = Nothing
-
-    Using store As New X509Store("Remote Desktop", StoreLocation.LocalMachine)
-        store.Open(OpenFlags.ReadOnly)
-
-        Dim certificates As X509Certificate2Collection = store.Certificates
-
-        certificate = certificates _
-            .Cast(Of X509Certificate2)() _
-            .FirstOrDefault()
-    End Using
-
-    Return certificate
-End Function
-
+            If cert Is Nothing Then
+                Throw New InvalidOperationException($"No valid client-auth certificate found for SubjectName contains '{subject}'.")
+            End If
