@@ -1,18 +1,19 @@
-private static X509Certificate2? FindValidCertificateByThumbprint(string subjectName)
-{
-    X509Certificate2? certificate;
+Imports System.Security.Cryptography.X509Certificates
+Imports System.Linq
 
-    using (X509Store store = new("Remote Desktop", StoreLocation.LocalMachine))
-    {
-        store.Open(OpenFlags.ReadOnly);
+Private Shared Function FindValidCertificateBySubjectName(subjectName As String) As X509Certificate2
+    Dim certificate As X509Certificate2 = Nothing
 
-        X509Certificate2Collection certificates = store.Certificates;
+    Using store As New X509Store("Remote Desktop", StoreLocation.LocalMachine)
+        store.Open(OpenFlags.ReadOnly)
 
-        certificate = certificates
-            .Cast<X509Certificate2>()
-            .FirstOrDefault();
-    }
+        Dim certificates As X509Certificate2Collection = store.Certificates
 
-    return certificate;
-}
+        certificate = certificates _
+            .Cast(Of X509Certificate2)() _
+            .FirstOrDefault()
+    End Using
+
+    Return certificate
+End Function
 
