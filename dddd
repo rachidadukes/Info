@@ -1,15 +1,18 @@
-If Not resp.IsSuccessStatusCode Then
-        Throw New HttpRequestException(
-            $"HTTP {(CInt(resp.StatusCode))} ({resp.ReasonPhrase}). Body={response}")
-    End If
+private static X509Certificate2? FindValidCertificateByThumbprint(string subjectName)
+{
+    X509Certificate2? certificate;
 
-Catch ex As AggregateException
-    Dim root = ex.Flatten().InnerExceptions(0) ' usually the real one
+    using (X509Store store = new("Remote Desktop", StoreLocation.LocalMachine))
+    {
+        store.Open(OpenFlags.ReadOnly);
 
-    ' optional: drill to innermost
-    While root.InnerException IsNot Nothing
-        root = root.InnerException
-    End While
+        X509Certificate2Collection certificates = store.Certificates;
 
-    Throw New Exception($"Request failed. Root={root.GetType().FullName}: {root.Message}", ex)
-End Try
+        certificate = certificates
+            .Cast<X509Certificate2>()
+            .FirstOrDefault();
+    }
+
+    return certificate;
+}
+
