@@ -1,5 +1,14 @@
-Dim cert As X509Certificate2 = FindValidCertificateBySubjectName(matches, subject)
+Dim subject As String = ConfigurationManager.AppSettings("ClientCert.SubjectName")
+        If String.IsNullOrWhiteSpace(subject) Then
+            Throw New ConfigurationErrorsException("Missing appSetting: ClientCert.SubjectName")
+        End If
 
-            If cert Is Nothing Then
-                Throw New InvalidOperationException($"No valid client-auth certificate found for SubjectName contains '{subject}'.")
-            End If
+        ' Example store setup (keep yours)
+        Dim storeLoc As StoreLocation = StoreLocation.LocalMachine
+        Dim storeName As StoreName = StoreName.My
+
+        Using store As New X509Store(storeName, storeLoc)
+            store.Open(OpenFlags.ReadOnly Or OpenFlags.OpenExistingOnly)
+
+            Dim matches As X509Certificate2Collection =
+                store.Certificates.Find(X509FindType.FindBySubjectName, subject, False)
