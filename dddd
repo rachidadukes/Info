@@ -1,47 +1,15 @@
-Imports System.Net
-Imports System.Net.Http
-Imports System.Text
-Imports System.Configuration
-Imports System.IO
-Imports System.Net.Sockets
+If Not resp.IsSuccessStatusCode Then
+        Throw New HttpRequestException(
+            $"HTTP {(CInt(resp.StatusCode))} ({resp.ReasonPhrase}). Body={response}")
+    End If
 
-Private Sub SendToConverterEndpointWithoutCertificate(ByRef request As String, ByRef response As String)
+Catch ex As AggregateException
+    Dim root = ex.Flatten().InnerExceptions(0) ' usually the real one
 
-    Const ROUTINE As String = "HostMsg.SendToConverterEndpoint"
-    Dim endpointUrl As String = ConfigurationManager.AppSettings("MessageConverterURL")
+    ' optional: drill to innermost
+    While root.InnerException IsNot Nothing
+        root = root.InnerException
+    End While
 
-    ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12
-
-    Try
-        Using handler As New WebRequestHandler()
-            Using client As New HttpClient(handler)
-                client.Timeout = TimeSpan.FromSeconds(30)
-
-                Using content As New StringContent(request, Encoding.UTF8, "application/xml")
-
-                    ' Avoid .Result to prevent AggregateException masking
-                    Dim resp As HttpResponseMessage =
-                        client.PostAsync(endpointUrl, content).GetAwaiter().GetResult()
-
-                    response = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult()
-
-                    If Not resp.IsSuccessStatusCode Then
-                        Throw New HttpRequestException(
-                            $"[{ROUTINE}] HTTP {(CInt(resp.StatusCode))} ({resp.ReasonPhrase}). " &
-                            $"Url={endpointUrl}. Body={Trunc(response, 2000)}")
-                    End If
-                End Using
-            End Using
-        End Using
-
-    Catch ex As TaskCanceledException
-        ' This is how HttpClient signals timeout in sync usage too
-        Throw New TimeoutException(
-            $"[{ROUTINE}] Timeout calling {endpointUrl}.", ex)
-
-    Catch ex As Exception
-        ' Add useful diagnostics + preserve the original exception as InnerException
-        Throw New Exception(BuildHttpErrorMessage(ROUTINE, endpointUrl, ex), ex)
-    End Try
-
-End Sub
+    Throw New Exception($"Request failed. Root={root.GetType().FullName}: {root.Message}", ex)
+End Try
