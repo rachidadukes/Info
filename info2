@@ -1,4 +1,1 @@
 
-$employeeId = "15308"
-$user = ([adsisearcher]"(&(objectCategory=person)(objectClass=user)(sAMAccountName=$employeeId))").FindOne()
-$user.Properties.memberof | Where-Object { $_ -like "*BERCHA_Encore*" }
