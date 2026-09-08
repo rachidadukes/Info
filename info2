@@ -1,2 +1,16 @@
-
-
+we should check:
+- HFS_EncActiveDirectory/ActiveDirectoryClass.vb
+  - Search for AttemptMyLogin
+  - Search for DirectoryEntry
+  - Search for LDAP://
+  - This should reveal the AD server/domain and username format.
+- Configuration files such as App.config
+  - Search for domain, LDAP, ActiveDirectory, and DirectoryEntry.
+- The ADGroups database table
+  - Run:SELECT GroupID, GroupName, AuthorityLevel
+    FROM ADGroups
+    ORDER BY AuthorityLevel;
+  - GroupName should contain the real AD group distinguished names.
+- HFS_EncSecurityC/CentralizedProfiles.vb
+  - Search for SyncADGroups
+  - Follow where its enterprise result set originates to find the upstream group configuration.
