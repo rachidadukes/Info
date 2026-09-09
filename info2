@@ -1,1 +1,146 @@
+SET NOCOUNT ON;
+SET XACT_ABORT ON;
+
+DECLARE @Now DATETIME = GETDATE();
+
+BEGIN TRY
+    BEGIN TRANSACTION;
+
+    ;WITH TransactionNames AS
+    (
+        SELECT NameNumber, TranName
+        FROM (VALUES
+            (1,  'Cash Exchange'),
+            (2,  'Cashed Check'),
+            (3,  'CDR Buy'),
+            (4,  'CDR Empty'),
+            (5,  'CDR Load'),
+            (6,  'Checking Deposit'),
+            (7,  'Checking Wdr'),
+            (8,  'Checking Wdr by Check'),
+            (9,  'CORR-Cash Exchange'),
+            (10, 'CORR-Checking Deposit'),
+            (11, 'Credit Card Cash Advance'),
+            (12, 'MMSA Deposit'),
+            (13, 'Multi-Tran Adjustment - In'),
+            (14, 'Savings Deposit'),
+            (15, 'Savings Wdr'),
+            (16, 'Savings Wdr by Check'),
+            (17, 'Sell Foreign Currency'),
+            (18, 'Xfer to Checking from Savings'),
+            (19, 'Xfer to Savings from Checking')
+        ) AS Names(NameNumber, TranName)
+    ),
+    Numbers AS
+    (
+        SELECT RowNumber
+        FROM (VALUES
+            (1),  (2),  (3),  (4),  (5),
+            (6),  (7),  (8),  (9),  (10),
+            (11), (12), (13), (14), (15),
+            (16), (17), (18), (19), (20),
+            (21), (22), (23), (24), (25),
+            (26), (27), (28), (29), (30),
+            (31), (32), (33), (34), (35),
+            (36), (37), (38), (39), (40)
+        ) AS Sequence(RowNumber)
+    ),
+    SampleRows AS
+    (
+        SELECT
+            N.RowNumber,
+            T.TranName,
+            ((N.RowNumber - 1) % 5) + 1 AS SampleBranch,
+            ((N.RowNumber - 1) % 8) + 1 AS SampleTeller,
+            ((N.RowNumber - 1) / 10) + 1 AS SampleMember
+        FROM Numbers AS N
+        INNER JOIN TransactionNames AS T
+            ON T.NameNumber = ((N.RowNumber - 1) % 19) + 1
+    )
+    INSERT INTO dbo.EJHeader
+    (
+        BranchNumber,
+        BranchID,
+        userID,
+        TranNo,
+        TranName,
+        TranID,
+        EJTime,
+        CalendarDate,
+        EnterpriseStatus,
+        HostStatus,
+        HostApproved,
+        HostTimeOut,
+        ForwardToHost,
+        ForwardToHostApproved,
+        ForwardToHostTimeOut,
+        CustomerID,
+        MultiTranNumber,
+        AccountNumber,
+        TranAmount,
+        Passbook,
+        BeginTime,
+        CashBoxID,
+        CashAccumInd,
+        DeferredStatus,
+        TranCommitted,
+        SigCaptured,
+        AccessNo
+    )
+    SELECT
+        RIGHT('000' + CONVERT(VARCHAR(3), SampleBranch), 3),
+        SampleBranch,
+        CONCAT('sample.teller', RIGHT('00' + CONVERT(VARCHAR(2), SampleTeller), 2)),
+        CONVERT(SMALLINT, 100 + RowNumber),
+        TranName,
+        20000 + RowNumber,
+        DATEADD(MINUTE, RowNumber * -7, @Now),
+        CONVERT(DATETIME, CONVERT(DATE, DATEADD(DAY, -((RowNumber - 1) / 10), @Now))),
+        CONVERT(BIT, 1),
+        CONVERT(BIT, CASE WHEN RowNumber % 10 = 0 THEN 0 ELSE 1 END),
+        CONVERT(BIT, CASE WHEN RowNumber % 10 = 0 THEN 0 ELSE 1 END),
+        CONVERT(BIT, CASE WHEN RowNumber % 10 = 0 THEN 1 ELSE 0 END),
+        CONVERT(SMALLINT, 1),
+        CONVERT(BIT, CASE WHEN RowNumber % 10 = 0 THEN 0 ELSE 1 END),
+        CONVERT(BIT, CASE WHEN RowNumber % 10 = 0 THEN 1 ELSE 0 END),
+        60000 + SampleMember,
+        RowNumber,
+        CONCAT('1000000000', RIGHT('00' + CONVERT(VARCHAR(2), SampleMember), 2)),
+        CONVERT(MONEY, RowNumber * 37.25),
+        CASE WHEN TranName LIKE 'Savings%' THEN 'Y' ELSE 'N' END,
+        DATEADD(MINUTE, (RowNumber * -7) - 2, @Now),
+        10 + SampleBranch,
+        CONVERT(BIT, RowNumber % 2),
+        CONVERT(SMALLINT, CASE WHEN RowNumber % 10 = 0 THEN 1 ELSE 0 END),
+        CONVERT(SMALLINT, CASE WHEN RowNumber % 10 = 0 THEN 0 ELSE 1 END),
+        CONVERT(BIT, CASE WHEN RowNumber % 4 = 0 THEN 1 ELSE 0 END),
+        CASE SampleMember
+            WHEN 1 THEN N'00009000000001'
+            WHEN 2 THEN N'00009000000002'
+            WHEN 3 THEN N'00009000000003'
+            ELSE N'00009000000004'
+        END
+    FROM SampleRows;
+
+    DECLARE @InsertedRows INT = @@ROWCOUNT;
+
+    COMMIT TRANSACTION;
+
+    SELECT @InsertedRows AS InsertedRows;
+
+    SELECT
+        TranName,
+        COUNT(*) AS SampleTransactionCount
+    FROM dbo.EJHeader
+    WHERE TranID BETWEEN 20001 AND 20040
+      AND userID LIKE 'sample.teller%'
+    GROUP BY TranName
+    ORDER BY TranName;
+END TRY
+BEGIN CATCH
+    IF @@TRANCOUNT > 0
+        ROLLBACK TRANSACTION;
+
+    THROW;
+END CATCH;
 
